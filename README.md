@@ -243,8 +243,8 @@ document[phase=active] -delegates-to-> item[openness=open]
 
 Node types   document · item · *
 Attributes   id kind title path file line phase status receptivity alias
-             document state openness section text body evidence conflicted
-             fm.<front-matter-key>
+             document state (or disposition) openness section text body
+             evidence conflicted fm.<front-matter-key>
 Operators    =  !=  ^=  $=  *=  ~=   and [attr] for "is present"
 Relations    -kind->   <-kind-   =kind=>   <=kind=      (= forms are transitive)
              comma-separate kinds: -assumes,depends-on->

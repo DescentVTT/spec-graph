@@ -96,8 +96,8 @@ SELECTORS
 
   Node types:  document, item, * (any)
   Attributes:  id, kind, title, path, file, line, phase, status, receptivity,
-               alias, document, state, openness, section, text, evidence,
-               conflicted, fm.<front-matter-key>
+               alias, document, state (or disposition), openness, section,
+               text, body, evidence, conflicted, fm.<front-matter-key>
   Operators:   = != ^= $= *= ~=   and [attr] for "is present"
   Relations:   -kind->  <-kind-   =kind=>  <=kind=   (= forms are transitive)
 

@@ -48,7 +48,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "selfcheck": "node ./bin/spec-graph.js check \"docs/**/*.md\" \"README.md\" --verbose",
+    "selfcheck": "node ./bin/spec-graph.js check \"docs/**/*.md\" \"README.md\" \"CONTRIBUTING.md\" --verbose",
     "prepublishOnly": "npm run clean && npm run build",
     "test:mutation": "stryker run"
   },
