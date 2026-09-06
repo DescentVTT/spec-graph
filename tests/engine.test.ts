@@ -231,6 +231,38 @@ describe('stale premises', () => {
     expect(rules(analyse(weak).diagnostics)).not.toContain('stale-premise');
   });
 
+  it('does not also report a blocked-by handover it already reported as a ghost', () => {
+    // `blocked-by` transfers an obligation *and* is load-bearing, so both rules
+    // match the same edge. One defect on one line must produce one finding.
+    const { diagnostics } = analyse({
+      'docs/adr/0002-old.md': ['---', 'status: archived', '---', '', '# Old'].join('\n'),
+      'docs/adr/0004-new.md': [
+        '---',
+        'status: accepted',
+        '---',
+        '',
+        '# New',
+        '',
+        '## Open Questions',
+        '',
+        '- [ ] What is the limit? Blocked by [ADR-0002](0002-old.md).',
+      ].join('\n'),
+    });
+    const onLine9 = diagnostics.filter((d) => d.at.span.start.line === 9);
+    expect(onLine9.map((d) => d.rule)).toEqual(['ghost-handover']);
+  });
+
+  it('does not let the hand-off suppress a load-bearing edge of another kind', () => {
+    // Only the edges ghost-handover actually matched are claimed. A depends-on
+    // is load-bearing but transfers no obligation, so it must still report.
+    const { diagnostics } = analyse({
+      'docs/adr/0002-old.md': ['---', 'status: archived', '---', '', '# Old'].join('\n'),
+      'docs/adr/0004-new.md': ['---', 'status: accepted', 'depends-on: ADR-0002', '---', '', '# New'].join('\n'),
+    });
+    expect(rules(diagnostics)).toContain('stale-premise');
+    expect(rules(diagnostics)).not.toContain('ghost-handover');
+  });
+
   it('catches a dependency on a question that was obviated', () => {
     const files2 = {
       'docs/adr/0002-rows.md': [

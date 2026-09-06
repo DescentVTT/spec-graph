@@ -95,8 +95,12 @@ export function runRules(graph: SpecGraph, corpus: ResolvedCorpus, options: Rule
     out.push({ rule, severity, ...body, related: body.related.slice(0, maxRelated) });
   };
 
-  ghostHandovers(graph, emit);
-  stalePremises(graph, emit);
+  // Ghost handovers are reported first and claim their edges, because
+  // `blocked-by` is both obligation-transferring and load-bearing: without this,
+  // one open question blocked by an archived decision would produce two
+  // findings on the same line, for the same defect, with the same fix.
+  const claimed = ghostHandovers(graph, emit);
+  stalePremises(graph, emit, claimed);
   brokenReferences(corpus, emit);
   circularDelegations(graph, emit);
   orphanedObligations(graph, emit, maxRelated);
@@ -124,7 +128,9 @@ const GHOST_HANDOVER: QuerySpec = parseQuery(
   '*[openness!=closed][phase!=retired] -delegates-to,blocked-by-> *[receptivity=sealed]',
 );
 
-function ghostHandovers(graph: SpecGraph, emit: Emit): void {
+/** Emits ghost-handover findings and returns the edges they account for. */
+function ghostHandovers(graph: SpecGraph, emit: Emit): Set<string> {
+  const claimed = new Set<string>();
   for (const match of execute(graph, GHOST_HANDOVER)) {
     const source = match.nodes[0] as SpecNode;
     const target = match.nodes[1] as SpecNode;
@@ -135,6 +141,7 @@ function ghostHandovers(graph: SpecGraph, emit: Emit): void {
     const sealed = targetDocument.phase === 'retired' ? 'retired' : 'frozen';
     const what = source.kind === 'item' ? 'open obligation' : 'obligation';
     const verb = EDGE_TRAITS[edge.kind].phrase;
+    claimed.add(edgeKey(edge));
 
     emit('ghost-handover', () => ({
       message: `${what} ${verb} ${describe(target)}, which is ${sealed}`,
@@ -150,6 +157,12 @@ function ghostHandovers(graph: SpecGraph, emit: Emit): void {
           : `${targetDocument.id} is frozen and cannot take on new work - open an amendment, or close this here`,
     }));
   }
+  return claimed;
+}
+
+/** Identity of a relation, for the hand-off between overlapping rules. */
+function edgeKey(edge: Edge): string {
+  return `${edge.kind} ${edge.from} ${edge.to}`;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -170,13 +183,16 @@ const STALE_PREMISE_ITEM: QuerySpec = parseQuery(
   '*[phase!=retired] -depends-on,assumes,amends,blocked-by-> item[state=obviated]',
 );
 
-function stalePremises(graph: SpecGraph, emit: Emit): void {
+function stalePremises(graph: SpecGraph, emit: Emit, claimed: ReadonlySet<string>): void {
   const seen = new Set<string>();
   for (const spec of [STALE_PREMISE_DOCUMENT, STALE_PREMISE_ITEM]) {
     for (const match of execute(graph, spec)) {
       const source = match.nodes[0] as SpecNode;
       const target = match.nodes[1] as SpecNode;
       const edge = match.edges[0] as Edge;
+      // Already reported as a ghost handover, which says the same thing in the
+      // terms the reader needs.
+      if (claimed.has(edgeKey(edge))) continue;
       const key = `${source.id}>${target.id}>${edge.kind}`;
       if (seen.has(key)) continue;
       seen.add(key);
