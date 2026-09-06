@@ -480,6 +480,64 @@ describe('cycles', () => {
     expect(found[0]?.message).toContain('supersession cycle');
   });
 
+  it('finds a cycle two documents pass between their own open questions', () => {
+    // Each delegation runs item -> document, so the raw graph holds no cycle at
+    // all - only the projection onto owning documents reveals that the same
+    // question is being handed back and forth.
+    const { diagnostics } = analyse({
+      'docs/adr/0001-a.md': [
+        '---',
+        'status: accepted',
+        '---',
+        '',
+        '# A',
+        '',
+        '## Open Questions',
+        '',
+        '- [ ] Who owns retention? Deferred to [ADR-0002](0002-b.md).',
+      ].join('\n'),
+      'docs/adr/0002-b.md': [
+        '---',
+        'status: accepted',
+        '---',
+        '',
+        '# B',
+        '',
+        '## Open Questions',
+        '',
+        '- [ ] Who owns retention? Deferred to [ADR-0001](0001-a.md).',
+      ].join('\n'),
+    });
+    const found = only(diagnostics, 'circular-delegation');
+    expect(found).toHaveLength(1);
+    expect(found[0]?.message).toContain('2 documents');
+    // Both halves of the loop are named, each at the line that declares it.
+    expect(found[0]?.related.map((r) => `${r.at.file}:${r.at.span.start.line}`)).toEqual([
+      'docs/adr/0001-a.md:9',
+      'docs/adr/0002-b.md:9',
+    ]);
+  });
+
+  it('treats a delegation that stays inside one document as a self-reference', () => {
+    // A projected self-loop is not a cycle between documents, and reporting it
+    // as one would be two findings for the same line.
+    const { diagnostics } = analyse({
+      'docs/adr/0001-a.md': [
+        '---',
+        'status: accepted',
+        '---',
+        '',
+        '# A',
+        '',
+        '## Open Questions',
+        '',
+        '- [ ] Who owns this? Deferred to [ADR-0001](0001-a.md).',
+      ].join('\n'),
+    });
+    expect(rules(diagnostics)).toContain('self-reference');
+    expect(rules(diagnostics)).not.toContain('circular-delegation');
+  });
+
   it('does not mistake a chain for a cycle', () => {
     const { diagnostics } = analyse({
       'docs/adr/0001-a.md': '---\nstatus: accepted\ndelegates-to: ADR-0002\n---\n\n# A\n',

@@ -38,10 +38,16 @@ export interface SpecGraph {
   reach(id: string, kinds: readonly EdgeKind[]): ReadonlyMap<string, readonly Edge[]>;
 
   /**
-   * Strongly connected components with more than one member, plus self-loops,
-   * over the given edge kinds. Each is a real cycle.
+   * Strongly connected components with more than one member, over the given
+   * edge kinds. Each is a real cycle.
+   *
+   * With `byDocument`, relations are projected onto the documents that own
+   * their endpoints before the search. That is what catches two documents
+   * ping-ponging one obligation: the delegation runs item -> document in each
+   * direction, so there is no cycle among the raw nodes even though the two
+   * documents are plainly passing the same question back and forth.
    */
-  cycles(kinds: readonly EdgeKind[]): readonly (readonly string[])[];
+  cycles(kinds: readonly EdgeKind[], options?: { byDocument?: boolean }): readonly (readonly string[])[];
 }
 
 /** Builds the graph. Edges naming an unknown node are dropped, not stored. */
@@ -123,7 +129,30 @@ export function buildGraph(input: {
       return paths;
     },
 
-    cycles: (kinds) => tarjan(nodes, outgoing, kinds),
+    cycles(kinds, options) {
+      const relevant = (id: string): Edge[] => [...filter(outgoing.get(id), kinds)];
+      if (!options?.byDocument) {
+        return tarjan([...nodes.keys()], (id) => relevant(id).map((edge) => edge.to).filter((to) => nodes.has(to)));
+      }
+      const ownerOf = (id: string): string => graph.owningDocument(id)?.id ?? id;
+      const projected = new Map<string, Set<string>>();
+      for (const node of nodes.values()) {
+        for (const edge of relevant(node.id)) {
+          const from = ownerOf(edge.from);
+          const to = ownerOf(edge.to);
+          // A relation that stays inside one document is a self-reference, not
+          // a cycle, and has a rule of its own.
+          if (from === to) continue;
+          const set = projected.get(from) ?? new Set<string>();
+          set.add(to);
+          projected.set(from, set);
+        }
+      }
+      return tarjan(
+        documents.map((document) => document.id),
+        (id) => [...(projected.get(id) ?? [])],
+      );
+    },
   };
 
   return graph;
@@ -148,12 +177,11 @@ function push<T>(map: Map<string, T[]>, key: string, value: T): void {
  * Iterative rather than recursive because a monorepo's reference graph can be
  * deep enough to blow the call stack, and a linter that crashes on the largest
  * repository in the company is a linter nobody trusts on the small ones either.
+ *
+ * Takes a successor function so the same search serves both the raw graph and
+ * the document-level projection.
  */
-function tarjan(
-  nodes: ReadonlyMap<string, SpecNode>,
-  outgoing: ReadonlyMap<string, readonly Edge[]>,
-  kinds: readonly EdgeKind[],
-): string[][] {
+function tarjan(ids: readonly string[], successors: (id: string) => string[]): string[][] {
   const indexOf = new Map<string, number>();
   const lowLink = new Map<string, number>();
   const onStack = new Set<string>();
@@ -161,17 +189,7 @@ function tarjan(
   const components: string[][] = [];
   let counter = 0;
 
-  const successors = (id: string): string[] => {
-    const list = outgoing.get(id) ?? EMPTY_EDGES;
-    const out: string[] = [];
-    for (const edge of list) {
-      if (kinds.length > 0 && !kinds.includes(edge.kind)) continue;
-      if (nodes.has(edge.to)) out.push(edge.to);
-    }
-    return out;
-  };
-
-  for (const root of nodes.keys()) {
+  for (const root of ids) {
     if (indexOf.has(root)) continue;
 
     const work: { id: string; next: number; children: string[] }[] = [
@@ -215,11 +233,8 @@ function tarjan(
           component.push(popped);
           if (popped === frame.id) break;
         }
-        if (component.length > 1) {
-          components.push(component.reverse());
-        } else if (successors(frame.id).includes(frame.id)) {
-          components.push(component);
-        }
+        if (component.length > 1) components.push(component.reverse());
+        else if (successors(frame.id).includes(frame.id)) components.push(component);
       }
     }
   }

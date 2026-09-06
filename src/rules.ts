@@ -273,18 +273,23 @@ function brokenHint(ref: DanglingRef): string {
 
 function circularDelegations(graph: SpecGraph, emit: Emit): void {
   const kinds = [...OBLIGATION_EDGES, 'supersedes' as const];
-  for (const component of graph.cycles(kinds)) {
-    const members = component.map((id) => graph.node(id)).filter((node): node is SpecNode => node !== undefined);
-    if (members.length === 0) continue;
+  // Projected onto documents, so a question handed back and forth between two
+  // of them is found even though each delegation runs item -> document and the
+  // raw graph therefore contains no cycle at all.
+  for (const component of graph.cycles(kinds, { byDocument: true })) {
+    const members = component
+      .map((id) => graph.document(id))
+      .filter((node): node is DocumentNode => node !== undefined);
+    if (members.length < 2) continue;
 
     const edges = cycleEdges(graph, component, kinds);
     const onlySupersession = edges.length > 0 && edges.every((edge) => edge.kind === 'supersedes');
-    const head = members[0] as SpecNode;
+    const head = members[0] as DocumentNode;
 
     emit('circular-delegation', () => ({
       message: onlySupersession
         ? `supersession cycle across ${members.length} documents`
-        : `${members.length === 1 ? 'self-delegation' : `delegation cycle across ${members.length} nodes`}: nothing in it can ever land`,
+        : `delegation cycle across ${members.length} documents: nothing in it can ever land`,
       at: edges[0]?.declaredAt ?? head.at,
       nodes: component,
       related: edges.map((edge) => related(edge.declaredAt, `${edge.from} ${EDGE_TRAITS[edge.kind].phrase} ${edge.to}`)),
@@ -293,14 +298,22 @@ function circularDelegations(graph: SpecGraph, emit: Emit): void {
   }
 }
 
-/** The edges that keep a component strongly connected, in traversal order. */
+/**
+ * The relations that keep a component strongly connected.
+ *
+ * Membership is by owning document, because the component is a projection: the
+ * edge that closes the loop is usually written on an item, and that is the line
+ * the report has to point at.
+ */
 function cycleEdges(graph: SpecGraph, component: readonly string[], kinds: readonly Edge['kind'][]): Edge[] {
   const inside = new Set(component);
+  const owner = (id: string): string => graph.owningDocument(id)?.id ?? id;
   const out: Edge[] = [];
-  for (const id of component) {
-    for (const edge of graph.out(id, kinds)) {
-      if (inside.has(edge.to)) out.push(edge);
-    }
+  for (const edge of graph.edges) {
+    if (!kinds.includes(edge.kind)) continue;
+    const from = owner(edge.from);
+    const to = owner(edge.to);
+    if (from !== to && inside.has(from) && inside.has(to)) out.push(edge);
   }
   return out;
 }
