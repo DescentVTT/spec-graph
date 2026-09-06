@@ -20,8 +20,7 @@
  * the superseded document, not the one that declared the relation.
  */
 
-import { LOAD_BEARING_EDGES, OBLIGATION_EDGES, type SpecGraph } from './graph.js';
-import { formatRef } from './source.js';
+import { OBLIGATION_EDGES, type SpecGraph } from './graph.js';
 import { execute, parseQuery, type QuerySpec } from './select.js';
 import type { ResolvedCorpus } from './resolve.js';
 import type {
@@ -458,6 +457,3 @@ export const RULE_QUERIES: Readonly<Partial<Record<RuleId, string>>> = Object.fr
   'orphaned-obligation': 'document[receptivity=sealed] -contains-> item[openness!=closed]',
   'self-reference': 'see --format json; reflexive edges are excluded from traversal by default',
 });
-
-/** Exposed so callers can report on the same edge sets the rules use. */
-export { LOAD_BEARING_EDGES, OBLIGATION_EDGES, formatRef };

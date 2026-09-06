@@ -14,7 +14,6 @@
 import type { SpecGraph } from './graph.js';
 import { formatRef } from './source.js';
 import type { AnalysisResult } from './runner.js';
-import { RULE_DESCRIPTIONS } from './rules.js';
 import type { Diagnostic, Edge, Severity, SpecNode } from './types.js';
 
 export interface ReporterOptions {
@@ -38,7 +37,10 @@ export interface ColorEnvironment {
 export function shouldUseColor(environment: ColorEnvironment = {}): boolean {
   const env = environment.env ?? process.env;
   if (env['NO_COLOR'] !== undefined && env['NO_COLOR'] !== '') return false;
-  if (env['FORCE_COLOR'] !== undefined && env['FORCE_COLOR'] !== '0') return true;
+  // `FORCE_COLOR=0` is the conventional way to turn colour off, so it has to
+  // win over an attached TTY rather than merely failing to force it on.
+  if (env['FORCE_COLOR'] === '0') return false;
+  if (env['FORCE_COLOR'] !== undefined && env['FORCE_COLOR'] !== '') return true;
   if (env['TERM'] === 'dumb') return false;
   if (env['CI'] !== undefined && env['CI'] !== '') return false;
   return environment.isTTY === true;
@@ -383,6 +385,3 @@ function escapeDot(value: string): string {
 function escapeMermaid(value: string): string {
   return value.replace(/["#]/g, ' ').replace(/\s+/g, ' ').trim();
 }
-
-/** Exposed so `spec-graph rules` and the README stay in step. */
-export { RULE_DESCRIPTIONS };

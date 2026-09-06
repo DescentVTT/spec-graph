@@ -196,8 +196,12 @@ class Parser {
 
   parseStep(): StepSpec {
     const rest = this.source.slice(this.position);
+    // The forward form is lazy because its terminator is two characters (`->`),
+    // which cannot be confused with the hyphen inside `delegates-to`. The
+    // backward terminator is a single `-`, so it must be greedy and backtrack:
+    // matching lazily would read `<-delegates-to-` as the relation `delegates`.
     const forward = /^(-|=)([A-Za-z,*-]*?)(->|=>)/.exec(rest);
-    const backward = /^(<-|<=)([A-Za-z,*-]*?)(-|=)(?=\s|$|[A-Za-z*[])/.exec(rest);
+    const backward = /^(<-|<=)([A-Za-z,*-]*)(-|=)(?=\s|$|[A-Za-z*[])/.exec(rest);
 
     if (forward && (!backward || (forward.index ?? 0) <= (backward.index ?? 0))) {
       const transitive = (forward[1] as string) === '=';
@@ -378,6 +382,16 @@ export function matches(node: SpecNode, matcher: NodeMatcher, graph?: SpecGraph)
 /* -------------------------------------------------------------------------- */
 
 export interface ExecuteOptions {
+  /**
+   * Cap on the paths produced by each traversal step.
+   *
+   * It bounds *expansion*, not the initial selection: a query with no steps
+   * returns every matching node. That asymmetry is deliberate. The limit exists
+   * so a query across a dense graph cannot fan out unboundedly, and the rules
+   * run through this engine - truncating the set of nodes a rule starts from
+   * would silently drop findings, whereas truncating a runaway expansion only
+   * ever drops paths that were already beyond reading.
+   */
   readonly limit?: number | undefined;
   /**
    * Whether a step may stay inside one document.

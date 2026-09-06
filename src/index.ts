@@ -28,14 +28,7 @@ export type { CliIO, CliOptions, Command } from './cli.js';
 export { analyse, analyseSources, DEFAULT_CONCURRENCY, DEFAULT_PATTERNS } from './runner.js';
 export type { AnalyseOptions, AnalyseSourcesOptions, AnalysisResult, Source } from './runner.js';
 
-export {
-  buildGraph,
-  isOpenObligation,
-  phaseOfNode,
-  sameDocument,
-  LOAD_BEARING_EDGES,
-  OBLIGATION_EDGES,
-} from './graph.js';
+export { buildGraph, LOAD_BEARING_EDGES, OBLIGATION_EDGES } from './graph.js';
 export type { SpecGraph } from './graph.js';
 
 export {

@@ -16,7 +16,7 @@
  */
 
 import { attr, attrList, directiveFor, parseDirectives, type Directive } from './directives.js';
-import { identify, isExternal, looksLikePath, normaliseRef, type DocumentIdentity, ID_KEYS } from './identity.js';
+import { identify, isExternal, normaliseRef, type DocumentIdentity, ID_KEYS } from './identity.js';
 import { isStatusHeading, phaseFromPath, phaseOf, STATUS_KEYS, supersessionTargetsIn } from './lifecycle.js';
 import { scanMarkdown, slugify, type Link, type ListItem, type ScannedDocument } from './markdown.js';
 import { resolveItemState } from './state.js';
@@ -825,13 +825,28 @@ export function classifyReference(
   return { kind: 'references', inverted: false };
 }
 
-/** Lower-cased, whitespace-collapsed text back to the start of the sentence. */
+/** A sentence end, a blank line, or the start of a new block-level item. */
+const STATEMENT_BREAK = /[.?!;]\s|\n\s*\n|\n\s*[-*+>#]/g;
+
+/**
+ * Lower-cased, whitespace-collapsed text back to the start of the statement.
+ *
+ * The search stops at the last boundary: a governing phrase in the *previous*
+ * sentence does not govern this reference. "We deferred that to ADR-3. See also
+ * [ADR-9]." must not read as a delegation to ADR-9.
+ */
 function sentenceBefore(text: string, start: number): string {
-  const from = Math.max(0, start - 160);
-  let window = text.slice(from, start);
-  const boundary = /(?:[.?!;]\s|\n\s*\n|\n\s*[-*+>#]|^)(?![\s\S]*(?:[.?!;]\s|\n\s*\n|\n\s*[-*+>#]))/.exec(window);
-  if (boundary) window = window.slice((boundary.index ?? 0) + (boundary[0] as string).length);
-  return window.toLowerCase().replace(/[`*_~"'()\[\],]/g, ' ').replace(/\s+/g, ' ');
+  const window = text.slice(Math.max(0, start - 160), start);
+  let cut = 0;
+  STATEMENT_BREAK.lastIndex = 0;
+  for (let m = STATEMENT_BREAK.exec(window); m !== null; m = STATEMENT_BREAK.exec(window)) {
+    cut = (m.index ?? 0) + (m[0] as string).length;
+  }
+  return window
+    .slice(cut)
+    .toLowerCase()
+    .replace(/[`*_~"'()\[\],]/g, ' ')
+    .replace(/\s+/g, ' ');
 }
 
 function sentenceAfter(text: string, end: number): string {
@@ -944,5 +959,5 @@ function renderLink(link: Link): string {
   }
 }
 
-/** Exposed for tests and for the query language's `section:` predicate. */
-export { looksLikePath, OBLIGATION_SECTIONS, sectionPathAt, WEAK_SECTIONS };
+/** Exposed for tests and for callers that classify their own sections. */
+export { OBLIGATION_SECTIONS, sectionPathAt, WEAK_SECTIONS };

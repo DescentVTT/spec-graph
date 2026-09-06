@@ -172,6 +172,17 @@ describe('ghost handovers', () => {
     expect(found[0]?.message).toContain('frozen');
   });
 
+  it('does not let a verb from the previous sentence govern the next reference', () => {
+    // "deferred to" belongs to the first sentence. Letting it reach across the
+    // full stop would turn every following citation into a handover.
+    const spillover = { ...files };
+    spillover['docs/adr/0004-cache.md'] = files['docs/adr/0004-cache.md'].replace(
+      'Deferred to [ADR-0002](0002-storage.md).',
+      'That was deferred to a working group. Background: [ADR-0002](0002-storage.md).',
+    );
+    expect(rules(analyse(spillover).diagnostics)).not.toContain('ghost-handover');
+  });
+
   it('does not fire on a neutral citation', () => {
     const neutral = { ...files };
     neutral['docs/adr/0004-cache.md'] = files['docs/adr/0004-cache.md'].replace(

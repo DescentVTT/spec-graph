@@ -11,8 +11,7 @@
  * finding circular delegations.
  */
 
-import { documentOf } from './resolve.js';
-import type { DocumentNode, Edge, EdgeKind, ItemNode, Phase, SpecNode } from './types.js';
+import type { DocumentNode, Edge, EdgeKind, ItemNode, SpecNode } from './types.js';
 import { EDGE_TRAITS } from './types.js';
 
 export interface SpecGraph {
@@ -241,18 +240,3 @@ export const OBLIGATION_EDGES: readonly EdgeKind[] = Object.freeze(
 export const LOAD_BEARING_EDGES: readonly EdgeKind[] = Object.freeze(
   (Object.keys(EDGE_TRAITS) as EdgeKind[]).filter((kind) => EDGE_TRAITS[kind].loadBearing),
 );
-
-/** True when a node still represents work somebody owes. */
-export function isOpenObligation(node: SpecNode): boolean {
-  return node.kind === 'item' && node.openness !== 'closed';
-}
-
-/** The phase of the document a node belongs to. */
-export function phaseOfNode(graph: SpecGraph, id: string): Phase {
-  return graph.owningDocument(id)?.phase ?? 'unknown';
-}
-
-/** True when `a` and `b` live in the same document. */
-export function sameDocument(a: string, b: string): boolean {
-  return documentOf(a) === documentOf(b);
-}
