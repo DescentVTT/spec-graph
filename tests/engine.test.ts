@@ -370,10 +370,38 @@ describe('reference integrity', () => {
     const missing = analyseSources(sources);
     expect(only(missing.diagnostics, 'broken-reference')[0]?.message).toContain('does not resolve');
 
+    // A file that exists but was not included is a configuration problem, not a
+    // broken graph, so it is a different rule at a lower severity - otherwise a
+    // repository whose specs live outside the default patterns fails on its
+    // first run for something the user has not done wrong.
     const excluded = analyseSources(sources, { fileExists: (path) => path === 'docs/notes.md' });
-    const found = only(excluded.diagnostics, 'broken-reference')[0];
+    expect(rules(excluded.diagnostics)).not.toContain('broken-reference');
+    const found = only(excluded.diagnostics, 'reference-outside-corpus')[0];
+    expect(found?.severity).toBe('warn');
     expect(found?.message).toContain('not a specification');
-    expect(found?.hint).toContain('include patterns');
+    // The hint names the pattern that would include it, rather than telling the
+    // reader to widen something and leaving them to work out what.
+    expect(found?.hint).toContain('spec-graph "docs/**/*.md"');
+  });
+
+  it('does not treat a link to a directory as a citation', () => {
+    // "the retired decisions live in [archive/](archive/)" is ordinary prose in
+    // a README, and is not a reference to any document.
+    const { diagnostics } = analyse({
+      'docs/adr/0001-a.md': ['# A', '', 'Superseded decisions live in [archive/](archive/).'].join('\n'),
+    });
+    expect(diagnostics).toHaveLength(0);
+  });
+
+  it('still resolves a directory that is a document', () => {
+    // Resolution is attempted before the directory rule applies, so the
+    // README-in-a-folder layout keeps working.
+    const { corpus } = analyse({
+      'docs/adr/0007-sharding/README.md': '# Sharding\n',
+      'docs/adr/0008-b.md': '# B\n\nSee [sharding](0007-sharding/).\n',
+    });
+    expect(corpus.dangling).toHaveLength(0);
+    expect(corpus.edges.some((e) => e.from === 'ADR-0008' && e.to === 'ADR-0007')).toBe(true);
   });
 
   it('ignores links inside code samples', () => {

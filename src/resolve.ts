@@ -224,6 +224,11 @@ function resolveOne(
 
   if (found.ids.length === 0) {
     if (candidate.opportunistic && !worthReporting(bare, index)) return null;
+    // A trailing slash names a directory. Linking to one is ordinary - "the
+    // decisions live in [archive/](archive/)" - and is not a citation of any
+    // document. Resolution is still attempted first, so a directory-style
+    // document written as `0007-sharding/` continues to resolve.
+    if (bare.endsWith('/')) return null;
     const reason = pathMissingReason(bare, entry, options);
     return dangle(candidate, reason, found.near);
   }

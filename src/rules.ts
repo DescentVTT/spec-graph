@@ -21,6 +21,7 @@
  */
 
 import { OBLIGATION_EDGES, type SpecGraph } from './graph.js';
+import { dirnamePosix, resolveFrom } from './paths.js';
 import { execute, parseQuery, type QuerySpec } from './select.js';
 import type { ResolvedCorpus } from './resolve.js';
 import type {
@@ -45,6 +46,7 @@ export const DEFAULT_SEVERITIES: Readonly<Record<RuleId, Severity>> = Object.fre
   'ghost-handover': 'error',
   'stale-premise': 'error',
   'broken-reference': 'error',
+  'reference-outside-corpus': 'warn',
   'ambiguous-reference': 'warn',
   'circular-delegation': 'error',
   'orphaned-obligation': 'error',
@@ -61,6 +63,7 @@ export const RULE_DESCRIPTIONS: Readonly<Record<RuleId, string>> = Object.freeze
   'ghost-handover': 'an open obligation is handed to a document that can no longer absorb it',
   'stale-premise': 'a live document rests on a decision that has been retired or obviated',
   'broken-reference': 'a citation names a document or anchor that does not exist',
+  'reference-outside-corpus': 'a citation names a real document the include patterns did not reach',
   'ambiguous-reference': 'a citation matches more than one document',
   'circular-delegation': 'obligations or supersessions form a cycle, so none of them can ever land',
   'orphaned-obligation': 'a retired or frozen document still holds open obligations',
@@ -234,7 +237,14 @@ function brokenReferences(corpus: ResolvedCorpus, emit: Emit): void {
       continue;
     }
 
-    emit('broken-reference', () => ({
+    // A link to a file that exists but was not included is a configuration
+    // problem: the graph is not broken, the corpus is just incomplete. Reporting
+    // it as an error means a repository whose specifications live somewhere the
+    // default patterns miss fails on its first run, for something the user has
+    // not done wrong.
+    const rule: RuleId = ref.reason === 'not-a-spec' ? 'reference-outside-corpus' : 'broken-reference';
+
+    emit(rule, () => ({
       message: brokenMessage(ref),
       at: ref.declaredAt,
       nodes: [ref.from],
@@ -261,10 +271,26 @@ function brokenHint(ref: DanglingRef): string {
     case 'unknown-anchor':
       return 'check the heading or item id it is meant to address';
     case 'not-a-spec':
-      return 'widen the include patterns, or link somewhere else';
+      // Name the pattern that would include it: "widen your patterns" is advice
+      // the reader then has to translate, and this is the translation.
+      return `include it, for example: spec-graph "${suggestPattern(ref)}"`;
     default:
       return 'fix the identifier, or add the document it names';
   }
+}
+
+/**
+ * The narrowest include pattern that would reach a target the corpus missed.
+ *
+ * Built from the *resolved* repository-relative path, not the link as written:
+ * `../notes.md` cited from `docs/adr/` needs `docs/**\/*.md`, and suggesting
+ * `../**\/*.md` would be worse than saying nothing.
+ */
+function suggestPattern(ref: DanglingRef): string {
+  const withoutAnchor = (ref.target.split('#')[0] ?? ref.target).trim();
+  const resolved = resolveFrom(ref.declaredAt.file, withoutAnchor);
+  const directory = dirnamePosix(resolved);
+  return directory.length > 0 ? `${directory}/**/*.md` : '**/*.md';
 }
 
 /* -------------------------------------------------------------------------- */

@@ -330,6 +330,7 @@ export type RuleId =
   | 'ghost-handover'
   | 'stale-premise'
   | 'broken-reference'
+  | 'reference-outside-corpus'
   | 'ambiguous-reference'
   | 'circular-delegation'
   | 'orphaned-obligation'

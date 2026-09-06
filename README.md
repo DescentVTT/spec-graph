@@ -74,6 +74,7 @@ npx @descent-vtt/spec-graph "docs/**/*.md"
 | `circular-delegation` | error | Obligations or supersessions in a cycle, so none can ever land |
 | `orphaned-obligation` | error | A retired or frozen document still holding open work |
 | `live-supersession` | error | A superseded document still presenting itself as current |
+| `reference-outside-corpus` | warn | A citation naming a real document the include patterns did not reach |
 | `ambiguous-reference` | warn | A citation matching more than one document |
 | `unreciprocated-supersession` | warn | A retired document that never says what replaced it |
 | `state-conflict` | warn | An item whose two state signals disagree about whether work remains |
