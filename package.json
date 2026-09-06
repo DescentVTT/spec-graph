@@ -1,0 +1,68 @@
+{
+  "name": "@descent-vtt/spec-graph",
+  "version": "0.1.0",
+  "description": "Turn Markdown specs into a verifiable relational graph. Catches ghost handovers, stale premises and broken references in CI.",
+  "keywords": [
+    "adr",
+    "architecture",
+    "documentation",
+    "graph",
+    "kep",
+    "lifecycle",
+    "madr",
+    "markdown",
+    "rfc",
+    "spec",
+    "traceability"
+  ],
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "bin": {
+    "spec-graph": "bin/spec-graph.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "bin",
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
+    "lint": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "selfcheck": "node ./bin/spec-graph.js check \"docs/**/*.md\" \"README.md\" --verbose",
+    "prepublishOnly": "npm run clean && npm run build"
+  },
+  "devDependencies": {
+    "@types/node": "^26.4.1",
+    "@vitest/coverage-v8": "^4.1.11",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.11"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DescentVTT/spec-graph.git"
+  },
+  "bugs": {
+    "url": "https://github.com/DescentVTT/spec-graph/issues"
+  },
+  "homepage": "https://github.com/DescentVTT/spec-graph#readme"
+}
