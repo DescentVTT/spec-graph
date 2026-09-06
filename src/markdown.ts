@@ -86,6 +86,14 @@ export interface ListItem {
   readonly firstLine: string;
   /** Full item text including continuations and nested content. */
   readonly body: string;
+  /**
+   * `body` with code and comments blanked out, same length and offsets.
+   *
+   * Anything that searches item text for meaning - resolution markers above
+   * all - must read this rather than `body`, or a fenced example nested under
+   * the item will close it.
+   */
+  readonly maskedBody: string;
   readonly line: number;
   /** How many list items enclose this one. Top-level items are `0`. */
   readonly depth: number;
@@ -159,7 +167,7 @@ export function scanMarkdown(source: string): ScannedDocument {
   const sortedMask = mergeRanges(maskRanges);
 
   const headings = scanHeadings(lines);
-  const listItems = scanListItems(lines, text);
+  const listItems = scanListItems(lines, text, masked);
   const links = scanLinks(masked, text, index);
 
   return {
@@ -411,7 +419,7 @@ function scanHeadings(lines: readonly ScannedLine[]): Heading[] {
 
 const CHECKBOX = /^\[([ xX~\-?!*/+])\](?=[ \t]|$)/;
 
-function scanListItems(lines: readonly ScannedLine[], text: string): ListItem[] {
+function scanListItems(lines: readonly ScannedLine[], text: string, masked: string): ListItem[] {
   const out: ListItem[] = [];
   // Indents of the list items currently enclosing the cursor, outermost first.
   const stack: number[] = [];
@@ -455,6 +463,7 @@ function scanListItems(lines: readonly ScannedLine[], text: string): ListItem[] 
       checkboxStart,
       firstLine,
       body,
+      maskedBody: masked.slice(textStart, end),
       line: line.line,
       depth,
       indent,

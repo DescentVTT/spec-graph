@@ -1,0 +1,934 @@
+/**
+ * Document extraction: Markdown in, graph fragments out.
+ *
+ * This module is where domain-agnosticism is won or lost. It never requires a
+ * repository to adopt a syntax. It reads what teams already write - front
+ * matter, a `## Status` section, a checklist under `## Open Questions`, a link
+ * that says "deferred to ADR-0011" - and turns each into a typed relation with a
+ * source position.
+ *
+ * The one rule it holds to everywhere: **an inference that cannot be justified
+ * is not made.** An unrecognised status becomes `unknown`, not a guess. A link
+ * with no governing verb becomes a neutral `references`, not a dependency. Bare
+ * identifiers found in prose are opportunistic and are dropped silently when
+ * they do not resolve, because the alternative is reporting `SHA-256` as a
+ * broken reference to specification 256.
+ */
+
+import { attr, attrList, directiveFor, parseDirectives, type Directive } from './directives.js';
+import { identify, isExternal, looksLikePath, normaliseRef, type DocumentIdentity, ID_KEYS } from './identity.js';
+import { isStatusHeading, phaseFromPath, phaseOf, STATUS_KEYS, supersessionTargetsIn } from './lifecycle.js';
+import { scanMarkdown, slugify, type Link, type ListItem, type ScannedDocument } from './markdown.js';
+import { resolveItemState } from './state.js';
+import { refOf, type LineIndex } from './source.js';
+import type {
+  DocumentNode,
+  EdgeKind,
+  EdgeOrigin,
+  ItemNode,
+  ParseProblem,
+  Phase,
+  SourceRef,
+} from './types.js';
+import { parseFrontMatter, toRecord, valuesOf, type YamlEntry } from './yaml.js';
+
+/* -------------------------------------------------------------------------- */
+/* Output                                                                     */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * A relation that has been read but not yet resolved to a target node.
+ *
+ * Resolution needs the whole corpus, so extraction stops at the raw target text.
+ */
+export interface ReferenceCandidate {
+  readonly kind: EdgeKind;
+  /** Id of the node the relation was written on. */
+  readonly from: string;
+  /** The target exactly as written: a path, an identifier, or a URL. */
+  readonly target: string;
+  readonly origin: EdgeOrigin;
+  readonly declaredAt: SourceRef;
+  readonly raw: string;
+  /**
+   * When true the relation runs `target -> from`.
+   *
+   * `superseded-by: ADR-0009` written in ADR-0003 declares that *ADR-0009*
+   * supersedes ADR-0003. The edge belongs to ADR-0009; the line a human must go
+   * and fix is in ADR-0003, which is why `declaredAt` is tracked separately.
+   */
+  readonly inverted: boolean;
+  /**
+   * Opportunistic references are dropped in silence when they do not resolve.
+   * Only deliberate ones - links, front matter, directives - are reported.
+   */
+  readonly opportunistic: boolean;
+}
+
+export interface ExtractedDocument {
+  readonly document: DocumentNode;
+  readonly items: readonly ItemNode[];
+  readonly references: readonly ReferenceCandidate[];
+  readonly problems: readonly ParseProblem[];
+  /** Heading slugs, for resolving `#anchor` references into this document. */
+  readonly anchors: ReadonlySet<string>;
+  readonly identity: DocumentIdentity;
+  readonly scanned: ScannedDocument;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Vocabulary                                                                 */
+/* -------------------------------------------------------------------------- */
+
+/** Front-matter keys that declare a relation, and what they mean. */
+const RELATION_KEYS: Readonly<Record<string, { kind: EdgeKind; inverted: boolean }>> = {
+  supersedes: { kind: 'supersedes', inverted: false },
+  supercedes: { kind: 'supersedes', inverted: false },
+  replaces: { kind: 'supersedes', inverted: false },
+  obsoletes: { kind: 'supersedes', inverted: false },
+  'superseded-by': { kind: 'supersedes', inverted: true },
+  'superceded-by': { kind: 'supersedes', inverted: true },
+  'replaced-by': { kind: 'supersedes', inverted: true },
+  'obsoleted-by': { kind: 'supersedes', inverted: true },
+  amends: { kind: 'amends', inverted: false },
+  extends: { kind: 'amends', inverted: false },
+  'amended-by': { kind: 'amends', inverted: true },
+  'depends-on': { kind: 'depends-on', inverted: false },
+  dependencies: { kind: 'depends-on', inverted: false },
+  requires: { kind: 'depends-on', inverted: false },
+  assumes: { kind: 'assumes', inverted: false },
+  'blocked-by': { kind: 'blocked-by', inverted: false },
+  blocks: { kind: 'blocked-by', inverted: true },
+  'delegates-to': { kind: 'delegates-to', inverted: false },
+  'delegated-to': { kind: 'delegates-to', inverted: false },
+  'tracked-in': { kind: 'delegates-to', inverted: false },
+  related: { kind: 'relates-to', inverted: false },
+  'relates-to': { kind: 'relates-to', inverted: false },
+  'see-also': { kind: 'relates-to', inverted: false },
+  references: { kind: 'references', inverted: false },
+  refs: { kind: 'references', inverted: false },
+};
+
+/**
+ * Phrases that give a link its meaning, longest-matching-nearest wins.
+ *
+ * Only phrases that genuinely commit the citing document are here. Vague ones
+ * ("see", "covered by") stay out: a `references` edge is harmless, whereas a
+ * wrongly inferred `assumes` edge produces a confident stale-premise finding
+ * about a document that never depended on anything.
+ */
+const VERB_RULES: readonly { kind: EdgeKind; inverted: boolean; phrases: readonly string[] }[] = [
+  {
+    kind: 'supersedes',
+    inverted: true,
+    phrases: ['superseded by', 'superceded by', 'replaced by', 'obsoleted by', 'deprecated by', 'rolled into'],
+  },
+  { kind: 'supersedes', inverted: false, phrases: ['supersedes', 'supercedes', 'replaces', 'obsoletes', 'deprecates'] },
+  { kind: 'amends', inverted: true, phrases: ['amended by', 'refined by', 'clarified by', 'revised by'] },
+  { kind: 'amends', inverted: false, phrases: ['amends', 'refines', 'clarifies', 'revises'] },
+  {
+    kind: 'delegates-to',
+    inverted: false,
+    phrases: [
+      'delegated to',
+      'delegate to',
+      'deferred to',
+      'defer to',
+      'moved to',
+      'move to',
+      'tracked in',
+      'tracked by',
+      'handed off to',
+      'handed to',
+      'hand off to',
+      'follow up in',
+      'follow-up in',
+      'followup in',
+      'continued in',
+      'continues in',
+      'punted to',
+      'left to',
+      'belongs in',
+      'owned by',
+      'will be decided in',
+      'will be resolved in',
+      'will be handled in',
+      'will be handled by',
+      'will be answered in',
+      'to be decided in',
+      'to be resolved in',
+      'to be handled in',
+      'to be answered in',
+    ],
+  },
+  {
+    kind: 'blocked-by',
+    inverted: false,
+    phrases: ['blocked by', 'blocked on', 'waiting on', 'waiting for', 'gated on', 'gated by', 'unblocked by'],
+  },
+  { kind: 'blocked-by', inverted: true, phrases: ['blocks', 'blocking'] },
+  {
+    kind: 'depends-on',
+    inverted: false,
+    phrases: ['depends on', 'depend on', 'dependent on', 'requires', 'builds on', 'built on', 'relies on'],
+  },
+  { kind: 'depends-on', inverted: true, phrases: ['required by', 'depended on by'] },
+  {
+    kind: 'assumes',
+    inverted: false,
+    phrases: [
+      'assumes',
+      'assuming',
+      'on the assumption of',
+      'as decided in',
+      'as established in',
+      'as established by',
+      'as stated in',
+      'as specified in',
+      'as required by',
+      'as mandated by',
+      'in accordance with',
+      'constrained by',
+      'mandated by',
+      'governed by',
+      'predicated on',
+      'rests on',
+      'follows from',
+      'justified by',
+      'per',
+      'because',
+      'since',
+    ],
+  },
+];
+
+/** How close a governing phrase must sit to the reference it governs. */
+const VERB_WINDOW = 40;
+
+/** Headings under which a link is bookkeeping rather than a commitment. */
+const WEAK_SECTIONS: ReadonlySet<string> = new Set([
+  'see also',
+  'references',
+  'reference',
+  'related',
+  'related work',
+  'related decisions',
+  'related documents',
+  'links',
+  'further reading',
+  'prior art',
+  'history',
+  'changelog',
+  'change log',
+  'revision history',
+  'bibliography',
+  'sources',
+  'appendix',
+  'more information',
+  'resources',
+  'index',
+]);
+
+/** Headings whose bullets are obligations even without a checkbox. */
+const OBLIGATION_SECTIONS: ReadonlySet<string> = new Set([
+  'open questions',
+  'open question',
+  'unresolved questions',
+  'unanswered questions',
+  'questions',
+  'open issues',
+  'action items',
+  'actions',
+  'todo',
+  'to do',
+  'to-do',
+  'todos',
+  'next steps',
+  'follow ups',
+  'follow-ups',
+  'followups',
+  'follow up',
+  'follow-up',
+  'unresolved',
+  'outstanding',
+  'outstanding questions',
+  'tasks',
+  'task list',
+  'work items',
+  'remaining work',
+  'decisions needed',
+  'blockers',
+  'parking lot',
+  'future work',
+  'deferred',
+]);
+
+/**
+ * Prefixes that look like specification identifiers but never are.
+ *
+ * The corpus filter in `resolve.ts` is the real defence; this list only keeps
+ * the obvious noise out of the candidate set.
+ */
+const NOT_A_FAMILY: ReadonlySet<string> = new Set([
+  'v',
+  'ver',
+  'version',
+  'p',
+  'pp',
+  'fig',
+  'figure',
+  'table',
+  'tbl',
+  'section',
+  'sect',
+  'sec',
+  'step',
+  'item',
+  'no',
+  'num',
+  'line',
+  'ln',
+  'col',
+  'port',
+  'pr',
+  'issue',
+  'gh',
+  'utf',
+  'ascii',
+  'sha',
+  'md',
+  'http',
+  'https',
+  'ipv',
+  'tls',
+  'ssl',
+  'es',
+  'ecma',
+  'x',
+  'h',
+  'p99',
+  'base',
+  'sql',
+  'ipv4',
+  'ipv6',
+  'arm',
+  'x86',
+  'win',
+  'node',
+  'python',
+  'java',
+  'go',
+  'c',
+  'cpp',
+]);
+
+const BARE_REF = /\b([A-Za-z][A-Za-z0-9]{0,14})[\s._-]?(\d{1,6})\b/g;
+
+/* -------------------------------------------------------------------------- */
+/* Extraction                                                                 */
+/* -------------------------------------------------------------------------- */
+
+export interface ExtractInput {
+  /** Repository-relative POSIX path. */
+  readonly path: string;
+  readonly text: string;
+}
+
+/** Reads one document into graph fragments. Returns `null` when it opts out. */
+export function extractDocument(input: ExtractInput): ExtractedDocument | null {
+  const scanned = scanMarkdown(input.text);
+  const directives = parseDirectives(scanned.comments);
+  if (directives.some((d) => d.name === 'spec-ignore')) return null;
+
+  const index = scanned.index;
+  const file = input.path;
+  const problems: ParseProblem[] = [];
+  const at = (start: number, end: number): SourceRef => refOf(file, index, start, end);
+
+  for (const directive of directives) {
+    for (const unknown of directive.unknownAttributes) {
+      problems.push({
+        message: `unknown attribute "${unknown}" on @${directive.name}`,
+        at: at(directive.start, directive.end),
+      });
+    }
+  }
+
+  const entries = scanned.frontMatter ? parseFrontMatter(scanned.frontMatter.raw, scanned.frontMatter.start) : [];
+  const byKey = new Map<string, YamlEntry>();
+  for (const entry of entries) byKey.set(entry.key, entry);
+
+  const nodeDirective = directives.find((d) => d.name === 'spec-node') ?? null;
+  const h1 = scanned.headings.find((h) => h.level === 1) ?? null;
+
+  const declaredId =
+    (nodeDirective ? attr(nodeDirective, 'id')?.value : null) ??
+    firstValue(byKey, ID_KEYS) ??
+    null;
+
+  const identity = identify({
+    path: input.path,
+    declaredId,
+    declaredAliases: [
+      ...(nodeDirective ? attrList(nodeDirective, 'aliases') : []),
+      ...valuesOf(byKey.get('aliases')),
+      ...valuesOf(byKey.get('alias')),
+    ],
+    heading: h1?.text ?? null,
+  });
+
+  const status = readStatus(scanned, byKey, nodeDirective, index, file);
+  const pathPhase = phaseFromPath(input.path);
+  const phase: Phase = status.phase !== 'unknown' ? status.phase : pathPhase;
+
+  const title =
+    (nodeDirective ? attr(nodeDirective, 'title')?.value : null) ??
+    asString(byKey.get('title')) ??
+    h1?.text ??
+    identity.id;
+
+  const document: DocumentNode = {
+    id: identity.id,
+    kind: 'document',
+    title,
+    at: at(0, Math.min(scanned.text.length, index.lineEnd(1))),
+    path: input.path,
+    aliases: identity.aliases,
+    phase,
+    rawStatus: status.raw,
+    statusAt: status.at,
+    frontMatter: toRecord(entries),
+  };
+
+  const items = extractItems({ scanned, directives, documentId: identity.id, file, index });
+  const references = extractReferences({
+    scanned,
+    directives,
+    document,
+    items,
+    byKey,
+    status,
+    file,
+    index,
+  });
+
+  const anchors = new Set<string>(scanned.headings.map((h) => h.slug));
+
+  return { document, items, references, problems, anchors, identity, scanned };
+}
+
+/* -------------------------------------------------------------------------- */
+/* Status                                                                     */
+/* -------------------------------------------------------------------------- */
+
+interface StatusReading {
+  readonly raw: string | null;
+  readonly at: SourceRef | null;
+  readonly phase: Phase;
+}
+
+/**
+ * Finds the document status.
+ *
+ * Looks in the three places teams actually put it, in descending order of how
+ * deliberate each is: a directive, a front-matter field, then the body of a
+ * `## Status` section. A repository using none of them still gets a phase from
+ * its directory layout, which is handled by the caller.
+ */
+function readStatus(
+  scanned: ScannedDocument,
+  byKey: ReadonlyMap<string, YamlEntry>,
+  nodeDirective: Directive | null,
+  index: LineIndex,
+  file: string,
+): StatusReading {
+  if (nodeDirective) {
+    const declared = attr(nodeDirective, 'status');
+    if (declared) {
+      return {
+        raw: declared.value,
+        at: refOf(file, index, declared.start, declared.end),
+        phase: phaseOf(declared.value),
+      };
+    }
+  }
+
+  for (const key of STATUS_KEYS) {
+    const entry = byKey.get(key);
+    if (!entry) continue;
+    const raw = typeof entry.value === 'string' ? entry.value : entry.value.join(', ');
+    if (raw.trim().length === 0) continue;
+    return {
+      raw,
+      at: refOf(file, index, entry.valueStart, entry.end),
+      phase: phaseOf(raw),
+    };
+  }
+
+  const heading = scanned.headings.find((h) => isStatusHeading(h.text));
+  if (heading) {
+    const body = statusSectionBody(scanned, heading.line);
+    if (body) {
+      return {
+        raw: body.text,
+        at: refOf(file, index, body.start, body.end),
+        phase: phaseOf(body.text),
+      };
+    }
+  }
+
+  return { raw: null, at: null, phase: 'unknown' };
+}
+
+/** The first non-blank line under a `## Status` heading. */
+function statusSectionBody(
+  scanned: ScannedDocument,
+  headingLine: number,
+): { text: string; start: number; end: number } | null {
+  for (const line of scanned.lines) {
+    if (line.line <= headingLine) continue;
+    if (line.blank) continue;
+    if (line.code) return null;
+    const trimmed = line.content.trim();
+    // A heading immediately after means the section is empty.
+    if (trimmed.startsWith('#')) return null;
+    const offset = line.contentStart + line.content.indexOf(trimmed);
+    // Bullet lists under Status are a status history; take the first entry.
+    const cleaned = trimmed.replace(/^[-*+]\s+/, '');
+    const start = offset + (trimmed.length - cleaned.length);
+    return { text: cleaned, start, end: start + cleaned.length };
+  }
+  return null;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Items                                                                      */
+/* -------------------------------------------------------------------------- */
+
+interface ItemContext {
+  readonly scanned: ScannedDocument;
+  readonly directives: readonly Directive[];
+  readonly documentId: string;
+  readonly file: string;
+  readonly index: LineIndex;
+}
+
+function extractItems(context: ItemContext): ItemNode[] {
+  const { scanned, directives, documentId, file, index } = context;
+  const out: ItemNode[] = [];
+  const ordinals = new Map<string, number>();
+
+  for (const item of scanned.listItems) {
+    const section = sectionPathAt(scanned, item.start);
+    const inObligationSection = section.some((heading) => OBLIGATION_SECTIONS.has(normaliseHeading(heading)));
+    const directive = directiveFor(directives, 'spec-item', { start: item.start, end: item.end }, 200);
+
+    if (!isObligation(item, inObligationSection, directive)) continue;
+
+    const slug = section.length > 0 ? slugify(section[section.length - 1] as string) : 'item';
+    const ordinal = (ordinals.get(slug) ?? 0) + 1;
+    ordinals.set(slug, ordinal);
+
+    const declaredId = directive ? attr(directive, 'id')?.value : null;
+    const id = `${documentId}#${declaredId ?? `${slug}.${ordinal}`}`;
+
+    const state = resolveItemState({
+      file,
+      index,
+      item,
+      section,
+      directive,
+      inObligationSection,
+    });
+
+    out.push({
+      id,
+      kind: 'item',
+      title: (directive ? attr(directive, 'title')?.value : null) ?? summarise(item.firstLine),
+      at: refOf(file, index, item.start, item.end),
+      document: documentId,
+      section,
+      text: summarise(item.firstLine),
+      body: item.body,
+      disposition: state.disposition,
+      openness: state.openness,
+      evidence: state.evidence,
+      conflicts: state.conflicts,
+    });
+  }
+
+  return out;
+}
+
+/**
+ * Decides whether a bullet is an obligation.
+ *
+ * A checkbox or an explicit directive always makes one. Otherwise only
+ * top-level bullets under a heading like "Open Questions" count: promoting
+ * every bullet in a specification would bury the real obligations under the
+ * document's own prose.
+ */
+function isObligation(item: ListItem, inObligationSection: boolean, directive: Directive | null): boolean {
+  if (directive !== null) return true;
+  if (item.checkbox !== null) return true;
+  return inObligationSection && item.depth === 0;
+}
+
+/** The heading path enclosing an offset, outermost first. */
+function sectionPathAt(scanned: ScannedDocument, offset: number): string[] {
+  const path: { level: number; text: string }[] = [];
+  for (const heading of scanned.headings) {
+    if (heading.start > offset) break;
+    while (path.length > 0 && (path[path.length - 1] as { level: number }).level >= heading.level) path.pop();
+    path.push({ level: heading.level, text: heading.text });
+  }
+  return path.map((entry) => entry.text);
+}
+
+function normaliseHeading(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[`*_~]/g, '')
+    .replace(/[^\p{L}\p{N}\s-]/gu, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/** One-line form of an item for reports. */
+function summarise(text: string): string {
+  const flat = text.replace(/\s+/g, ' ').trim();
+  return flat.length <= 120 ? flat : `${flat.slice(0, 117)}...`;
+}
+
+/* -------------------------------------------------------------------------- */
+/* References                                                                 */
+/* -------------------------------------------------------------------------- */
+
+interface ReferenceContext {
+  readonly scanned: ScannedDocument;
+  readonly directives: readonly Directive[];
+  readonly document: DocumentNode;
+  readonly items: readonly ItemNode[];
+  readonly byKey: ReadonlyMap<string, YamlEntry>;
+  readonly status: StatusReading;
+  readonly file: string;
+  readonly index: LineIndex;
+}
+
+function extractReferences(context: ReferenceContext): ReferenceCandidate[] {
+  const { scanned, directives, document, items, byKey, status, file, index } = context;
+  const out: ReferenceCandidate[] = [];
+  const at = (start: number, end: number): SourceRef => refOf(file, index, start, end);
+
+  // Front matter.
+  for (const [key, relation] of Object.entries(RELATION_KEYS)) {
+    const entry = byKey.get(key) ?? byKey.get(key.replace(/-/g, '_'));
+    if (!entry) continue;
+    for (const value of valuesOf(entry)) {
+      const target = cleanTarget(value);
+      if (target.length === 0) continue;
+      out.push({
+        kind: relation.kind,
+        from: document.id,
+        target,
+        origin: 'front-matter',
+        declaredAt: at(entry.valueStart, entry.end),
+        raw: `${key}: ${value}`,
+        inverted: relation.inverted,
+        opportunistic: false,
+      });
+    }
+  }
+
+  // `status: Superseded by ADR-0009` is the most common supersession record of
+  // all, and it never appears as a field of its own.
+  if (status.raw && status.at) {
+    for (const target of supersessionTargetsIn(status.raw)) {
+      const cleaned = cleanTarget(target);
+      if (cleaned.length === 0) continue;
+      out.push({
+        kind: 'supersedes',
+        from: document.id,
+        target: cleaned,
+        origin: 'front-matter',
+        declaredAt: status.at,
+        raw: status.raw,
+        inverted: true,
+        opportunistic: true,
+      });
+    }
+  }
+
+  // Explicit edge directives.
+  for (const directive of directives) {
+    if (directive.name !== 'spec-edge') continue;
+    const kind = attr(directive, 'kind')?.value as EdgeKind | undefined;
+    const to = attr(directive, 'to');
+    const from = attr(directive, 'from');
+    if (!kind) continue;
+    const owner = ownerOf(items, directive.start) ?? document.id;
+    if (to) {
+      out.push({
+        kind,
+        from: owner,
+        target: to.value,
+        origin: 'directive',
+        declaredAt: at(to.start, to.end),
+        raw: `@spec-edge kind="${kind}" to="${to.value}"`,
+        inverted: false,
+        opportunistic: false,
+      });
+    }
+    if (from) {
+      out.push({
+        kind,
+        from: owner,
+        target: from.value,
+        origin: 'directive',
+        declaredAt: at(from.start, from.end),
+        raw: `@spec-edge kind="${kind}" from="${from.value}"`,
+        inverted: true,
+        opportunistic: false,
+      });
+    }
+  }
+
+  // Prose links.
+  const linked = new Set<string>();
+  for (const link of scanned.links) {
+    if (link.form === 'definition') continue;
+    const target = cleanTarget(link.target);
+    if (target.length === 0) continue;
+    if (isExternal(target)) continue;
+
+    const owner = ownerOf(items, link.start) ?? document.id;
+    const section = sectionPathAt(scanned, link.start);
+    const classified = classifyReference(scanned.masked, link.start, link.end, section);
+
+    linked.add(normaliseRef(stripAnchor(target)));
+    out.push({
+      kind: classified.kind,
+      from: owner,
+      target,
+      origin: 'link',
+      declaredAt: at(link.targetStart, link.targetStart + link.target.length),
+      raw: renderLink(link),
+      inverted: classified.inverted,
+      opportunistic: false,
+    });
+  }
+
+  // Bare identifiers in prose. Everything already covered by a link is skipped
+  // so a citation written as `[ADR-7](0007.md)` is not counted twice.
+  for (const bare of findBareReferences(scanned)) {
+    const key = normaliseRef(bare.text);
+    if (linked.has(key)) continue;
+    const owner = ownerOf(items, bare.start) ?? document.id;
+    const section = sectionPathAt(scanned, bare.start);
+    const classified = classifyReference(scanned.masked, bare.start, bare.end, section);
+    out.push({
+      kind: classified.kind,
+      from: owner,
+      target: bare.text,
+      origin: 'text',
+      declaredAt: at(bare.start, bare.end),
+      raw: bare.text,
+      inverted: classified.inverted,
+      opportunistic: true,
+    });
+  }
+
+  return out;
+}
+
+/** The item whose block contains an offset, if any. */
+function ownerOf(items: readonly ItemNode[], offset: number): string | null {
+  let best: ItemNode | null = null;
+  for (const item of items) {
+    const span = item.at.span;
+    if (offset < span.start.offset || offset >= span.end.offset) continue;
+    // Innermost wins when items nest.
+    if (best === null || span.start.offset > best.at.span.start.offset) best = item;
+  }
+  return best?.id ?? null;
+}
+
+export interface Classification {
+  readonly kind: EdgeKind;
+  readonly inverted: boolean;
+}
+
+/**
+ * Decides what a reference means from the words around it.
+ *
+ * The nearest governing phrase within {@link VERB_WINDOW} characters wins, and
+ * the search never crosses a sentence boundary. With nothing to go on, a
+ * reference under a "See also" heading is bookkeeping and everything else is a
+ * neutral citation.
+ */
+export function classifyReference(
+  text: string,
+  start: number,
+  end: number,
+  section: readonly string[],
+): Classification {
+  const before = sentenceBefore(text, start);
+  let best: { rule: Classification; distance: number; length: number } | null = null;
+
+  for (const rule of VERB_RULES) {
+    for (const phrase of rule.phrases) {
+      const found = lastPhraseIndex(before, phrase);
+      if (found === -1) continue;
+      const distance = before.length - (found + phrase.length);
+      if (distance > VERB_WINDOW) continue;
+      const candidate = { rule: { kind: rule.kind, inverted: rule.inverted }, distance, length: phrase.length };
+      if (best === null || candidate.distance < best.distance || (candidate.distance === best.distance && candidate.length > best.length)) {
+        best = candidate;
+      }
+    }
+  }
+
+  if (best) return best.rule;
+
+  // "[ADR-0009] supersedes this decision": the reference is the subject, so the
+  // relation runs the other way.
+  const after = sentenceAfter(text, end);
+  for (const rule of VERB_RULES) {
+    if (rule.inverted) continue;
+    for (const phrase of rule.phrases) {
+      if (!after.startsWith(phrase)) continue;
+      if (rule.kind === 'assumes' || rule.kind === 'depends-on') continue;
+      return { kind: rule.kind, inverted: true };
+    }
+  }
+
+  const innermost = section.length > 0 ? normaliseHeading(section[section.length - 1] as string) : '';
+  if (WEAK_SECTIONS.has(innermost)) return { kind: 'relates-to', inverted: false };
+  for (const heading of section) {
+    if (WEAK_SECTIONS.has(normaliseHeading(heading))) return { kind: 'relates-to', inverted: false };
+  }
+
+  return { kind: 'references', inverted: false };
+}
+
+/** Lower-cased, whitespace-collapsed text back to the start of the sentence. */
+function sentenceBefore(text: string, start: number): string {
+  const from = Math.max(0, start - 160);
+  let window = text.slice(from, start);
+  const boundary = /(?:[.?!;]\s|\n\s*\n|\n\s*[-*+>#]|^)(?![\s\S]*(?:[.?!;]\s|\n\s*\n|\n\s*[-*+>#]))/.exec(window);
+  if (boundary) window = window.slice((boundary.index ?? 0) + (boundary[0] as string).length);
+  return window.toLowerCase().replace(/[`*_~"'()\[\],]/g, ' ').replace(/\s+/g, ' ');
+}
+
+function sentenceAfter(text: string, end: number): string {
+  const window = text.slice(end, Math.min(text.length, end + 80));
+  const stop = /[.?!;\n]/.exec(window);
+  const cut = stop ? window.slice(0, stop.index) : window;
+  return cut.toLowerCase().replace(/[`*_~"'()\[\],]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+/** Last index of `phrase` in `text`, respecting word boundaries. */
+function lastPhraseIndex(text: string, phrase: string): number {
+  let from = text.length;
+  for (;;) {
+    const found = text.lastIndexOf(phrase, from);
+    if (found === -1) return -1;
+    const beforeChar = found === 0 ? ' ' : (text[found - 1] as string);
+    const afterChar = text[found + phrase.length] ?? ' ';
+    if (!/[\p{L}\p{N}]/u.test(beforeChar) && !/[\p{L}\p{N}]/u.test(afterChar)) return found;
+    from = found - 1;
+    if (from < 0) return -1;
+  }
+}
+
+interface BareReference {
+  readonly text: string;
+  readonly start: number;
+  readonly end: number;
+}
+
+/**
+ * Finds identifiers written as plain prose, such as "as decided in ADR-0007".
+ *
+ * Link constructs are blanked first. Without that, `[ADR-7](https://x/adr-7)`
+ * would yield three references to the same thing - one real and two harvested
+ * out of a URL - which is precisely the mis-match that makes hand-rolled regex
+ * checks untrustworthy.
+ */
+function findBareReferences(scanned: ScannedDocument): BareReference[] {
+  const buffer = scanned.masked.split('');
+  for (const link of scanned.links) {
+    for (let i = link.start; i < Math.min(link.end, buffer.length); i += 1) {
+      const ch = buffer[i] as string;
+      if (ch !== '\n' && ch !== '\r') buffer[i] = ' ';
+    }
+  }
+  const text = buffer.join('');
+
+  const out: BareReference[] = [];
+  BARE_REF.lastIndex = 0;
+  for (let m = BARE_REF.exec(text); m !== null; m = BARE_REF.exec(text)) {
+    const prefix = (m[1] as string).toLowerCase();
+    if (NOT_A_FAMILY.has(prefix)) continue;
+    if (prefix.length < 2) continue;
+    const start = m.index ?? 0;
+    // A token glued to a path separator or an extension is not a citation.
+    const before = text[start - 1] ?? ' ';
+    const after = text[start + (m[0] as string).length] ?? ' ';
+    if (before === '/' || before === '.' || after === '/') continue;
+    out.push({ text: m[0] as string, start, end: start + (m[0] as string).length });
+  }
+  return out;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Helpers                                                                    */
+/* -------------------------------------------------------------------------- */
+
+function firstValue(byKey: ReadonlyMap<string, YamlEntry>, keys: readonly string[]): string | null {
+  for (const key of keys) {
+    const entry = byKey.get(key);
+    if (!entry) continue;
+    const value = asString(entry);
+    if (value !== null && value.length > 0) return value;
+  }
+  return null;
+}
+
+function asString(entry: YamlEntry | undefined): string | null {
+  if (!entry) return null;
+  if (typeof entry.value === 'string') return entry.value.trim().length > 0 ? entry.value.trim() : null;
+  return entry.value.length > 0 ? (entry.value[0] as string) : null;
+}
+
+/** Strips Markdown decoration a target may still be wearing. */
+function cleanTarget(value: string): string {
+  return value
+    .trim()
+    .replace(/^[`'"<(\[]+/, '')
+    .replace(/[`'">)\]]+$/, '')
+    .replace(/[.,;]+$/, '')
+    .trim();
+}
+
+function stripAnchor(target: string): string {
+  const hash = target.indexOf('#');
+  return hash <= 0 ? target : target.slice(0, hash);
+}
+
+function renderLink(link: Link): string {
+  switch (link.form) {
+    case 'wiki':
+      return `[[${link.target}]]`;
+    case 'autolink':
+      return `<${link.target}>`;
+    case 'reference':
+    case 'shortcut':
+      return `[${link.text}][${link.target}]`;
+    default:
+      return `[${link.text}](${link.target})`;
+  }
+}
+
+/** Exposed for tests and for the query language's `section:` predicate. */
+export { looksLikePath, OBLIGATION_SECTIONS, sectionPathAt, WEAK_SECTIONS };

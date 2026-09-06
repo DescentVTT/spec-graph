@@ -220,6 +220,14 @@ export interface Edge {
   readonly declaredAt: SourceRef;
   /** The raw text that produced the edge, for diagnostics. */
   readonly raw: string;
+  /**
+   * Every file that declares this relation.
+   *
+   * A supersession stated only in the superseding document leaves the
+   * superseded one silently presenting itself as current, which is a finding in
+   * its own right - so the set of declaration sites has to survive de-duplication.
+   */
+  readonly declaredIn: readonly string[];
   /** True when `from` and `to` are the same node. Kept, never traversed. */
   readonly reflexive: boolean;
 }
