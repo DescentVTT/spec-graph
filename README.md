@@ -239,7 +239,8 @@ gate without writing any code:
 
 ```text
 document[phase=active] -delegates-to-> item[openness=open]
-└── node type ──┘└─ predicate ─┘ └─ relation ─┘ └─── node ───┘
+└──────┘└────────────┘ └─────────────┘ └─────────────────┘
+  node    predicate       relation            node
 
 Node types   document · item · *
 Attributes   id kind title path file line phase status receptivity alias
