@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 import { HELP } from '../src/cli.js';
@@ -16,6 +16,36 @@ import { EDGE_KINDS, OPENNESS_OF, type Disposition, type DocumentNode, type Item
  */
 
 const README = readFileSync('README.md', 'utf8');
+
+describe('the source tree', () => {
+  function* walk(directory: string): Generator<string> {
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      const path = `${directory}/${entry.name}`;
+      if (entry.isDirectory()) yield* walk(path);
+      else if (/\.(ts|js|mjs|json|md)$/.test(entry.name)) yield path;
+    }
+  }
+
+  const files = [...walk('src'), ...walk('tests'), ...walk('bin'), 'README.md', 'CONTRIBUTING.md'];
+
+  it('contains no NUL bytes', () => {
+    // A stray NUL makes a file "binary" to grep, diff and review tooling, and
+    // hides in plain sight because editors render it as nothing at all. This
+    // has happened twice, so it is now an invariant rather than a habit.
+    // Spelled without an escape sequence, because an escape is exactly the
+    // kind of thing that gets mangled on its way into a file.
+    const NUL = String.fromCharCode(0);
+    const offenders = files.filter((file) => readFileSync(file, 'utf8').includes(NUL));
+    expect(offenders).toEqual([]);
+  });
+
+  it('is committed with LF line endings', () => {
+    // bin/spec-graph.js starts with a shebang: a CRLF there makes Linux look
+    // for an interpreter named "node\r".
+    const offenders = files.filter((file) => readFileSync(file, 'utf8').includes('\r\n'));
+    expect(offenders).toEqual([]);
+  });
+});
 
 describe('the README rule table', () => {
   const rows = [...README.matchAll(/^\|\s*`([a-z-]+)`\s*\|\s*(error|warn|info)\s*\|/gm)].map((row) => ({

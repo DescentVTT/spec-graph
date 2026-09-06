@@ -176,6 +176,7 @@ const STATE_ALIASES: Readonly<Record<string, Disposition>> = {
 };
 
 const MARKER_PATTERN = buildMarkerPattern();
+const MARKER_LOOKUP = markerLookup();
 
 export interface StateInput {
   readonly file: string;
@@ -335,7 +336,6 @@ function buildMarkerPattern(): RegExp {
 
 function findMarkers(body: string): MarkerHit[] {
   const out: MarkerHit[] = [];
-  const dispositionOf = markerLookup();
 
   MARKER_PATTERN.lastIndex = 0;
   for (let m = MARKER_PATTERN.exec(body); m !== null; m = MARKER_PATTERN.exec(body)) {
@@ -352,7 +352,7 @@ function findMarkers(body: string): MarkerHit[] {
     // keep the queue" must not close an item.
     if (!emphasised && !punctuated && !shouted) continue;
 
-    const disposition = dispositionOf.get(normalisePhrase(phrase));
+    const disposition = MARKER_LOOKUP.get(normalisePhrase(phrase));
     if (!disposition) continue;
 
     const start = (m.index ?? 0) + (m[0] as string).indexOf(phrase);
@@ -365,6 +365,7 @@ function findMarkers(body: string): MarkerHit[] {
   return out;
 }
 
+/** Built once: this used to be rebuilt for every item in the corpus. */
 function markerLookup(): Map<string, Disposition> {
   const map = new Map<string, Disposition>();
   for (const [disposition, phrases] of Object.entries(MARKERS) as [Disposition, readonly string[]][]) {
