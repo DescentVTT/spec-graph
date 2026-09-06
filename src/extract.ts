@@ -219,6 +219,30 @@ const VERB_RULES: readonly { kind: EdgeKind; inverted: boolean; phrases: readonl
 /** How close a governing phrase must sit to the reference it governs. */
 const VERB_WINDOW = 40;
 
+/**
+ * Every governing phrase compiled into one alternation, plus a lookup table.
+ *
+ * Classification runs on every reference in the corpus, and testing a hundred
+ * phrases one at a time made it the most expensive thing extraction did. The
+ * alternation is sorted longest-first so that at any given position the regex
+ * prefers `partially resolved` over `resolved`, matching the precedence the
+ * per-phrase search had. Lookarounds rather than `\b`, because phrases contain
+ * hyphens and `\b` does the wrong thing around them.
+ */
+const VERB_LOOKUP: ReadonlyMap<string, Classification> = new Map(
+  VERB_RULES.flatMap((rule) =>
+    rule.phrases.map((phrase) => [phrase, { kind: rule.kind, inverted: rule.inverted }] as const),
+  ),
+);
+
+const VERB_PATTERN = new RegExp(
+  `(?<![\\p{L}\\p{N}])(?:${[...VERB_LOOKUP.keys()]
+    .sort((a, b) => b.length - a.length)
+    .map((phrase) => phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+    .join('|')})(?![\\p{L}\\p{N}])`,
+  'gu',
+);
+
 /** Headings under which a link is bookkeeping rather than a commitment. */
 const WEAK_SECTIONS: ReadonlySet<string> = new Set([
   'see also',
@@ -599,13 +623,25 @@ function sectionPathAt(scanned: ScannedDocument, offset: number): string[] {
   return path.map((entry) => entry.text);
 }
 
+/**
+ * Memoised because it is called for every heading above every reference and
+ * every item, and a corpus has only a handful of distinct headings - `Context`,
+ * `Decision`, `Open Questions`, `See also` - repeated thousands of times.
+ */
+const headingCache = new Map<string, string>();
+
 function normaliseHeading(text: string): string {
-  return text
+  const cached = headingCache.get(text);
+  if (cached !== undefined) return cached;
+  const normalised = text
     .toLowerCase()
     .replace(/[`*_~]/g, '')
     .replace(/[^\p{L}\p{N}\s-]/gu, '')
     .replace(/\s+/g, ' ')
     .trim();
+  // Bounded so a pathological corpus of unique headings cannot grow it forever.
+  if (headingCache.size < 4096) headingCache.set(text, normalised);
+  return normalised;
 }
 
 /** One-line form of an item for reports. */
@@ -787,22 +823,20 @@ export function classifyReference(
   section: readonly string[],
 ): Classification {
   const before = sentenceBefore(text, start);
-  let best: { rule: Classification; distance: number; length: number } | null = null;
 
-  for (const rule of VERB_RULES) {
-    for (const phrase of rule.phrases) {
-      const found = lastPhraseIndex(before, phrase);
-      if (found === -1) continue;
-      const distance = before.length - (found + phrase.length);
-      if (distance > VERB_WINDOW) continue;
-      const candidate = { rule: { kind: rule.kind, inverted: rule.inverted }, distance, length: phrase.length };
-      if (best === null || candidate.distance < best.distance || (candidate.distance === best.distance && candidate.length > best.length)) {
-        best = candidate;
-      }
-    }
+  // Left to right, so the last match within the window is the nearest one - and
+  // the nearest governing phrase is the one that governs.
+  let best: Classification | null = null;
+  VERB_PATTERN.lastIndex = 0;
+  for (let m = VERB_PATTERN.exec(before); m !== null; m = VERB_PATTERN.exec(before)) {
+    const phrase = m[0] as string;
+    const distance = before.length - ((m.index ?? 0) + phrase.length);
+    if (distance > VERB_WINDOW) continue;
+    const rule = VERB_LOOKUP.get(phrase);
+    if (rule) best = rule;
   }
 
-  if (best) return best.rule;
+  if (best) return best;
 
   // "[ADR-0009] supersedes this decision": the reference is the subject, so the
   // relation runs the other way.
@@ -856,20 +890,6 @@ function sentenceAfter(text: string, end: number): string {
   return cut.toLowerCase().replace(/[`*_~"'()\[\],]/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
-/** Last index of `phrase` in `text`, respecting word boundaries. */
-function lastPhraseIndex(text: string, phrase: string): number {
-  let from = text.length;
-  for (;;) {
-    const found = text.lastIndexOf(phrase, from);
-    if (found === -1) return -1;
-    const beforeChar = found === 0 ? ' ' : (text[found - 1] as string);
-    const afterChar = text[found + phrase.length] ?? ' ';
-    if (!/[\p{L}\p{N}]/u.test(beforeChar) && !/[\p{L}\p{N}]/u.test(afterChar)) return found;
-    from = found - 1;
-    if (from < 0) return -1;
-  }
-}
-
 interface BareReference {
   readonly text: string;
   readonly start: number;
@@ -885,14 +905,20 @@ interface BareReference {
  * checks untrustworthy.
  */
 function findBareReferences(scanned: ScannedDocument): BareReference[] {
-  const buffer = scanned.masked.split('');
+  // Slice-based for the same reason as the scanner's masking: this runs over
+  // every document, and a per-character array is the wrong shape for the job.
+  const source = scanned.masked;
+  let text = '';
+  let cursor = 0;
   for (const link of scanned.links) {
-    for (let i = link.start; i < Math.min(link.end, buffer.length); i += 1) {
-      const ch = buffer[i] as string;
-      if (ch !== '\n' && ch !== '\r') buffer[i] = ' ';
-    }
+    const start = Math.max(link.start, cursor);
+    const end = Math.min(link.end, source.length);
+    if (end <= start) continue;
+    text += source.slice(cursor, start);
+    text += source.slice(start, end).replace(/[^\n\r]/g, ' ');
+    cursor = end;
   }
-  const text = buffer.join('');
+  text += source.slice(cursor);
 
   const out: BareReference[] = [];
   BARE_REF.lastIndex = 0;

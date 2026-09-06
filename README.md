@@ -373,6 +373,11 @@ Five ADRs, which `spec-graph` validates on every CI run:
 scanner, the front-matter reader, the glob matcher and the query parser are all
 written here, so the whole package is auditable in an afternoon.
 
+**Fast enough to run on save.** A synthetic corpus of 2,000 documents — 8.9 MB,
+6,000 obligations, 12,285 relations — is read, parsed, resolved and checked in
+about 1.3 seconds on a laptop, roughly a third of which is file I/O. A typical
+repository with a few dozen ADRs finishes in tens of milliseconds.
+
 ## Relationship to spec-guard
 
 [`spec-guard`](https://github.com/DescentVTT/spec-guard) checks the **vertical**

@@ -626,18 +626,27 @@ function containsOffset(sorted: readonly Range[], offset: number): boolean {
 function applyMask(text: string, ranges: readonly Range[]): string {
   const merged = mergeRanges(ranges);
   if (merged.length === 0) return text;
-  // Split by code unit, not by code point: every offset in the result must keep
-  // matching the original string, astral characters included.
-  const buffer = text.split('');
+
+  // Built from slices rather than a per-character array. Masking runs over every
+  // byte of every document, and a `split('')`/`join('')` round trip allocates an
+  // array entry per character - on a large corpus that was the single most
+  // expensive thing the scanner did.
+  let out = '';
+  let cursor = 0;
   for (const range of merged) {
-    const end = Math.min(range.end, buffer.length);
-    for (let i = Math.max(range.start, 0); i < end; i += 1) {
-      const ch = buffer[i] as string;
-      if (ch !== '\n' && ch !== '\r') buffer[i] = ' ';
-    }
+    const start = Math.max(range.start, cursor);
+    const end = Math.min(range.end, text.length);
+    if (end <= start) continue;
+    out += text.slice(cursor, start);
+    // The character class is deliberately not Unicode-aware: a surrogate pair
+    // must become two spaces so that every later offset still lines up.
+    out += text.slice(start, end).replace(NON_TERMINATOR, ' ');
+    cursor = end;
   }
-  return buffer.join('');
+  return out + text.slice(cursor);
 }
+
+const NON_TERMINATOR = /[^\n\r]/g;
 
 /* -------------------------------------------------------------------------- */
 /* Links                                                                      */
