@@ -41,8 +41,9 @@ linters untrustworthy:
 
 ## Consequences
 
-Roughly 600 lines we own and must maintain, in exchange for zero runtime
-dependencies and exact positions.
+Roughly 850 lines we own and must maintain, in exchange for zero runtime
+dependencies and exact positions. That is the real price and it is worth stating
+plainly: it is the largest single module in the project.
 
 One deliberate imprecision: indented code blocks are recognised only outside list
 containers. Inside a list, four-space indentation is a continuation far more

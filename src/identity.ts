@@ -23,7 +23,6 @@ const FAMILY_DIRECTORIES: Readonly<Record<string, string>> = {
   decisions: 'ADR',
   rfc: 'RFC',
   rfcs: 'RFC',
-  'text/rfcs': 'RFC',
   kep: 'KEP',
   keps: 'KEP',
   enhancements: 'KEP',
@@ -133,7 +132,10 @@ export function identify(input: IdentityInput): DocumentIdentity {
   } else if (input.declaredId) {
     id = input.declaredId.trim();
   } else if (number !== null) {
-    id = String(number);
+    // Numbered but with no family to prefix - a Rust RFC in `text/0001-foo.md`,
+    // say. The file stem is a far better identity than a bare "1": it is what
+    // people actually type, and it stays unique across the repository.
+    id = stem.length > 0 ? stem : String(number);
   } else {
     id = stem.length > 0 ? stem : input.path;
   }
@@ -146,12 +148,17 @@ export function identify(input: IdentityInput): DocumentIdentity {
   for (const alias of input.declaredAliases) add(alias);
   if (input.heading) add(headingId(input.heading));
 
-  if (number !== null && family !== null) {
-    // Every spelling a human might type. `normaliseRef` folds separators, so
-    // `adr-7`, `adr 7` and `adr7` collapse to one key; the padding variants do
-    // not, and each needs registering.
-    for (const digits of numberSpellings(number, witnesses)) {
-      add(`${family}-${digits}`);
+  if (number !== null) {
+    const spellings = numberSpellings(number, witnesses);
+    if (family !== null) {
+      // Every spelling a human might type. `normaliseRef` folds separators, so
+      // `adr-7`, `adr 7` and `adr7` collapse to one key; the padding variants do
+      // not, and each needs registering.
+      for (const digits of spellings) add(`${family}-${digits}`);
+    } else {
+      // With no family there is only one number space in the repository, so a
+      // bare `0001` is unambiguous and worth resolving.
+      for (const digits of spellings) add(digits);
     }
   }
 
