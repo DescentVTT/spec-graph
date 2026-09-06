@@ -403,7 +403,7 @@ describe('cycles', () => {
     });
     const found = only(diagnostics, 'circular-delegation');
     expect(found).toHaveLength(1);
-    expect(found[0]?.nodes.sort()).toEqual(['ADR-0001', 'ADR-0002', 'ADR-0003']);
+    expect([...(found[0]?.nodes ?? [])].sort()).toEqual(['ADR-0001', 'ADR-0002', 'ADR-0003']);
   });
 
   it('finds a supersession cycle and names it as one', () => {

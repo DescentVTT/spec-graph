@@ -229,6 +229,12 @@ function resolveOne(
   }
 
   const documentId = found.ids[0] as string;
+
+  // A document naming itself in prose - almost always its own H1, `# ADR-0007:
+  // Sharding` - is not a citation. Deliberate self-links are kept, because a
+  // link that points at its own document is a real mistake worth reporting.
+  if (candidate.opportunistic && documentId === entry.document.id) return null;
+
   if (anchor !== null) return bindAnchor(candidate, documentId, anchor, index, nodes);
 
   return makeEdge(candidate, documentId);

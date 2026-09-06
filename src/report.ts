@@ -250,9 +250,24 @@ export function formatGraph(graph: SpecGraph, format: GraphFormat, options: Grap
   const skipItems = options.documentsOnly ?? false;
   const nodes = [...graph.nodes.values()].filter((node) => !skipItems || node.kind === 'document');
   const visible = new Set(nodes.map((node) => node.id));
-  const edges = graph.edges.filter(
-    (edge) => visible.has(edge.from) && visible.has(edge.to) && (!skipItems || edge.kind !== 'contains'),
-  );
+
+  // Hiding items must not hide what they say. An obligation delegated from an
+  // item to a document is lifted onto the item's owner, so the document-level
+  // view still shows the handover rather than silently losing it.
+  const lifted = skipItems
+    ? dedupeEdges(
+        graph.edges
+          .filter((edge) => edge.kind !== 'contains')
+          .map((edge) => {
+            const from = graph.owningDocument(edge.from)?.id ?? edge.from;
+            const to = graph.owningDocument(edge.to)?.id ?? edge.to;
+            return from === edge.from && to === edge.to ? edge : { ...edge, from, to, reflexive: from === to };
+          })
+          .filter((edge) => !edge.reflexive),
+      )
+    : graph.edges;
+
+  const edges = lifted.filter((edge) => visible.has(edge.from) && visible.has(edge.to));
 
   switch (format) {
     case 'dot':
@@ -278,6 +293,19 @@ export function formatGraph(graph: SpecGraph, format: GraphFormat, options: Grap
         2,
       )}\n`;
   }
+}
+
+/** Collapses duplicate relations produced by lifting item edges onto documents. */
+function dedupeEdges(edges: readonly Edge[]): Edge[] {
+  const seen = new Set<string>();
+  const out: Edge[] = [];
+  for (const edge of edges) {
+    const key = `${edge.kind} ${edge.from} ${edge.to}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(edge);
+  }
+  return out;
 }
 
 function serialiseNode(node: SpecNode): Record<string, unknown> {

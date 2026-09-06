@@ -192,12 +192,10 @@ function stalePremises(graph: SpecGraph, emit: Emit): void {
         message: `${describe(source)} ${EDGE_TRAITS[edge.kind].phrase} ${describe(target)}, which no longer holds`,
         at: edge.declaredAt,
         nodes: [source.id, target.id],
-        related: [
-          related(target.at, because),
-          ...(targetDocument && targetDocument.statusAt && target.kind === 'document'
-            ? [related(targetDocument.statusAt, `declared here as "${targetDocument.rawStatus ?? ''}"`)]
-            : []),
-        ],
+        // Point at the status line when there is one: that is the sentence that
+        // makes the premise stale, and repeating the document's first line
+        // underneath it adds nothing.
+        related: [related(target.kind === 'document' ? (targetDocument?.statusAt ?? target.at) : target.at, because)],
         hint: `re-check this dependency: the constraint it assumes may have been lifted when ${target.kind === 'item' ? 'the question closed' : `${target.id} was retired`}`,
       }));
     }
