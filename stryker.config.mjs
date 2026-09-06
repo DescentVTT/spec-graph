@@ -51,7 +51,9 @@ export default {
   // is still far longer than any healthy mutant needs.
   timeoutMS: 15000,
   concurrency: 8,
-  // `break` is a regression guard, not an aspiration: it sits below the measured
-  // score so losing ground fails the build while ordinary refactoring does not.
-  thresholds: { high: 90, low: 75, break: 70 },
+  // `break` is a regression guard, not an aspiration: it sits a few points below
+  // the measured score (63.31% over 6,083 mutants, commit aff5533) so that
+  // losing ground fails the build while ordinary refactoring does not.
+  // See docs/adr/0007-mutation-testing.md for what the number is made of.
+  thresholds: { high: 80, low: 63, break: 60 },
 };

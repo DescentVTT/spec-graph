@@ -362,18 +362,27 @@ exported. Reporters, editor extensions and custom rules are all first-class.
 
 ## Design
 
-Five ADRs, which `spec-graph` validates on every CI run:
+Seven ADRs, which `spec-graph` validates on every CI run:
 
 - [ADR-0001 — A hand-written Markdown scanner](docs/adr/0001-hand-written-markdown-scanner.md)
 - [ADR-0002 — A four-phase lifecycle lattice](docs/adr/0002-lifecycle-lattice.md)
 - [ADR-0003 — Item state is resolved from competing signals](docs/adr/0003-item-state-signals.md)
 - [ADR-0004 — Reference resolution is deliberately asymmetric](docs/adr/0004-reference-resolution.md)
 - [ADR-0005 — The rules and the query language share one engine](docs/adr/0005-rules-are-queries.md)
+- [ADR-0006 — False positives cost more than misses](docs/adr/0006-false-positives-cost-more.md)
+- [ADR-0007 — Mutation testing, and what the score actually means](docs/adr/0007-mutation-testing.md)
 
 **Zero runtime dependencies.** Node 22+, native ESM, TypeScript strict with
 `noUncheckedIndexedAccess` and `exactOptionalPropertyTypes`. The Markdown
 scanner, the front-matter reader, the glob matcher and the query parser are all
 written here, so the whole package is auditable in an afternoon.
+
+**Verified, not just covered.** 363 tests; 92.7% statement and 95.7% line
+coverage. Coverage says a line ran, so the suite is also held to a mutation
+score - 63.31% over 6,083 mutants - because a vocabulary entry or a boundary
+condition can be weakened by an ordinary-looking refactor without a single test
+going red. [ADR-0007](docs/adr/0007-mutation-testing.md) is straight about what
+that number is and is not.
 
 **Fast enough to run on save.** A synthetic corpus of 2,000 documents — 8.9 MB,
 6,000 obligations, 12,285 relations — is read, parsed, resolved and checked in
