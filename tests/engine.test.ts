@@ -311,6 +311,28 @@ describe('reference integrity', () => {
     expect(found[0]?.hint).toContain('ADR-0002');
   });
 
+  it('does not treat a link to source code as a broken specification reference', () => {
+    // Design documents link to source constantly. Reporting that would fire on
+    // the most ordinary thing a specification does.
+    const { diagnostics } = analyse({
+      'docs/adr/0001-a.md': ['# A', '', 'Implemented in [rules.ts](../../src/rules.ts) and [a diagram](x.png).'].join(
+        '\n',
+      ),
+    });
+    expect(diagnostics).toHaveLength(0);
+  });
+
+  it('distinguishes a document outside the include patterns from one that is missing', () => {
+    const sources = [{ path: 'docs/adr/0001-a.md', text: ['# A', '', 'See [notes](../notes.md).'].join('\n') }];
+    const missing = analyseSources(sources);
+    expect(only(missing.diagnostics, 'broken-reference')[0]?.message).toContain('does not resolve');
+
+    const excluded = analyseSources(sources, { fileExists: (path) => path === 'docs/notes.md' });
+    const found = only(excluded.diagnostics, 'broken-reference')[0];
+    expect(found?.message).toContain('not a specification');
+    expect(found?.hint).toContain('include patterns');
+  });
+
   it('ignores links inside code samples', () => {
     const { diagnostics } = analyse({
       'docs/adr/0001-a.md': ['# A', '', '```md', 'See [ADR-0099](0099-missing.md).', '```'].join('\n'),

@@ -7,6 +7,7 @@
  * never existed on disk.
  */
 
+import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 
 import { extractDocument, type ExtractedDocument } from './extract.js';
@@ -70,7 +71,11 @@ export async function analyse(options: AnalyseOptions): Promise<AnalysisResult> 
 
   return finish(
     analyseSources(sources, {
-      fileExists: (path) => present.has(path.toLowerCase()),
+      // Consulted only for references that failed to resolve, so the cost is
+      // bounded by the number of findings - and it buys the difference between
+      // "that document does not exist" and "that document exists but your
+      // include patterns did not reach it", which are different fixes.
+      fileExists: (path) => present.has(path.toLowerCase()) || existsSync(`${root}/${path}`),
       ...(options.severities !== undefined ? { severities: options.severities } : {}),
       ...(options.maxRelated !== undefined ? { maxRelated: options.maxRelated } : {}),
     }),

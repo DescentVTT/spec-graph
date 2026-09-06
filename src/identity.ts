@@ -192,7 +192,30 @@ export function parseBareRef(value: string): number | null {
 
 /** True when a reference target names a location rather than an identifier. */
 export function looksLikePath(target: string): boolean {
-  return target.includes('/') || /\.(md|markdown|mdx|txt|rst)$/i.test(target);
+  return target.includes('/') || DOCUMENT_EXTENSION.test(target);
+}
+
+const DOCUMENT_EXTENSION = /\.(md|markdown|mdx|txt|rst|adoc|asciidoc)$/i;
+
+/**
+ * True when a path-like target could name a specification.
+ *
+ * A specification linking to `../../src/rules.ts` is citing source code, which
+ * is a different tool's job. Treating it as a dangling specification reference
+ * would report an error on one of the most ordinary things a design document
+ * does, so targets carrying a non-document extension are not references at all.
+ */
+export function isDocumentTarget(target: string): boolean {
+  const withoutAnchor = splitAnchor(target).target;
+  const base = withoutAnchor.slice(withoutAnchor.lastIndexOf('/') + 1);
+  const dot = base.lastIndexOf('.');
+  // No extension: a directory, or an extensionless spec such as `rfcs/0007`.
+  if (dot <= 0) return true;
+  const extension = base.slice(dot);
+  // Only a plausible file extension disqualifies a target. An identifier like
+  // `v1.2` or `ADR-0007.1` keeps its dot and is still resolved as an id.
+  if (!/^\.[A-Za-z][A-Za-z0-9]{0,5}$/.test(extension)) return true;
+  return DOCUMENT_EXTENSION.test(base);
 }
 
 /** True when a reference target points outside the repository. */

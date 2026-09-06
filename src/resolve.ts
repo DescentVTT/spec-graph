@@ -20,6 +20,7 @@
 
 import type { ExtractedDocument, ReferenceCandidate } from './extract.js';
 import {
+  isDocumentTarget,
   isExternal,
   looksLikePath,
   normaliseRef,
@@ -214,6 +215,10 @@ function resolveOne(
   }
 
   if (isExternal(bare)) return null;
+  // A link to source code, an image or a config file is not a specification
+  // reference. Validating it would report an error on the most ordinary thing a
+  // design document does.
+  if (!isDocumentTarget(bare)) return null;
 
   const found = lookup(bare, entry, index);
 

@@ -120,6 +120,7 @@ export type { ResolvedState, StateInput } from './state.js';
 export {
   familyFromPath,
   identify,
+  isDocumentTarget,
   isExternal,
   looksLikePath,
   normaliseRef,
