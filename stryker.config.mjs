@@ -44,7 +44,12 @@ export default {
   htmlReporter: { fileName: 'reports/mutation/index.html' },
   clearTextReporter: { allowColor: false, maxTestsToLog: 0 },
 
-  timeoutMS: 60000,
+  // A mutant that hangs is a real detection - a mutated regex can turn linear
+  // scanning into catastrophic backtracking - but each one costs a worker the
+  // full budget. The first run here logged 185 timeouts, and at 60s apiece that
+  // was most of its 27 minutes. The whole suite runs in about a second, so 15s
+  // is still far longer than any healthy mutant needs.
+  timeoutMS: 15000,
   concurrency: 8,
   // `break` is a regression guard, not an aspiration: it sits below the measured
   // score so losing ground fails the build while ordinary refactoring does not.

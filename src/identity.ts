@@ -247,9 +247,12 @@ function fileStem(posixPath: string): string {
   const base = posixPath.slice(posixPath.lastIndexOf('/') + 1);
   const dot = base.lastIndexOf('.');
   const stem = dot > 0 ? base.slice(0, dot) : base;
-  // `docs/adr/0007-sharding/README.md` is identified by its directory.
-  if (/^(readme|index)$/i.test(stem)) {
-    const parent = posixPath.slice(0, posixPath.lastIndexOf('/'));
+  // `docs/adr/0007-sharding/README.md` is identified by its directory - but a
+  // README at the repository root has no directory to be named after, and must
+  // keep its own name.
+  const slash = posixPath.lastIndexOf('/');
+  if (slash > 0 && /^(readme|index)$/i.test(stem)) {
+    const parent = posixPath.slice(0, slash);
     return parent.slice(parent.lastIndexOf('/') + 1);
   }
   return stem;

@@ -23,7 +23,7 @@ jobs:
   stryker:
     name: stryker
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
 
     steps:
       - uses: actions/checkout@v5

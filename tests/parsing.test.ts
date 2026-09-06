@@ -171,6 +171,12 @@ describe('identity', () => {
     ).toBe('ADR-0007');
   });
 
+  it('leaves a root-level README named after itself', () => {
+    // There is no enclosing directory to borrow a name from, and slicing one off
+    // anyway produced the id "README.m".
+    expect(identify({ path: 'README.md', declaredId: null, declaredAliases: [], heading: null }).id).toBe('README');
+  });
+
   it('registers every spelling a citation might use', () => {
     const identity = identify({
       path: 'docs/adr/0007-sharding.md',
