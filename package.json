@@ -49,9 +49,12 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "selfcheck": "node ./bin/spec-graph.js check \"docs/**/*.md\" \"README.md\" --verbose",
-    "prepublishOnly": "npm run clean && npm run build"
+    "prepublishOnly": "npm run clean && npm run build",
+    "test:mutation": "stryker run"
   },
   "devDependencies": {
+    "@stryker-mutator/core": "^10.0.0",
+    "@stryker-mutator/vitest-runner": "^10.0.0",
     "@types/node": "^26.4.1",
     "@vitest/coverage-v8": "^4.1.11",
     "typescript": "^7.0.2",

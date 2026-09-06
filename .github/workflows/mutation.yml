@@ -1,0 +1,49 @@
+name: Mutation
+
+# Mutation testing runs on every push rather than on a schedule. A mutation
+# score is only useful if it is current, and the whole point of measuring it
+# here is that spec-graph is built out of heuristics: a vocabulary table or a
+# boundary condition can be weakened by an ordinary-looking refactor without a
+# single test going red.
+#
+# There is no paths filter. A dependency bump can move the score as easily as a
+# source edit can, and filtering on src/** would miss it.
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+# A push to a branch that also has an open pull request triggers both events.
+# Keying on the PR number when there is one collapses those into a single run.
+concurrency:
+  group: mutation-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  stryker:
+    name: stryker
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: npm
+
+      - run: npm ci
+
+      # The config's concurrency of 8 is tuned for a developer machine. Hosted
+      # runners have 4 vCPUs and each Stryker worker drives a vitest process of
+      # its own, so oversubscribing here makes the run slower, not faster.
+      - name: Mutation test
+        run: npx stryker run --concurrency 4
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: mutation-report
+          path: reports/mutation/
+          if-no-files-found: ignore

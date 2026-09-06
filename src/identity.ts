@@ -122,9 +122,14 @@ export function identify(input: IdentityInput): DocumentIdentity {
   const family = numbered?.family ?? directoryFamily;
   const number = numbered?.number ?? null;
 
+  // Witnesses to the local zero-padding convention, most authoritative first.
+  // The spelling that actually produced the number comes first: an id read from
+  // the H1 of `sharding.md` must still render as ADR-0007, not ADR-7.
+  const witnesses = [numbered?.label, input.declaredId, stem];
+
   let id: string;
   if (number !== null && family !== null) {
-    id = `${family}-${padNumber(number, stem, input.declaredId)}`;
+    id = `${family}-${padNumber(number, witnesses)}`;
   } else if (input.declaredId) {
     id = input.declaredId.trim();
   } else if (number !== null) {
@@ -145,7 +150,7 @@ export function identify(input: IdentityInput): DocumentIdentity {
     // Every spelling a human might type. `normaliseRef` folds separators, so
     // `adr-7`, `adr 7` and `adr7` collapse to one key; the padding variants do
     // not, and each needs registering.
-    for (const digits of numberSpellings(number, stem)) {
+    for (const digits of numberSpellings(number, witnesses)) {
       add(`${family}-${digits}`);
     }
   }
@@ -279,19 +284,26 @@ function headingId(heading: string | null): string | null {
  * not `ADR-7`. The file name is the most reliable witness of the local
  * convention, so it decides.
  */
-function padNumber(number: number, stem: string, declared: string | null): string {
-  const fromDeclared = declared ? /(\d{1,6})/.exec(declared) : null;
-  const fromStem = /(\d{1,6})/.exec(stem);
-  const witness = (fromDeclared?.[1] ?? fromStem?.[1]) as string | undefined;
-  const width = witness && Number.parseInt(witness, 10) === number ? witness.length : String(number).length;
+function padNumber(number: number, witnesses: readonly (string | null | undefined)[]): string {
+  const width = paddingWidth(number, witnesses) ?? String(number).length;
   return String(number).padStart(width, '0');
 }
 
+/** The digit width of the first witness that actually spells this number. */
+function paddingWidth(number: number, witnesses: readonly (string | null | undefined)[]): number | null {
+  for (const witness of witnesses) {
+    if (!witness) continue;
+    const digits = /(\d{1,6})/.exec(witness)?.[1];
+    if (digits && Number.parseInt(digits, 10) === number) return digits.length;
+  }
+  return null;
+}
+
 /** Zero-padded spellings a citation might reasonably use. */
-function numberSpellings(number: number, stem: string): string[] {
+function numberSpellings(number: number, witnesses: readonly (string | null | undefined)[]): string[] {
   const out = new Set<string>([String(number)]);
-  const witness = /(\d{1,6})/.exec(stem);
-  if (witness && Number.parseInt(witness[1] as string, 10) === number) out.add(witness[1] as string);
+  const observed = paddingWidth(number, witnesses);
+  if (observed !== null) out.add(String(number).padStart(observed, '0'));
   for (const width of [3, 4]) out.add(String(number).padStart(width, '0'));
   return [...out];
 }
