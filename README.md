@@ -11,7 +11,7 @@ checked.
 ✖ docs/adr/0003-event-log.md:13:65  ghost-handover
     open obligation delegates to ADR-0002, which is retired
     ↳ docs/adr/0002-single-node-storage.md:2:9  ADR-0002 is retired ("Superseded by ADR-0007")
-    ↳ docs/adr/0003-event-log.md:13:1           the obligation: Which compaction policy do we use?
+    ↳ docs/adr/0003-event-log.md:13:1           the obligation: Which compaction policy do we use? Deferred to ADR-0002.
     → nothing will be read from ADR-0002 again - re-home this in a live document, or close it here
 ```
 

@@ -167,6 +167,30 @@ describe('obligation promotion', () => {
     expect(corpus.items).toHaveLength(2);
   });
 
+  it('quotes the obligation back as prose, not as Markdown source', () => {
+    // A finding that echoes the item should read like the sentence the author
+    // wrote. Link syntax in a report is noise the reader has to parse past.
+    const { corpus } = analyse({
+      'docs/adr/0002-b.md': '# B\n',
+      'docs/adr/0001-a.md': [
+        '# A',
+        '',
+        '## Open Questions',
+        '',
+        '- [ ] Which policy? Deferred to [ADR-0002](0002-b.md), and see [[0002-b|the notes]].',
+      ].join('\n'),
+    });
+    expect(corpus.items[0]?.text).toBe('Which policy? Deferred to ADR-0002, and see the notes.');
+  });
+
+  it('truncates a very long obligation rather than flooding the report', () => {
+    const { corpus } = analyse({
+      'docs/adr/0001-a.md': ['# A', '', '## Open Questions', '', `- [ ] ${'word '.repeat(60)}`].join('\n'),
+    });
+    expect(corpus.items[0]?.text).toHaveLength(120);
+    expect(corpus.items[0]?.text.endsWith('...')).toBe(true);
+  });
+
   it('promotes nothing from an ordinary section', () => {
     const { corpus } = analyse({
       'docs/adr/0001-a.md': ['# A', '', '## Considered Options', '', '* PostgreSQL', '* MySQL'].join('\n'),

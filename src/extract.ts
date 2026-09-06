@@ -644,9 +644,21 @@ function normaliseHeading(text: string): string {
   return normalised;
 }
 
-/** One-line form of an item for reports. */
+/**
+ * One-line form of an item for reports.
+ *
+ * Link syntax is flattened to its label. A finding that quotes the obligation
+ * back at the reader should read like the sentence they wrote, not like the
+ * Markdown source of it.
+ */
 function summarise(text: string): string {
-  const flat = text.replace(/\s+/g, ' ').trim();
+  const flat = text
+    .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
+    // `[[target|display]]` keeps the display half: that is the text a reader
+    // of the rendered document actually sees.
+    .replace(/\[\[(?:[^\]|]*\|)?([^\]]*)\]\]/g, '$1')
+    .replace(/\s+/g, ' ')
+    .trim();
   return flat.length <= 120 ? flat : `${flat.slice(0, 117)}...`;
 }
 
