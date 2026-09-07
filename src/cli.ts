@@ -11,7 +11,7 @@
 
 import { analyse, DEFAULT_PATTERNS, type AnalyseOptions } from './runner.js';
 import { formatGraph, formatJson, formatReport, shouldUseAscii, shouldUseColor, type GraphFormat } from './report.js';
-import { DEFAULT_SEVERITIES, RULE_DESCRIPTIONS, RULE_IDS, RULE_QUERIES } from './rules.js';
+import { DEFAULT_SEVERITIES, resolveStrict, RULE_DESCRIPTIONS, RULE_IDS, RULE_QUERIES } from './rules.js';
 import { formatRef } from './source.js';
 import { execute, parseQuery, QueryError, renderMatch, type Match } from './select.js';
 import type { RuleId, Severity, SpecNode } from './types.js';
@@ -43,6 +43,8 @@ export interface CliOptions {
   readonly documentsOnly: boolean;
   readonly max: number;
   readonly maxWarnings: number;
+  /** Raise every warning to an error. Explicit `--rule` overrides still win. */
+  readonly strict: boolean;
   readonly selector: string | null;
   readonly help: boolean;
   readonly version: boolean;
@@ -80,6 +82,8 @@ OPTIONS
   --rule <id>=<severity>  Override one rule: error, warn, info or off. Repeatable.
   --max <n>               Show at most n findings (0 = no limit)
   --max-warnings <n>      Fail when warnings exceed n (default: no limit)
+  --strict                Raise every warning to an error. An explicit --rule
+                          still wins, so --strict --rule x=warn exempts x.
   --color / --no-color    Force colour on or off
   --ascii                 Use ASCII glyphs only
   --verbose               Include parse problems and per-file detail
@@ -140,6 +144,7 @@ export function parseArgs(argv: readonly string[], cwd: string): CliOptions {
   let documentsOnly = false;
   let max = 0;
   let maxWarnings = -1;
+  let strict = false;
   let selector: string | null = null;
   let help = false;
   let version = false;
@@ -187,6 +192,9 @@ export function parseArgs(argv: readonly string[], cwd: string): CliOptions {
         break;
       case '--documents-only':
         documentsOnly = true;
+        break;
+      case '--strict':
+        strict = true;
         break;
       case '--explain':
         verbose = true;
@@ -266,6 +274,7 @@ export function parseArgs(argv: readonly string[], cwd: string): CliOptions {
     documentsOnly,
     max,
     maxWarnings,
+    strict,
     selector,
     help,
     version,
@@ -320,11 +329,15 @@ export async function main(io: CliIO = {}): Promise<number> {
     return EXIT_OK;
   }
 
+  // Strict is resolved before the run, so the rules themselves see the raised
+  // severities and `result.ok` needs no special casing at the exit-code layer.
+  const { severities, escalated } = resolveStrict(options.severities, options.strict);
+
   const analyseOptions: AnalyseOptions = {
     root: options.root,
     patterns: options.patterns.length > 0 ? options.patterns : DEFAULT_PATTERNS,
     ignore: options.ignore,
-    severities: options.severities,
+    severities,
   };
 
   let result;
@@ -366,8 +379,8 @@ export async function main(io: CliIO = {}): Promise<number> {
     default: {
       out(
         options.format === 'json'
-          ? formatJson(result)
-          : `${formatReport(result, { color, ascii, verbose: options.verbose, max: options.max })}\n`,
+          ? formatJson(result, { escalated })
+          : `${formatReport(result, { color, ascii, verbose: options.verbose, max: options.max, escalated })}\n`,
       );
       if (!result.ok) return EXIT_FAILED;
       if (options.maxWarnings >= 0 && result.summary.warnings > options.maxWarnings) return EXIT_FAILED;

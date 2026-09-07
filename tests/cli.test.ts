@@ -181,6 +181,104 @@ describe('check', () => {
   });
 });
 
+describe('strict mode', () => {
+  // A fixture whose only findings are warnings: a retired decision that never
+  // says what replaced it, and a link to a real document outside the patterns.
+  // Those are exactly the findings a team past its first run stops tolerating.
+  const WARN = ['docs/**/*.md', '--root', 'tests/fixtures/warnings'];
+
+  it('passes without it and fails with it', async () => {
+    const lenient = await run('check', ...WARN);
+    expect(lenient.code).toBe(EXIT_OK);
+    expect(lenient.out).toContain('2 warnings');
+    expect(lenient.out).toContain('no errors - the specification graph holds');
+
+    const strict = await run('check', ...WARN, '--strict');
+    expect(strict.code).toBe(EXIT_FAILED);
+    expect(strict.out).toContain('2 errors');
+    expect(strict.out).toContain('the specification graph is inconsistent');
+  });
+
+  it('says which findings it raised, and how many', async () => {
+    // A finding that is only an error because of a flag has to say so, or the
+    // reader cannot tell what the build would do without it.
+    const strict = await run('check', ...WARN, '--strict');
+    expect(strict.out).toContain('unreciprocated-supersession (strict: warn -> error)');
+    expect(strict.out).toContain('reference-outside-corpus (strict: warn -> error)');
+    expect(strict.out).toContain('2 raised by --strict');
+  });
+
+  it('says nothing about strict when the flag is absent', async () => {
+    const lenient = await run('check', ...WARN);
+    expect(lenient.out).not.toContain('strict');
+  });
+
+  it('reports the same findings, only louder', async () => {
+    // Strict changes severity and nothing else. The same rules fire at the same
+    // places with the same hints; a flag that also changed what was detected
+    // would make the non-strict run untrustworthy.
+    const parse = (text: string): { rule: string; line: number; message: string }[] =>
+      JSON.parse(text).diagnostics.map((d: { rule: string; line: number; message: string }) => ({
+        rule: d.rule,
+        line: d.line,
+        message: d.message,
+      }));
+    const lenient = await run('check', ...WARN, '--format', 'json');
+    const strict = await run('check', ...WARN, '--strict', '--format', 'json');
+    expect(parse(strict.out)).toEqual(parse(lenient.out));
+  });
+
+  it('lets an explicit rule override exempt one rule from strict', async () => {
+    // Strict is only usable if a team can turn it on and keep the one rule
+    // their repository disagrees with, rather than choosing all or nothing.
+    const exempted = await run(
+      'check',
+      ...WARN,
+      '--strict',
+      '--rule',
+      'unreciprocated-supersession=warn',
+      '--format',
+      'json',
+    );
+    const report: { diagnostics: { rule: string; severity: string; escalated: boolean }[] } = JSON.parse(exempted.out);
+    const kept = report.diagnostics.find((d) => d.rule === 'unreciprocated-supersession');
+    expect(kept?.severity).toBe('warn');
+    expect(kept?.escalated).toBe(false);
+    const raised = report.diagnostics.find((d) => d.rule === 'reference-outside-corpus');
+    expect(raised?.severity).toBe('error');
+    expect(raised?.escalated).toBe(true);
+  });
+
+  it('marks the escalation in the machine-readable report too', async () => {
+    const strict = await run('check', ...WARN, '--strict', '--format', 'json');
+    const report: { strict: boolean; ok: boolean; diagnostics: { escalated: boolean }[] } = JSON.parse(strict.out);
+    expect(report.strict).toBe(true);
+    expect(report.ok).toBe(false);
+    expect(report.diagnostics.every((d) => d.escalated)).toBe(true);
+
+    const lenient = await run('check', ...WARN, '--format', 'json');
+    const plain: { strict: boolean; ok: boolean; diagnostics: { escalated: boolean }[] } = JSON.parse(lenient.out);
+    expect(plain.strict).toBe(false);
+    expect(plain.ok).toBe(true);
+    expect(plain.diagnostics.every((d) => !d.escalated)).toBe(true);
+  });
+
+  it('changes nothing on a corpus with no warnings to raise', async () => {
+    const clean = ['docs/**/*.md', '--root', DEMO, '--rule', 'unreciprocated-supersession=off'];
+    const strip = (text: string): string =>
+      text.replace(/"durationMs": [\d.]+/, '"durationMs": 0').replace(/"strict": (true|false)/, '"strict": x');
+    const plain = await run('check', ...clean, '--format', 'json');
+    const strict = await run('check', ...clean, '--strict', '--format', 'json');
+    expect(plain.code).toBe(strict.code);
+    expect(strip(strict.out)).toBe(strip(plain.out));
+  });
+
+  it('is parsed as a flag', () => {
+    expect(parseArgs(['check', '--strict'], '/repo').strict).toBe(true);
+    expect(parseArgs(['check'], '/repo').strict).toBe(false);
+  });
+});
+
 describe('query', () => {
   it('answers the ghost-handover question', async () => {
     const result = await run('query', 'item[openness=open] -delegates-to-> document[phase=retired]', '--root', DEMO);

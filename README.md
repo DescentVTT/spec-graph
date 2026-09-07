@@ -86,6 +86,27 @@ Override any of them:
 spec-graph --rule self-reference=off --rule state-conflict=error
 ```
 
+Once a repository is clean, `--strict` raises every warning to an error so the
+build stops tolerating them:
+
+```bash
+spec-graph --strict
+```
+
+```text
+✖ docs/adr/0001-old.md:2:9  unreciprocated-supersession (strict: warn → error)
+    ADR-0001 is retired but never says that ADR-0002 replaced it
+
+2 errors · 12ms · 2 raised by --strict
+```
+
+Every escalated finding says so, so you can always tell what the build would do
+without the flag. Two deliberate limits: strict leaves `info` rules alone, since
+those are advisory by design and promoting them would reintroduce exactly the
+noise the defaults avoid; and an explicit `--rule` always wins, so
+`--strict --rule state-conflict=warn` turns strict on and exempts one rule
+rather than making you choose between all of it and none.
+
 ## How it reads your documents
 
 ### Lifecycle, normalised
@@ -285,6 +306,7 @@ spec-graph rules [--explain]         List the diagnostics.
 --graph-format <fmt>    dot | mermaid | json
 --documents-only        Hide items; their relations lift onto their documents
 --rule <id>=<severity>  error | warn | info | off (repeatable)
+--strict                Raise every warning to an error
 --max <n>               Show at most n findings
 --max-warnings <n>      Fail when warnings exceed n
 --color / --no-color    Force colour

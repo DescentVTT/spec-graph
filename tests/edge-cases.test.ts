@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { scanMarkdown } from '../src/markdown.js';
 import { analyseSources, type Source } from '../src/runner.js';
-import { sortDiagnostics } from '../src/rules.js';
+import { DEFAULT_SEVERITIES, resolveStrict, RULE_IDS, sortDiagnostics } from '../src/rules.js';
 import type { Diagnostic, RuleId, Severity, SourceRef } from '../src/types.js';
 
 /**
@@ -83,6 +83,134 @@ describe('report ordering is total', () => {
     // Equal in every tier: the sort must be stable, not arbitrary.
     const same = sortDiagnostics([diagnostic({}), diagnostic({})]);
     expect(same).toHaveLength(2);
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/* Cycle detection, both modes                                                */
+/* -------------------------------------------------------------------------- */
+
+describe('cycle detection', () => {
+  const pingPong = analyse({
+    'docs/adr/0001-a.md': [
+      '---',
+      'status: accepted',
+      '---',
+      '',
+      '# A',
+      '',
+      '## Open Questions',
+      '',
+      '- [ ] Who owns retention? Deferred to [ADR-0002](0002-b.md).',
+    ].join('\n'),
+    'docs/adr/0002-b.md': [
+      '---',
+      'status: accepted',
+      '---',
+      '',
+      '# B',
+      '',
+      '## Open Questions',
+      '',
+      '- [ ] Who owns retention? Deferred to [ADR-0001](0001-a.md).',
+    ].join('\n'),
+  }).graph;
+
+  const direct = analyse({
+    'docs/adr/0001-a.md': '---\nstatus: accepted\ndelegates-to: ADR-0002\n---\n\n# A\n',
+    'docs/adr/0002-b.md': '---\nstatus: accepted\ndelegates-to: ADR-0001\n---\n\n# B\n',
+  }).graph;
+
+  it('finds a document-to-document cycle in the raw graph', () => {
+    expect(direct.cycles(['delegates-to']).map((c) => [...c].sort())).toEqual([['ADR-0001', 'ADR-0002']]);
+  });
+
+  it('misses an item-to-document cycle in the raw graph, by construction', () => {
+    // Each delegation runs item -> document, so there is genuinely no cycle
+    // among the raw nodes. This is why the projected mode exists, and asserting
+    // it keeps the two modes from quietly collapsing into one.
+    expect(pingPong.cycles(['delegates-to'])).toEqual([]);
+  });
+
+  it('finds it once relations are projected onto their documents', () => {
+    expect(pingPong.cycles(['delegates-to'], { byDocument: true }).map((c) => [...c].sort())).toEqual([
+      ['ADR-0001', 'ADR-0002'],
+    ]);
+  });
+
+  it('does not turn a relation that stays inside one document into a cycle', () => {
+    const selfDelegating = analyse({
+      'docs/adr/0001-a.md': [
+        '---',
+        'status: accepted',
+        '---',
+        '',
+        '# A',
+        '',
+        '## Open Questions',
+        '',
+        '- [ ] Who owns this? Deferred to [ADR-0001](0001-a.md).',
+      ].join('\n'),
+    }).graph;
+    expect(selfDelegating.cycles(['delegates-to'], { byDocument: true })).toEqual([]);
+  });
+
+  it('reports nothing for an acyclic chain in either mode', () => {
+    const chain = analyse({
+      'docs/adr/0001-a.md': '---\nstatus: accepted\ndelegates-to: ADR-0002\n---\n\n# A\n',
+      'docs/adr/0002-b.md': '---\nstatus: accepted\n---\n\n# B\n',
+    }).graph;
+    expect(chain.cycles(['delegates-to'])).toEqual([]);
+    expect(chain.cycles(['delegates-to'], { byDocument: true })).toEqual([]);
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/* Strict severity resolution                                                 */
+/* -------------------------------------------------------------------------- */
+
+describe('strict severity resolution', () => {
+  it('changes nothing when it is off', () => {
+    expect(resolveStrict({}, false)).toEqual({ severities: {}, escalated: new Set() });
+    expect(resolveStrict({ 'self-reference': 'off' }, false).severities).toEqual({ 'self-reference': 'off' });
+  });
+
+  it('raises every warn-by-default rule, and only those', () => {
+    const { severities, escalated } = resolveStrict({}, true);
+    const warnByDefault = RULE_IDS.filter((id) => DEFAULT_SEVERITIES[id] === 'warn');
+    expect(warnByDefault.length).toBeGreaterThan(0);
+    expect([...escalated].sort()).toEqual([...warnByDefault].sort());
+    for (const id of warnByDefault) expect(severities[id], id).toBe('error');
+  });
+
+  it('leaves error and info rules alone', () => {
+    // `info` is advisory by design - a self-link in a table of contents is a
+    // formatting quirk - and promoting it would resurrect exactly the
+    // false-positive problem ADR-0006 exists to prevent.
+    const { severities, escalated } = resolveStrict({}, true);
+    for (const id of RULE_IDS) {
+      if (DEFAULT_SEVERITIES[id] === 'warn') continue;
+      expect(severities[id], id).toBeUndefined();
+      expect(escalated.has(id), id).toBe(false);
+    }
+  });
+
+  it('lets an explicit override win, in both directions', () => {
+    // Exempting one rule is what makes strict adoptable at all.
+    const exempted = resolveStrict({ 'state-conflict': 'warn' }, true);
+    expect(exempted.severities['state-conflict']).toBe('warn');
+    expect(exempted.escalated.has('state-conflict')).toBe(false);
+
+    // And an explicit promotion of a rule strict would not touch still applies.
+    const promoted = resolveStrict({ 'self-reference': 'error' }, true);
+    expect(promoted.severities['self-reference']).toBe('error');
+    expect(promoted.escalated.has('self-reference')).toBe(false);
+  });
+
+  it('does not mutate the overrides it was given', () => {
+    const overrides: Partial<Record<RuleId, Severity>> = { 'self-reference': 'off' };
+    resolveStrict(overrides, true);
+    expect(overrides).toEqual({ 'self-reference': 'off' });
   });
 });
 

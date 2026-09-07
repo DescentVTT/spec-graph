@@ -120,9 +120,25 @@ describe('walking', () => {
     expect(files.map((f) => f.path)).toContain('README.md');
   });
 
-  it('honours an extra ignore', async () => {
+  it('honours a bare-name ignore by pruning that directory at any depth', async () => {
     const files = await walkFiles({ root: ROOT, patterns: ['docs/**/*.md'], ignore: ['drafts'] });
     expect(files.map((f) => f.path)).toEqual(['docs/adr/0001.md', 'docs/adr/0002.md']);
+  });
+
+  it('honours a path-shaped ignore as the glob it is documented to be', async () => {
+    // A bare name is a `.gitignore`-style directory filter; anything with a
+    // separator or glob syntax is a path pattern. Treating the second as the
+    // first excludes nothing, silently, while the user believes it worked.
+    for (const pattern of ['docs/drafts/**', 'docs/drafts', 'docs/**/000[3]*.md']) {
+      const files = await walkFiles({ root: ROOT, patterns: ['docs/**/*.md'], ignore: [pattern] });
+      expect(files.map((f) => f.path), pattern).not.toContain('docs/drafts/0003.md');
+      expect(files.map((f) => f.path), pattern).toContain('docs/adr/0001.md');
+    }
+  });
+
+  it('leaves everything alone when no ignore is given', async () => {
+    const files = await walkFiles({ root: ROOT, patterns: ['docs/**/*.md'], ignore: [] });
+    expect(files.map((f) => f.path)).toContain('docs/drafts/0003.md');
   });
 
   it('honours a negated pattern', async () => {

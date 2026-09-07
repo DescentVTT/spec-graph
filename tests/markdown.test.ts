@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { scanMarkdown, slugify } from '../src/markdown.js';
-import { createLineIndex } from '../src/source.js';
+import { compareRefs, createLineIndex } from '../src/source.js';
 
 /** Convenience: the targets of every extracted link, in document order. */
 const targets = (md: string): string[] => scanMarkdown(md).links.map((l) => l.target);
@@ -32,6 +32,35 @@ describe('createLineIndex', () => {
     const index = createLineIndex('one\ntwo');
     expect(index.positionAt(-5).offset).toBe(0);
     expect(index.positionAt(9999).offset).toBe(7);
+  });
+});
+
+describe('compareRefs', () => {
+  const ref = (file: string, line: number, column = 1, end = 0) => ({
+    file,
+    span: { start: { offset: 0, line, column }, end: { offset: end, line, column } },
+  });
+
+  it('orders by file, then line, then column, then extent', () => {
+    expect(compareRefs(ref('a.md', 1), ref('b.md', 1))).toBeLessThan(0);
+    expect(compareRefs(ref('b.md', 1), ref('a.md', 1))).toBeGreaterThan(0);
+    expect(compareRefs(ref('a.md', 1), ref('a.md', 9))).toBeLessThan(0);
+    expect(compareRefs(ref('a.md', 1, 2), ref('a.md', 1, 30))).toBeLessThan(0);
+    expect(compareRefs(ref('a.md', 1, 1, 5), ref('a.md', 1, 1, 50))).toBeLessThan(0);
+  });
+
+  it('is zero only for references to the same place', () => {
+    expect(compareRefs(ref('a.md', 3, 4, 9), ref('a.md', 3, 4, 9))).toBe(0);
+  });
+
+  it('sorts a list totally, so two runs cannot disagree', () => {
+    const refs = [ref('b.md', 1), ref('a.md', 9), ref('a.md', 2, 7), ref('a.md', 2, 1)];
+    expect([...refs].sort(compareRefs).map((r) => `${r.file}:${r.span.start.line}:${r.span.start.column}`)).toEqual([
+      'a.md:2:1',
+      'a.md:2:7',
+      'a.md:9:1',
+      'b.md:1:1',
+    ]);
   });
 });
 

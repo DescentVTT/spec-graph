@@ -70,8 +70,13 @@ anything at all.
 - [ ] Should the default include patterns be widened, or is naming the fix in
       the hint enough? Widening risks pulling in changelogs and issue templates,
       which is a different kind of noise.
-- [ ] Should there be a `--strict` that promotes every warning to an error, for
-      teams past the first run?
+- [x] Should there be a `--strict` that promotes every warning to an error, for
+      teams past the first run? **Resolved (2026-09-07):** yes, shipped. It
+      raises `warn` to `error`, leaves `info` alone because those rules are
+      advisory by design, and lets an explicit `--rule` win so a team can adopt
+      strict and exempt the one rule their repository disagrees with. Every
+      escalated finding is labelled, so a reader can always tell what the build
+      would do without the flag.
 
 ## See also
 

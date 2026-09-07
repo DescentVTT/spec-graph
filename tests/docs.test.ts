@@ -178,6 +178,7 @@ describe('the CLI help and the README agree on the interface', () => {
     '--graph-format',
     '--documents-only',
     '--rule',
+    '--strict',
     '--max',
     '--max-warnings',
     '--no-color',

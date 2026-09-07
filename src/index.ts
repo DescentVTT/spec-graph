@@ -52,6 +52,7 @@ export type {
 } from './select.js';
 
 export {
+  resolveStrict,
   runRules,
   sortDiagnostics,
   DEFAULT_SEVERITIES,

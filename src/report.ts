@@ -14,7 +14,7 @@
 import type { SpecGraph } from './graph.js';
 import { formatRef } from './source.js';
 import type { AnalysisResult } from './runner.js';
-import type { Diagnostic, Edge, Severity, SpecNode } from './types.js';
+import type { Diagnostic, Edge, RuleId, Severity, SpecNode } from './types.js';
 
 export interface ReporterOptions {
   readonly color?: boolean | undefined;
@@ -22,6 +22,13 @@ export interface ReporterOptions {
   readonly verbose?: boolean | undefined;
   /** Stop after this many findings. `0` means no limit. */
   readonly max?: number | undefined;
+  /**
+   * Rules whose severity `--strict` raised.
+   *
+   * A finding that only became an error because of a flag has to say so, or the
+   * reader cannot tell what would happen without it.
+   */
+  readonly escalated?: ReadonlySet<RuleId> | undefined;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -54,6 +61,8 @@ export function shouldUseAscii(environment: ColorEnvironment = {}): boolean {
   // Windows Terminal and modern shells set these; the legacy console does not.
   return env['WT_SESSION'] === undefined && env['TERM_PROGRAM'] === undefined;
 }
+
+const EMPTY_RULES: ReadonlySet<RuleId> = new Set<RuleId>();
 
 type Paint = (text: string) => string;
 
@@ -121,8 +130,9 @@ export function formatReport(result: AnalysisResult, options: ReporterOptions = 
   const limit = options.max && options.max > 0 ? options.max : result.diagnostics.length;
   const shown = result.diagnostics.slice(0, limit);
 
+  const escalated = options.escalated ?? EMPTY_RULES;
   for (const diagnostic of shown) {
-    lines.push(...formatDiagnostic(diagnostic, paint, marks));
+    lines.push(...formatDiagnostic(diagnostic, paint, marks, escalated));
     lines.push('');
   }
 
@@ -143,6 +153,10 @@ export function formatReport(result: AnalysisResult, options: ReporterOptions = 
   if (summary.warnings > 0) tally.push(paint.warn(`${summary.warnings} ${plural(summary.warnings, 'warning')}`));
   if (summary.infos > 0) tally.push(paint.info(`${summary.infos} ${plural(summary.infos, 'note')}`));
   tally.push(paint.dim(`${summary.durationMs}ms`));
+  const raised = result.diagnostics.filter((diagnostic) => escalated.has(diagnostic.rule)).length;
+  if (raised > 0) {
+    tally.push(paint.warn(`${raised} raised by --strict`));
+  }
   lines.push(tally.join(` ${marks.separator} `));
 
   lines.push(
@@ -158,10 +172,18 @@ export function formatReport(result: AnalysisResult, options: ReporterOptions = 
   return lines.join('\n');
 }
 
-function formatDiagnostic(diagnostic: Diagnostic, paint: Painter, marks: Glyphs): string[] {
+function formatDiagnostic(
+  diagnostic: Diagnostic,
+  paint: Painter,
+  marks: Glyphs,
+  escalated: ReadonlySet<RuleId>,
+): string[] {
   const mark = severityMark(diagnostic.severity, paint, marks);
+  const label = escalated.has(diagnostic.rule)
+    ? `${diagnostic.rule} ${paint.warn('(strict: warn -> error)')}`
+    : diagnostic.rule;
   const lines: string[] = [
-    `${mark} ${paint.location(formatRef(diagnostic.at))}  ${paint.dim(diagnostic.rule)}`,
+    `${mark} ${paint.location(formatRef(diagnostic.at))}  ${paint.dim(label)}`,
     `    ${diagnostic.message}`,
   ];
 
@@ -200,16 +222,20 @@ function plural(count: number, word: string): string {
  * Deliberately flat and versioned: this is the contract a CI annotator or a
  * dashboard builds against, and it must be safe to add fields to it later.
  */
-export function formatJson(result: AnalysisResult): string {
+export function formatJson(result: AnalysisResult, options: { escalated?: ReadonlySet<RuleId> } = {}): string {
+  const escalated = options.escalated ?? EMPTY_RULES;
   return `${JSON.stringify(
     {
       version: 1,
       ok: result.ok,
+      strict: escalated.size > 0,
       summary: result.summary,
       files: result.files,
       diagnostics: result.diagnostics.map((diagnostic) => ({
         rule: diagnostic.rule,
         severity: diagnostic.severity,
+        // True when this finding is only an error because of --strict.
+        escalated: escalated.has(diagnostic.rule),
         message: diagnostic.message,
         hint: diagnostic.hint,
         nodes: diagnostic.nodes,

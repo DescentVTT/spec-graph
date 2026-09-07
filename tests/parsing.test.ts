@@ -12,7 +12,15 @@ import {
   parsePrefixedRef,
   splitAnchor,
 } from '../src/identity.js';
-import { isStatusHeading, normaliseStatus, phaseFromPath, phaseOf, receptivityOf, supersessionTargetsIn } from '../src/lifecycle.js';
+import {
+  isRetired,
+  isStatusHeading,
+  normaliseStatus,
+  phaseFromPath,
+  phaseOf,
+  receptivityOf,
+  supersessionTargetsIn,
+} from '../src/lifecycle.js';
 import { scanMarkdown } from '../src/markdown.js';
 import { basenamePosix, dirnamePosix, joinPosix, normalisePosix, resolveFrom, toPosix } from '../src/paths.js';
 import { parseFrontMatter, toRecord, valuesOf } from '../src/yaml.js';
@@ -125,6 +133,17 @@ describe('lifecycle vocabulary', () => {
     expect(phaseFromPath('docs/adr/0001.md')).toBe('unknown');
     // A file called archive.md is not a directory called archive.
     expect(phaseFromPath('docs/adr/archive.md')).toBe('unknown');
+  });
+
+  it('tells retirement apart from merely being sealed', () => {
+    // `frozen` is also sealed, but it still binds - a frozen decision is
+    // current, it just cannot be edited. Only `retired` means it no longer
+    // applies, which is what makes a citation of it a stale premise.
+    expect(isRetired('retired')).toBe(true);
+    expect(isRetired('frozen')).toBe(false);
+    expect(isRetired('active')).toBe(false);
+    expect(isRetired('draft')).toBe(false);
+    expect(isRetired('unknown')).toBe(false);
   });
 
   it('recognises a status heading', () => {

@@ -73,6 +73,36 @@ export const RULE_DESCRIPTIONS: Readonly<Record<RuleId, string>> = Object.freeze
   'self-reference': 'a document delegates to or depends on itself',
 });
 
+/**
+ * The severity map `--strict` implies, and which rules it actually moved.
+ *
+ * Strict raises `warn` to `error` and leaves `info` alone. That asymmetry is
+ * deliberate: the `info` rules are advisory by nature - a self-link in a table
+ * of contents is a formatting quirk - and promoting them would resurrect
+ * precisely the false-positive problem ADR-0006 exists to prevent.
+ *
+ * An explicit `--rule` always wins over strict, so `--strict --rule x=warn`
+ * keeps `x` at warn. That is what makes strict usable: a team can turn it on
+ * and exempt the one rule their repository disagrees with, rather than choosing
+ * between all of it and none of it.
+ */
+export function resolveStrict(
+  overrides: Partial<Record<RuleId, Severity>> = {},
+  strict = false,
+): { severities: Partial<Record<RuleId, Severity>>; escalated: ReadonlySet<RuleId> } {
+  const severities: Partial<Record<RuleId, Severity>> = { ...overrides };
+  const escalated = new Set<RuleId>();
+  if (!strict) return { severities, escalated };
+
+  for (const id of RULE_IDS) {
+    if (overrides[id] !== undefined) continue;
+    if (DEFAULT_SEVERITIES[id] !== 'warn') continue;
+    severities[id] = 'error';
+    escalated.add(id);
+  }
+  return { severities, escalated };
+}
+
 export interface RuleOptions {
   readonly severities?: Partial<Record<RuleId, Severity>> | undefined;
   /** Cap on related locations attached to one finding. */

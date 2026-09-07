@@ -196,8 +196,21 @@ export function globBase(pattern: string): string {
 export async function walkFiles(options: WalkOptions): Promise<WalkedFile[]> {
   const root = toPosix(options.root).replace(/\/+$/, '');
   const matcher = createGlobMatcher(options.patterns);
-  const ignored = new Set([...DEFAULT_IGNORED_DIRECTORIES, ...(options.ignore ?? [])]);
   const maxSize = options.maxFileSize ?? MAX_FILE_SIZE;
+
+  // Ignores come in two shapes and both are documented. A bare name prunes any
+  // directory called that, at any depth, the way a `.gitignore` line does.
+  // Anything carrying a separator or glob syntax is matched against the
+  // repository-relative path, which is what `--ignore "docs/drafts/**"` means -
+  // and treating that as a directory name silently excluded nothing at all.
+  const ignores = options.ignore ?? [];
+  const ignoredNames = new Set([
+    ...DEFAULT_IGNORED_DIRECTORIES,
+    ...ignores.filter((pattern) => !isGlob(pattern) && !pattern.includes('/')),
+  ]);
+  const pathIgnores = ignores.filter((pattern) => isGlob(pattern) || pattern.includes('/'));
+  const ignoreMatcher = pathIgnores.length > 0 ? createGlobMatcher(pathIgnores) : null;
+  const excluded = (path: string): boolean => ignoreMatcher !== null && ignoreMatcher(path);
 
   // Only walk the directories the patterns can possibly reach.
   const bases = new Set<string>();
@@ -233,7 +246,9 @@ export async function walkFiles(options: WalkOptions): Promise<WalkedFile[]> {
       const child = relative.length === 0 ? entry.name : `${relative}/${entry.name}`;
 
       if (entry.isDirectory()) {
-        if (ignored.has(entry.name)) continue;
+        // Pruning a whole subtree is an optimisation; a pattern that only
+        // matches the files inside it is still honoured when they are filtered.
+        if (ignoredNames.has(entry.name) || excluded(child)) continue;
         await walk(child);
         continue;
       }
@@ -246,7 +261,7 @@ export async function walkFiles(options: WalkOptions): Promise<WalkedFile[]> {
             await walk(child);
             continue;
           }
-          if (!matcher(child) || info.size > maxSize) continue;
+          if (!matcher(child) || excluded(child) || info.size > maxSize) continue;
           out.set(child, { path: child, absolute: `${root}/${child}`, size: info.size });
         } catch {
           continue;
@@ -255,7 +270,7 @@ export async function walkFiles(options: WalkOptions): Promise<WalkedFile[]> {
       }
 
       if (!entry.isFile()) continue;
-      if (!matcher(child)) continue;
+      if (!matcher(child) || excluded(child)) continue;
 
       try {
         const info = await stat(`${root}/${child}`);
