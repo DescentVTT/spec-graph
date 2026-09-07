@@ -72,6 +72,11 @@ Three further details keep the model honest:
 - **Cells a column already typed are skipped by prose scanning**, so a link in a
   `Depends on` column yields one typed edge rather than a typed edge and a
   neutral citation beside it.
+- **A link in such a cell is read by its destination, not its label.** A link
+  states where its target lives; the label states only what it is called
+  ([ADR-0008](0008-wiki-links-carry-no-path.md)). `[see](adr/0050.md)` is a
+  dependency on that file, not on the word "see". A destination that is external
+  or in-page names no document here, so the label remains the fallback.
 
 ## Alternatives considered
 

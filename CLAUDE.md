@@ -99,6 +99,15 @@ assertions that restate the implementation is worse than a lower number.
 Read the survivor list, not just the score. It is the more useful output:
 `reports/mutation/index.html` after a run.
 
+Mutation testing measures what the tests assert. It cannot find a case nobody
+thought of, so **probe new parsing code against a corpus written to break it**
+before trusting the score. Three bugs in the register work were found that way
+and none of them by the suite: a link column read the label instead of the
+destination, a path lost its underscores to emphasis stripping, and one `/g`
+regex shared between a scan and a helper called from inside that scan reset its
+own cursor and exhausted the heap. Write the fixture, run the binary, read the
+edges.
+
 ## Prose
 
 Comments explain *why*, never *what*. If a comment restates the line below it,
