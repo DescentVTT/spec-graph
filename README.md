@@ -94,10 +94,12 @@ spec-graph --strict
 ```
 
 ```text
-✖ docs/adr/0001-old.md:2:9  unreciprocated-supersession (strict: warn → error)
+✖ docs/adr/0001-single-writer.md:2:9  unreciprocated-supersession (strict: warn -> error)
     ADR-0001 is retired but never says that ADR-0002 replaced it
+    ↳ docs/adr/0002-multi-writer.md:3:13  only ADR-0002 records the relationship
+    → add "superseded-by: ADR-0002" to docs/adr/0001-single-writer.md so a reader who lands there is redirected
 
-2 errors · 12ms · 2 raised by --strict
+2 errors · 20.73ms · 2 raised by --strict
 ```
 
 Every escalated finding says so, so you can always tell what the build would do
