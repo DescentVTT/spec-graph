@@ -44,6 +44,16 @@ jobs:
     # runs.
     timeout-minutes: 90
 
+    # Decided once. Writing the condition twice and negating it by hand is how
+    # the comment above came to promise a full run on manual dispatch while the
+    # steps below gave an incremental one - a declaration that had drifted from
+    # what runs, in the CI of the tool built to find those.
+    env:
+      FULL: >-
+        ${{ github.event_name == 'schedule'
+            || github.event_name == 'workflow_dispatch'
+            || github.ref_type == 'tag' }}
+
     steps:
       - uses: actions/checkout@v5
 
@@ -69,11 +79,11 @@ jobs:
       # runners have 4 vCPUs and each Stryker worker drives a vitest process of
       # its own, so oversubscribing here makes the run slower, not faster.
       - name: Mutation test (incremental)
-        if: github.event_name != 'schedule' && !startsWith(github.ref, 'refs/tags/')
+        if: env.FULL != 'true'
         run: npx stryker run --concurrency 4 --incremental
 
       - name: Mutation test (full)
-        if: github.event_name == 'schedule' || startsWith(github.ref, 'refs/tags/')
+        if: env.FULL == 'true'
         run: npx stryker run --concurrency 4
 
       - uses: actions/upload-artifact@v7
