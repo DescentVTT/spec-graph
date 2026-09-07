@@ -34,17 +34,29 @@ npm run selfcheck       # spec-graph validates its own ADRs
 npm run test:mutation   # stryker; ~30 minutes
 ```
 
-Two thresholds are regression guards, set just below the last measurement, and
-they move **up** as the measurement does - never down to accommodate a
-regression:
+Two thresholds are regression guards, set below the last measurement. They move
+**up** when the measurement moves further than the noise, and **never** down to
+accommodate a regression:
 
 - **Mutation score >= 70** (`break` in `stryker.config.mjs`; last measured
-  74.05% over 6,150 mutants).
+  74.73% over 6,232 mutants).
 - **Coverage floors** in `vitest.config.ts`. Branches sits lowest on purpose;
   the remainder is defensive fallbacks and platform paths of which only one can
-  run per machine. See `docs/adr/0007-mutation-testing.md`.
+  run per machine.
 
 If a change lowers either, the fix is the change, not the threshold.
+
+**Read a per-file mutation drop as a question, not an answer.** Timeouts count
+as detections and are timing-sensitive, and `perTest` coverage mis-attributes
+async filesystem tests - `runner.ts` has reported ten points below its real
+figure for both reasons. Confirm a drop by mutating the line by hand, or
+re-measure that one file:
+
+```bash
+npx stryker run --mutate src/runner.ts --coverageAnalysis all   # seconds, and honest
+```
+
+See `docs/adr/0007-mutation-testing.md`.
 
 ## Design rules
 

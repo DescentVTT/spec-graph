@@ -52,8 +52,14 @@ export default {
   timeoutMS: 15000,
   concurrency: 8,
   // `break` is a regression guard, not an aspiration: it sits a few points below
-  // the measured score (74.05% over 6,150 mutants, commit f275524) so that
+  // the measured score (74.73% over 6,232 mutants, commit 3a2cddd) so that
   // losing ground fails the build while ordinary refactoring does not.
-  // See docs/adr/0007-mutation-testing.md for what the number is made of.
+  //
+  // It stays at 70 rather than tracking the +0.68 from the previous run. That
+  // move is inside the noise this project measured on itself: 296 of these
+  // mutants are detected by timing out, and whether one crosses the budget
+  // depends on machine load, so a run swings a point or two either way without
+  // the suite changing. A floor that chases noise fails builds for no reason.
+  // See docs/adr/0007-mutation-testing.md.
   thresholds: { high: 85, low: 74, break: 70 },
 };

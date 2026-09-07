@@ -43,8 +43,9 @@ moves up as the measurement does: 60 against 63.31%, then 70 against 74.05%.
 
 ## Consequences
 
-The measured score is **74.05% over 6,150 mutants** at commit `f275524`. It has
-moved 48.11% → 60.6% → 63.31% → 74.05% as the suite grew from 149 to 411 tests.
+The measured score is **74.73% over 6,232 mutants** at commit `3a2cddd`. It has
+moved 48.11% → 60.6% → 63.31% → 74.05% → 74.73% as the suite grew from 149 to
+463 tests.
 
 It is worth being straight about what that number is and is not.
 
@@ -76,6 +77,29 @@ easy to read and pin down one behaviour precisely, but they never exercise the
 paths a real file takes. Both kinds of test earn their place; only one of them
 finds the code that no input in the suite had ever reached.
 
+**The per-file figures are a floor, not a point estimate.** Two effects pull
+them around, and both were visible on the v0.1.2 pass.
+
+A timeout counts as a detection, and 296 of these mutants time out - most of
+them in `state.ts`, where a mutated marker regex turns linear scanning into
+catastrophic backtracking. Whether a given mutant crosses the 15s budget depends
+on how loaded the machine is, so a *faster* run scores *lower*: mutants that
+would have hung instead run to completion and survive. Per-module swings of two
+or three points between runs are this, not the suite changing.
+
+More seriously, `coverageAnalysis: 'perTest'` mis-attributes coverage for async
+tests that touch the filesystem. `runner.ts` reported 74.2% on the full run and
+84.2% on the one before, which looked like a ten-point regression from new
+`--ignore-ref` wiring. It was not. Mutating `openObligations` by hand fails
+`runner.test.ts` immediately, and re-measuring that one file with
+`coverageAnalysis: 'all'` gives **83.51%**. Stryker had linked those lines to
+tests that execute them without asserting on them, and never ran the test that
+does.
+
+The lesson is to read a per-file drop as a question rather than an answer.
+Confirm it by mutating the line by hand, or re-measure that file with
+`--mutate src/<file>.ts --coverageAnalysis all`, which takes seconds.
+
 **Some survivors are not worth killing.** Removing `'provisional'` from the draft
 vocabulary fails no test, and the test that would catch it asserts that one word
 of a thirty-word table exists. A hundred such tests would raise the score and
@@ -94,9 +118,19 @@ one synonym among many, it does not.
       than shapes, and where a mutant is genuinely equivalent - a pre-sized
       array, a worker count that changes throughput and not output - there is
       deliberately no test and a comment saying why.
-- [ ] `report.ts` at 56.9% is now the weakest module by a clear margin. Most of
-      its survivors are string literals in message formatting, where a kill
-      means asserting exact output and buying brittleness with the score.
+- [x] `report.ts` at 56.9% is now the weakest module by a clear margin.
+      **Resolved (2026-09-07):** 74.9%, the largest single-module gain of any
+      pass. The kills came from contracts rather than from asserting output
+      verbatim: the SGR code for each role, an empty environment variable
+      meaning unset, all three severities and both success glyphs, parse
+      problems in the JSON report, and item shapes in the export.
+      `shouldUseAscii` now takes its platform the way it already took its
+      environment - without that, half of it was unreachable from a test and a
+      rule about Windows consoles could only ever break on Windows.
+- [ ] Should `coverageAnalysis` be `all` in CI? It is the only setting that
+      measures async modules honestly, and at roughly seven times the runtime
+      it would not fit a per-push job. A nightly `all` run against a weekly
+      `perTest` one would give both, at the cost of a second workflow.
 
 ## See also
 
