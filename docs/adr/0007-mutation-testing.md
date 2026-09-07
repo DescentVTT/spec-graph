@@ -37,29 +37,44 @@ here logged 185 timeouts, which at a minute apiece was most of its 27 minutes.
 The whole suite runs in about a second, so 15s is still far longer than any
 healthy mutant needs.
 
-**`break` sits at 60, below the measured 63.31%.** Its job is to fail the build
-when the suite gets weaker, not to assert an aspiration nobody has met.
+**`break` sits a few points below the measured score.** Its job is to fail the
+build when the suite gets weaker, not to assert an aspiration nobody has met. It
+moves up as the measurement does: 60 against 63.31%, then 70 against 74.05%.
 
 ## Consequences
 
-The measured score is **63.31% over 6,083 mutants** at commit `aff5533`. It has
-moved 48.11% → 60.6% → 63.31% as the suite grew from 149 to 363 tests.
+The measured score is **74.05% over 6,150 mutants** at commit `f275524`. It has
+moved 48.11% → 60.6% → 63.31% → 74.05% as the suite grew from 149 to 411 tests.
 
 It is worth being straight about what that number is and is not.
 
 **It is not "all vocabulary tables".** That would be a convenient story, and the
 data does not support it. String literals - message text and vocabulary entries -
-are the single largest surviving bucket at 632 mutants, but excluding them
-entirely moves the score only to 66.5%. The body of the survivors is 542
-conditional-expression mutants spread across every module. Roughly a third of the
+are still the largest surviving bucket at 428 mutants, but excluding them
+entirely moves the score only to 75.8%. The body of the survivors is 393
+conditional-expression mutants spread across every module. About a quarter of the
 mutants survive, and most of that is genuine headroom rather than noise.
 
 **The survivor list is more useful than the score.** Reading it, rather than
-chasing the number, is what produced the 28 tests in `tests/edge-cases.test.ts`.
-Every one of them passed on the first run - the behaviour was already correct,
-it was simply unverified, and unverified behaviour is what silently changes under
-a refactor. That is the return on this tool, and it does not require the score to
+chasing the number, is what produced `tests/edge-cases.test.ts` - and every test
+in its first batch passed on the first run. The behaviour was already correct; it
+was simply unverified, and unverified behaviour is what silently changes under a
+refactor. That is the return on this tool, and it does not require the score to
 be high to pay out.
+
+**End-to-end tests over a real directory kill more than unit tests over
+synthetic input.** This was the surprise of the v0.1.1 pass. The goal was
+`runner.ts`, which went from 45.3% to 84.2%. But the total moved 63.31% → 74.05%,
+and *forty per cent of that gain came from modules that got no new tests at all* -
+`extract.ts` +16.4, `identity.ts` +13.7, `markdown.ts` +11.3, `yaml.ts` +10.1.
+
+The reason is that the new tests drive `analyse()` over a fixture directory of
+realistic documents - front matter, four kinds of checkbox, a wrapped item, a
+relative link crossing two directories, a document that opts out - rather than
+over the minimal in-memory corpora the unit tests use. Those minimal corpora are
+easy to read and pin down one behaviour precisely, but they never exercise the
+paths a real file takes. Both kinds of test earn their place; only one of them
+finds the code that no input in the suite had ever reached.
 
 **Some survivors are not worth killing.** Removing `'provisional'` from the draft
 vocabulary fails no test, and the test that would catch it asserts that one word
@@ -70,12 +85,18 @@ one synonym among many, it does not.
 
 ## Open Questions
 
-- [ ] Should the `Regex` mutator be scoped? At 57.9% it is among the weakest, and
-      the Markdown scanner is mostly regex - but several of its survivors look
-      like genuinely equivalent mutants rather than gaps.
-- [ ] `runner.ts` at 45.3% is the weakest module. Most of it is orchestration
-      that the CLI suite covers end to end; the survivors are concentrated in
-      default values. Worth a closer look before the next release.
+- [x] Should the `Regex` mutator be scoped? At 57.9% it was among the weakest.
+      **Resolved (2026-09-07):** no. It rose to 74.0% - exactly the corpus
+      average - on the v0.1.1 pass without anyone targeting it, which says the
+      weakness was in the tests rather than in the mutator.
+- [x] `runner.ts` at 45.3% is the weakest module. **Resolved (2026-09-07):**
+      84.2%, with no uncovered mutants left. The tests assert decisions rather
+      than shapes, and where a mutant is genuinely equivalent - a pre-sized
+      array, a worker count that changes throughput and not output - there is
+      deliberately no test and a comment saying why.
+- [ ] `report.ts` at 56.9% is now the weakest module by a clear margin. Most of
+      its survivors are string literals in message formatting, where a kill
+      means asserting exact output and buying brittleness with the score.
 
 ## See also
 

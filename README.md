@@ -401,9 +401,9 @@ Seven ADRs, which `spec-graph` validates on every CI run:
 scanner, the front-matter reader, the glob matcher and the query parser are all
 written here, so the whole package is auditable in an afternoon.
 
-**Verified, not just covered.** 363 tests; 92.7% statement and 95.7% line
+**Verified, not just covered.** 411 tests; 94.2% statement and 96.9% line
 coverage. Coverage says a line ran, so the suite is also held to a mutation
-score - 63.31% over 6,083 mutants - because a vocabulary entry or a boundary
+score - 74.05% over 6,150 mutants - because a vocabulary entry or a boundary
 condition can be weakened by an ordinary-looking refactor without a single test
 going red. [ADR-0007](docs/adr/0007-mutation-testing.md) is straight about what
 that number is and is not.

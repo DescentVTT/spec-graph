@@ -52,8 +52,8 @@ export default {
   timeoutMS: 15000,
   concurrency: 8,
   // `break` is a regression guard, not an aspiration: it sits a few points below
-  // the measured score (63.31% over 6,083 mutants, commit aff5533) so that
+  // the measured score (74.05% over 6,150 mutants, commit f275524) so that
   // losing ground fails the build while ordinary refactoring does not.
   // See docs/adr/0007-mutation-testing.md for what the number is made of.
-  thresholds: { high: 80, low: 63, break: 60 },
+  thresholds: { high: 85, low: 74, break: 70 },
 };
