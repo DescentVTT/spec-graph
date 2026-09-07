@@ -94,7 +94,7 @@ export function loadConfig(root: string, read: (path: string) => string = defaul
 export function parseConfig(raw: string, source: string): LoadedConfig {
   let parsed: unknown;
   try {
-    parsed = JSON.parse(raw);
+    parsed = JSON.parse(withoutBom(raw));
   } catch (error) {
     return { config: {}, source, problems: [`${source} is not valid JSON: ${(error as Error).message}`] };
   }
@@ -185,10 +185,21 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function tryRead(read: (path: string) => string, path: string): string | null {
   try {
-    return read(path);
+    return withoutBom(read(path));
   } catch {
     return null;
   }
+}
+
+/**
+ * Drops a leading byte-order mark.
+ *
+ * `JSON.parse` rejects one, and several Windows editors write one by default -
+ * a config that silently stops applying because of an invisible first character
+ * is the worst kind of configuration bug.
+ */
+function withoutBom(text: string): string {
+  return text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
 }
 
 function defaultRead(path: string): string {

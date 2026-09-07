@@ -22,6 +22,7 @@
  */
 
 import { attr, type Directive } from './directives.js';
+import { isExternal } from './identity.js';
 import { isStatusHeading } from './lifecycle.js';
 import type { Heading, Range, ScannedDocument, Table, TableCell, TableRow } from './markdown.js';
 import type { EdgeKind } from './types.js';
@@ -111,6 +112,7 @@ const RELATION_COLUMNS: Readonly<Record<string, { kind: EdgeKind; inverted: bool
 };
 
 /** Cell values that mean "nothing here". */
+const MARKDOWN_LINK = /!?\[([^\]]*)\]\(([^)]*)\)/g;
 const EMPTY_CELL = /^(?:-+|—|–|n\/?a|none|nil|tbd|\.|_+)$/i;
 
 /** `## ADR-0007: Sharding` - an identifier at the very start of a heading. */
@@ -300,25 +302,45 @@ function normaliseHeader(text: string): string {
 /** Splits a cell into the identifiers it lists, keeping each one's offset. */
 function splitTargets(cell: TableCell): { text: string; start: number; end: number }[] {
   const out: { text: string; start: number; end: number }[] = [];
-  // Flattened *before* splitting: `[ADR-0001](adr/0001-a.md)` would otherwise be
-  // cut in half by the slash inside its own path.
-  const flat = flatten(cell.text);
-  if (flat.length === 0 || EMPTY_CELL.test(flat)) return out;
-
-  for (const piece of flat.split(/\s*(?:[,;]|\band\b)\s*/i)) {
-    const target = piece.trim();
-    if (target.length === 0 || EMPTY_CELL.test(target)) continue;
-    // Every target is reported at the cell's span. A cell is short, and an
-    // offset recovered back through a flattening is an offset that can drift.
+  // Every target is reported at the cell's span. A cell is short, and an offset
+  // recovered back through a flattening is an offset that can drift.
+  const push = (raw: string): void => {
+    const target = raw.trim();
+    if (target.length === 0 || EMPTY_CELL.test(target)) return;
     out.push({ text: target, start: cell.start, end: cell.end });
+  };
+  const prose = (segment: string): void => {
+    for (const piece of flatten(segment).split(/\s*(?:[,;]|\band\b)\s*/i)) push(piece);
+  };
+
+  // Links are taken out whole rather than flattened with everything else: a
+  // path would otherwise be cut in half by its own slash, and its underscores
+  // stripped as emphasis.
+  // A fresh matcher per cell. `prose` calls `flatten`, which drives the shared
+  // pattern; one /g regex advanced from inside its own scan resets its cursor
+  // and never terminates.
+  const links = new RegExp(MARKDOWN_LINK.source, 'g');
+  let last = 0;
+  for (let match = links.exec(cell.text); match !== null; match = links.exec(cell.text)) {
+    prose(cell.text.slice(last, match.index));
+    const destination = (match[2] ?? '').trim();
+    // A link states where its target lives; its label states only what the
+    // target is called (ADR-0008). In a column the author has already typed,
+    // the destination is the claim - `[see](adr/0050.md)` is a dependency on
+    // that file, not on the word "see". An external or in-page destination
+    // names no document here, so the label is what is left to try.
+    const local = destination.length > 0 && !destination.startsWith('#') && !isExternal(destination);
+    push(local ? destination : (match[1] ?? ''));
+    last = match.index + match[0].length;
   }
+  prose(cell.text.slice(last));
   return out;
 }
 
 /** Reduces a cell to its text: link labels rather than link syntax. */
 function flatten(text: string): string {
   return text
-    .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(MARKDOWN_LINK, '$1')
     .replace(/\[\[(?:[^\]|]*\|)?([^\]]*)\]\]/g, '$1')
     .replace(/[`*_~]/g, '')
     .replace(/\s+/g, ' ')

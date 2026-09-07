@@ -129,6 +129,20 @@ describe('finding a configuration', () => {
     expect(loadConfig(ROOT).source).toBe(CONFIG_FILES[0]);
   });
 
+  it('reads a file a Windows editor saved with a byte-order mark', async () => {
+    // JSON.parse rejects a BOM. A config that silently stops applying because
+    // of an invisible first character is the worst kind of configuration bug.
+    const mark = String.fromCharCode(0xfeff);
+    await write(CONFIG_FILES[0] as string, mark + JSON.stringify({ ignore: ['marked'] }));
+    expect(loadConfig(ROOT)).toEqual({ config: { ignore: ['marked'] }, source: CONFIG_FILES[0], problems: [] });
+
+    await rm(`${ROOT}/${CONFIG_FILES[0] as string}`);
+    await write('package.json', mark + JSON.stringify({ name: 'x', [CONFIG_PACKAGE_KEY]: { strict: true } }));
+    expect(loadConfig(ROOT).config.strict).toBe(true);
+
+    expect(parseConfig(mark + '{"strict":true}', 'x.json').problems).toEqual([]);
+  });
+
   it('falls back to the package.json key', async () => {
     await write('package.json', JSON.stringify({ name: 'x', [CONFIG_PACKAGE_KEY]: { ignore: ['from-package'] } }));
     const loaded = loadConfig(ROOT);

@@ -412,3 +412,53 @@ describe('a register contains the specifications written inside it', () => {
     expect(JSON.stringify(contains)).not.toContain('#open-questions');
   });
 });
+
+describe('a link in a typed relation column', () => {
+  const table = (cell: string): string =>
+    ['# Register', '', '| ID       | Status   | Depends on |', '| :------- | :------- | :--------- |',
+     '| ADR-0001 | accepted | -          |', `| ADR-0002 | accepted | ${cell} |`].join('\n');
+
+  const target = (cell: string): string[] => {
+    const { graph } = analyse({
+      'docs/register.md': table(cell),
+      'docs/adr/0001-first.md': '# ADR-0001: First\n\n## Status\n\naccepted\n',
+    });
+    return graph.out('ADR-0002', ['depends-on']).map((edge) => edge.to);
+  };
+
+  it('follows the destination, not the label', () => {
+    // A link states where its target lives; the label states only what it is
+    // called. "see" is not the dependency - the file it points at is.
+    expect(target('[see](adr/0001-first.md)')).toEqual(['ADR-0001']);
+  });
+
+  it('does not cut a path on its own slash, or strip its underscores', () => {
+    expect(target('[ADR-0001](adr/0001-first.md)')).toEqual(['ADR-0001']);
+
+    // A slash would split the target in two; an underscore reads as emphasis.
+    // Both survive only because links are lifted out before either happens.
+    const { graph } = analyse({
+      'docs/register.md': table('[x](notes/deep_path/a_b.md)'),
+      'docs/notes/deep_path/a_b.md': ['# ADR-0009: Deep', '', '## Status', '', 'accepted'].join('\n'),
+    });
+    expect(graph.out('ADR-0002', ['depends-on']).map((edge) => edge.to)).toEqual(['ADR-0009']);
+  });
+
+  it('reads a wiki link by name, since it carries no path', () => {
+    expect(target('[[ADR-0001]]')).toEqual(['ADR-0001']);
+  });
+
+  it('falls back to the label when the destination names nobody here', () => {
+    expect(target('[ADR-0001](https://example.test/adr-1)')).toEqual(['ADR-0001']);
+    expect(target('[ADR-0001](#section)')).toEqual(['ADR-0001']);
+  });
+
+  it('keeps every target in a cell that lists several', () => {
+    const { graph } = analyse({
+      'docs/register.md': table('[see](adr/0001-first.md) and ADR-0003'),
+      'docs/adr/0001-first.md': '# ADR-0001: First\n\n## Status\n\naccepted\n',
+      'docs/adr/0003-third.md': '# ADR-0003: Third\n\n## Status\n\naccepted\n',
+    });
+    expect(graph.out('ADR-0002', ['depends-on']).map((edge) => edge.to)).toEqual(['ADR-0001', 'ADR-0003']);
+  });
+});
