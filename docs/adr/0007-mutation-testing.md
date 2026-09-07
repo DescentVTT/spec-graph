@@ -43,9 +43,19 @@ moves up as the measurement does: 60 against 63.31%, then 70 against 74.05%.
 
 ## Consequences
 
-The measured score is **75.68% over 7,249 mutants** at commit `aababc5`. It has
-moved 48.11% → 60.6% → 63.31% → 74.05% → 74.73% → 75.68% as the suite grew from
-149 to 568 tests.
+The measured score is **76.52% over 7,642 mutants** at commit `9ea5f94`. It has
+moved 48.11% → 60.6% → 63.31% → 74.05% → 74.73% → 75.68% → 76.52% as the suite
+grew from 149 to 614 tests.
+
+**Read "no coverage" before reading the score.** The v0.2.0 modules landed at
+74.61% and 83.08%, and the number worth acting on was neither: it was that 42 of
+their mutants had no covering test at all. Most were genuine - a config key no
+test ever parsed, a comparator that never saw two entries sharing a rule - and
+closing them moved those files to 90.16% and 92.04% measured on their own. The
+rest were `perTest` mis-attribution, and measure fine under
+`--coverageAnalysis all`. A survivor is a test that is too weak; a no-coverage
+mutant is a test that does not exist, and the second is the cheaper thing to
+fix.
 
 **`break` stays at 70 even though the measurement rose.** The guard has to clear
 the noise, and the noise here has a size: 303 of those mutants were detected by
