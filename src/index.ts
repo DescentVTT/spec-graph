@@ -22,13 +22,31 @@
  * ```
  */
 
+export {
+  applyBaseline,
+  formatBaseline,
+  fingerprintOf,
+  parseBaseline,
+  BASELINE_VERSION,
+  EMPTY_BASELINE,
+} from './baseline.js';
+export type { Baseline, BaselineEntry, BaselineOutcome, ParsedBaseline } from './baseline.js';
+
 export { loadConfig, parseConfig, CONFIG_FILES, CONFIG_PACKAGE_KEY } from './config.js';
 export type { LoadedConfig, SpecGraphConfig } from './config.js';
 
 export { main, parseArgs, HELP, UsageError, EXIT_OK, EXIT_FAILED, EXIT_ERROR } from './cli.js';
 export type { CliIO, CliOptions, Command } from './cli.js';
 
-export { analyse, analyseSources, createFamilyFilter, DEFAULT_CONCURRENCY, DEFAULT_PATTERNS } from './runner.js';
+export {
+  analyse,
+  analyseSources,
+  createFamilyFilter,
+  createHistoryMatcher,
+  withDiagnostics,
+  DEFAULT_CONCURRENCY,
+  DEFAULT_PATTERNS,
+} from './runner.js';
 export type { AnalyseOptions, AnalyseSourcesOptions, AnalysisResult, Source } from './runner.js';
 
 export { buildGraph, LOAD_BEARING_EDGES, OBLIGATION_EDGES } from './graph.js';

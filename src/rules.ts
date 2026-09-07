@@ -121,11 +121,14 @@ export function runRules(graph: SpecGraph, corpus: ResolvedCorpus, options: Rule
   const maxRelated = options.maxRelated ?? DEFAULT_MAX_RELATED;
   const out: Diagnostic[] = [];
 
-  const emit = (rule: RuleId, build: () => Omit<Diagnostic, 'rule' | 'severity'>): void => {
+  const emit = (rule: RuleId, build: () => Built): void => {
     const severity = severities[rule];
     if (severity === 'off') return;
     const body = build();
-    out.push({ rule, severity, ...body, related: body.related.slice(0, maxRelated) });
+    if (exempt(graph, rule, body.nodes)) return;
+    // `target` ahead of the spread: a rule that names one overrides the default,
+    // and the eight that have nothing to name say nothing.
+    out.push({ rule, severity, target: null, ...body, related: body.related.slice(0, maxRelated) });
   };
 
   // Ghost handovers are reported first and claim their edges, because
@@ -144,7 +147,43 @@ export function runRules(graph: SpecGraph, corpus: ResolvedCorpus, options: Rule
   return sortDiagnostics(out);
 }
 
-type Emit = (rule: RuleId, build: () => Omit<Diagnostic, 'rule' | 'severity'>) => void;
+/** What a rule returns: the finding, minus what `emit` knows better. */
+type Built = Omit<Diagnostic, 'rule' | 'severity' | 'target'> & { readonly target?: string };
+
+type Emit = (rule: RuleId, build: () => Built) => void;
+
+/**
+ * Rules about what a document cites, rather than about what it owes.
+ *
+ * These are the ones a historical record still answers for. A link that goes
+ * nowhere is broken whoever wrote it and whenever they wrote it.
+ */
+const REFERENCE_RULES: ReadonlySet<RuleId> = new Set<RuleId>([
+  'broken-reference',
+  'reference-outside-corpus',
+  'ambiguous-reference',
+]);
+
+/**
+ * Whether a finding is about history rather than about work.
+ *
+ * A record reports that something was decided; it does not decide anything. Its
+ * open checkboxes are minutes, its delegations are things that were said, and
+ * its lifecycle is not a lifecycle. So a record is never the *subject* of a
+ * finding about obligations or lifecycle - though it is still a legitimate
+ * target of one, because delegating live work into a log is exactly the ghost
+ * handover this tool exists to find.
+ *
+ * Stated once, here, rather than as a guard repeated in eight rules: the
+ * exemption is a property of what counts as a finding, not of any one rule, and
+ * a rule added later inherits it without having to remember. See ADR-0011.
+ */
+function exempt(graph: SpecGraph, rule: RuleId, nodes: readonly string[]): boolean {
+  if (REFERENCE_RULES.has(rule)) return false;
+  const subject = nodes[0];
+  if (subject === undefined) return false;
+  return graph.owningDocument(subject)?.phase === 'record';
+}
 
 /* -------------------------------------------------------------------------- */
 /* Ghost handovers                                                            */
@@ -171,7 +210,7 @@ function ghostHandovers(graph: SpecGraph, emit: Emit): Set<string> {
     const targetDocument = graph.owningDocument(target.id);
     if (!targetDocument) continue;
 
-    const sealed = targetDocument.phase === 'retired' ? 'retired' : 'frozen';
+    const sealed = SEALED_WORD[targetDocument.phase] ?? 'frozen';
     const what = source.kind === 'item' ? 'open obligation' : 'obligation';
     const verb = EDGE_TRAITS[edge.kind].phrase;
     claimed.add(edgeKey(edge));
@@ -184,14 +223,26 @@ function ghostHandovers(graph: SpecGraph, emit: Emit): Set<string> {
         related(targetDocument.statusAt ?? targetDocument.at, `${targetDocument.id} is ${sealed}${statusSuffix(targetDocument)}`),
         ...(source.kind === 'item' ? [related(source.at, `the obligation: ${source.text}`)] : []),
       ],
-      hint:
-        targetDocument.phase === 'retired'
-          ? `nothing will be read from ${targetDocument.id} again - re-home this in a live document, or close it here`
-          : `${targetDocument.id} is frozen and cannot take on new work - open an amendment, or close this here`,
+      hint: HANDOVER_HINT[targetDocument.phase]?.(targetDocument.id) ?? FROZEN_HINT(targetDocument.id),
     }));
   }
   return claimed;
 }
+
+/** How a sealed target is described in a ghost-handover message. */
+const SEALED_WORD: Readonly<Partial<Record<string, string>>> = {
+  retired: 'retired',
+  record: 'a historical record',
+};
+
+const FROZEN_HINT = (id: string): string =>
+  `${id} is frozen and cannot take on new work - open an amendment, or close this here`;
+
+/** What to do about work handed into each kind of sealed document. */
+const HANDOVER_HINT: Readonly<Partial<Record<string, (id: string) => string>>> = {
+  retired: (id) => `nothing will be read from ${id} again - re-home this in a live document, or close it here`,
+  record: (id) => `${id} is a log of what happened and will never act - re-home this in a live document`,
+};
 
 /** Identity of a relation, for the hand-off between overlapping rules. */
 function edgeKey(edge: Edge): string {
@@ -261,6 +312,7 @@ function brokenReferences(corpus: ResolvedCorpus, emit: Emit): void {
         message: `"${ref.target}" matches ${ref.candidates.length} documents`,
         at: ref.declaredAt,
         nodes: [ref.from],
+        target: ref.target,
         related: [],
         hint: `disambiguate it - candidates: ${ref.candidates.join(', ')}`,
       }));
@@ -278,6 +330,7 @@ function brokenReferences(corpus: ResolvedCorpus, emit: Emit): void {
       message: brokenMessage(ref),
       at: ref.declaredAt,
       nodes: [ref.from],
+      target: ref.target,
       related: [],
       hint: brokenHint(ref),
     }));
@@ -357,6 +410,10 @@ function circularDelegations(graph: SpecGraph, emit: Emit): void {
       .map((id) => graph.document(id))
       .filter((node): node is DocumentNode => node !== undefined);
     if (members.length < 2) continue;
+    // A cycle is a set, not a subject, so the exemption at `emit` cannot see it.
+    // One record in the loop means the loop is partly a report of what was once
+    // said, and nothing in it is owed by anybody.
+    if (members.some((member) => member.phase === 'record')) continue;
 
     const edges = cycleEdges(graph, component, kinds);
     const onlySupersession = edges.length > 0 && edges.every((edge) => edge.kind === 'supersedes');
@@ -434,6 +491,12 @@ function supersessions(graph: SpecGraph, emit: Emit): void {
     const superseded = graph.document(edge.to);
     const superseding = graph.document(edge.from);
     if (!superseded || !superseding) continue;
+    // A record narrating "ADR-0005 replaced ADR-0001" is reporting a
+    // supersession, not declaring one. Both hints below ask somebody to edit
+    // the document that made the claim, and a log is the one document nobody
+    // can edit - it says what was true when it was written. The exemption at
+    // `emit` cannot see this: the subject here is the *other* document.
+    if (superseding.phase === 'record') continue;
 
     if (superseded.phase !== 'retired' && superseded.phase !== 'unknown') {
       emit('live-supersession', () => ({

@@ -475,3 +475,85 @@ describe('help and version', () => {
     expect(result.out).toBe('');
   });
 });
+
+const LEGACY = 'tests/fixtures/legacy';
+
+describe('historical records', () => {
+  it('indicts a journal until it is declared one, and never after', async () => {
+    const before = await run('check', '--root', LEGACY, '--no-config');
+    expect(before.out).toContain('ghost-handover');
+    expect(before.code).toBe(EXIT_FAILED);
+
+    const after = await run('check', '--root', LEGACY, '--no-config', '--history', '**/JOURNAL_*.md');
+    expect(after.out).not.toContain('ghost-handover');
+  });
+
+  it('still reports where its links go', async () => {
+    const after = await run('check', '--root', LEGACY, '--no-config', '--history', '**/JOURNAL_*.md');
+    expect(after.out).toContain('broken-reference');
+    expect(after.out).toContain('migration.md');
+  });
+
+  it('leaves its checkboxes out of the headline count', async () => {
+    // The summary is only built by a real run, which is why this is asserted
+    // here rather than against analyseSources.
+    const before = await run('check', '--root', LEGACY, '--no-config');
+    const after = await run('check', '--root', LEGACY, '--no-config', '--history', '**/JOURNAL_*.md');
+    expect(before.out).toContain('1 open');
+    expect(after.out).toContain('0 open');
+  });
+});
+
+describe('the baseline', () => {
+  const FILE = '.tmp-baseline.json';
+  const path = `${LEGACY}/${FILE}`;
+
+  it('records, suppresses, and lets the next new finding through', async () => {
+    const { rm, readFile, writeFile } = await import('node:fs/promises');
+    try {
+      const recorded = await run('check', '--root', LEGACY, '--no-config', '--record-baseline', FILE);
+      expect(recorded.code).toBe(EXIT_OK);
+      expect(recorded.out).toContain(`in ${FILE}`);
+
+      const written = await readFile(path, 'utf8');
+      expect(JSON.parse(written)).toMatchObject({ version: 1 });
+      // Recorded by specification and citation, so no line number can go stale.
+      expect(written).not.toMatch(/"line"|"column"/);
+
+      const clean = await run('check', '--root', LEGACY, '--no-config', '--baseline', FILE);
+      expect(clean.code).toBe(EXIT_OK);
+      expect(clean.out).toContain(`accepted by ${FILE}`);
+
+      // One new broken link, and the build fails again.
+      const extra = `${LEGACY}/docs/adr/0009-new.md`;
+      await writeFile(extra, '# ADR-0009: New\n\n## Status\n\naccepted\n\nSee [gone](docs/nope.md).\n');
+      try {
+        const worse = await run('check', '--root', LEGACY, '--no-config', '--baseline', FILE);
+        expect(worse.code).toBe(EXIT_FAILED);
+        expect(worse.out).toContain('docs/nope.md');
+      } finally {
+        await rm(extra, { force: true });
+      }
+    } finally {
+      await rm(path, { force: true });
+    }
+  });
+
+  it('accepts nothing when the file is not there yet', async () => {
+    const missing = await run('check', '--root', LEGACY, '--no-config', '--baseline', 'nothing-here.json');
+    expect(missing.code).toBe(EXIT_FAILED);
+    expect(missing.err).toBe('');
+  });
+
+  it('reports a baseline it cannot read rather than trusting it', async () => {
+    const { rm, writeFile } = await import('node:fs/promises');
+    await writeFile(path, '{ not json');
+    try {
+      const broken = await run('check', '--root', LEGACY, '--no-config', '--baseline', FILE);
+      expect(broken.err).toContain('not valid JSON');
+      expect(broken.code).toBe(EXIT_FAILED);
+    } finally {
+      await rm(path, { force: true });
+    }
+  });
+});

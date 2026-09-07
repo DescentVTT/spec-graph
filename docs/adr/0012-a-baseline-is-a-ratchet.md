@@ -1,0 +1,158 @@
+---
+status: accepted
+date: 2026-09-07
+---
+
+# ADR-0012: A baseline is a ratchet, keyed on identity
+
+## Context
+
+A linter introduced to a repository that predates it reports everything at once.
+Fifty findings on day one is not a report - it is a decision to be ignored. The
+team cannot stop feature work to clear them, so one of two things happens: the
+tool comes out of CI, or the rules that fired get switched off globally and the
+next specification rots unwatched.
+
+Both outcomes are worse than never installing it. The failure is not in the
+findings, which are real. It is that a tool with no memory can only ever ask for
+all of it at once.
+
+## Decision
+
+**Record what was already wrong, and report only what happened since.**
+
+```bash
+spec-graph check --record-baseline .spec-graph-baseline.json
+git add .spec-graph-baseline.json
+```
+
+From then on, `--baseline .spec-graph-baseline.json` (or `"baseline"` in
+`.spec-graph.json`) suppresses those findings and exits `0`. A new one fails the
+build. Debt can be paid whenever there is room, and in the meantime nothing new
+gets in.
+
+### What makes two findings the same finding
+
+This is the whole design, and everything else follows from it.
+
+**Not the line.** A baseline keyed on line numbers is invalidated by any edit
+above it, which turns every unrelated pull request into a wall of findings
+nobody introduced - and a tool that cries wolf gets switched off in an afternoon
+([ADR-0006](0006-false-positives-cost-more.md)).
+
+**Not the message.** Rewording a diagnostic would silently expire every baseline
+in the world on a patch release.
+
+What survives is the pair a finding is actually about: **which specification,
+and what within it.**
+
+```json
+{
+  "version": 1,
+  "findings": [
+    { "rule": "broken-reference", "document": "ADR-0004", "subject": "docs/plans/x.md", "count": 1 },
+    { "rule": "stale-premise",    "document": "ADR-0003", "subject": "ADR-0002",        "count": 1 }
+  ]
+}
+```
+
+Both parts are identifiers, and identifiers were made stable for exactly this:
+`ADR-0003` is the decision's name, not its location, so the entry survives the
+file being renamed, the section being moved into its own file, and every
+obligation above it being reordered ([ADR-0009](0009-a-specification-is-a-region.md)).
+The `subject` is the citation target where a rule has one, and the document at
+the other end of the relation where it does not.
+
+**Repeats are counted, not discriminated.** Two broken links from one document
+to the same target are one entry with a count of two. This is deliberate
+coarseness, and it is what is being bought: a fingerprint fine enough to tell
+those two apart would have to name a position, and a position is the thing that
+does not survive an edit. Where a baseline allows two and three exist, one is
+reported.
+
+### The ratchet
+
+An entry whose finding no longer occurs is reported, with the command that would
+strike it:
+
+```text
+16ms - 2 accepted by .spec-graph-baseline.json
+1 baseline entry no longer occurs - tighten it: spec-graph check --record-baseline ...
+```
+
+Reported, not failed. Failing a build because somebody fixed something is a
+strange way to encourage them.
+
+### Details that are not details
+
+**Recording is not checking.** `--record-baseline` writes down what is wrong
+today so tomorrow can be compared against it. It says nothing about whether
+today is acceptable, so it reports what it wrote and exits `0`.
+
+**A missing file accepts nothing.** `--baseline` against a repository that has
+not recorded one yet reports everything, which is what an empty baseline does.
+Requiring the file to exist would only mean a worse error message for the same
+situation.
+
+**A baseline that cannot be read is reported and ignored.** It suppresses
+findings; one nobody can parse would suppress findings the reader cannot account
+for. Malformed JSON, a version this build does not know, a misspelled rule in
+one row: each is printed, and the run continues on what is left - the same
+contract as [ADR-0010](0010-configuration-belongs-to-the-repository.md).
+
+**The file is deterministic.** Sorted by rule, then document, then subject; two
+spaces; no timestamp. It lands in a repository and is read in diffs, and a
+generated date would make every re-record a change even when nothing changed.
+
+**No configuration deletes an edge.** A baseline suppresses findings. The graph,
+the corpus, and every count that describes them are identical with and without
+it - only the tallies of findings and the verdict move. This is the same
+guarantee `--ignore-ref` has carried since ADR-0008.
+
+## Alternatives considered
+
+**Per-file counts, as PHPStan and ESLint suppressions do.** Immune to line
+shifts, which is the hard part, and rejected for being keyed on the wrong noun.
+A file is where a specification happens to live today; the whole of ADR-0009 was
+about not confusing the two. Keying on the specification costs nothing extra and
+survives a move.
+
+**A hash of the finding.** Stable only if nothing in the message, position or
+wording ever changes, which is a promise no reporter can keep. And unreadable in
+a diff, which matters for a file a team is expected to shrink deliberately.
+
+**Suppression comments in the source.** `<!-- spec-graph-ignore -->` next to each
+finding. Rejected: it puts fifty markers into fifty documents to solve a problem
+that belongs to the repository's adoption date, and there is no way to see the
+whole debt at once or to watch it shrink.
+
+**Failing when the baseline is stale.** A true ratchet, and too sharp. The build
+would break for the person who fixed something, on a commit that improved the
+repository, and they would learn to stop.
+
+## Consequences
+
+A legacy repository can adopt spec-graph in one commit with CI green, and every
+specification written afterwards is checked in full. The debt is one file, in
+review, that only ever gets shorter.
+
+The cost is that a finding suppressed by fingerprint can hide a genuinely
+different instance of the same rule between the same two documents. That is the
+price of a key with no position in it, it is bounded by the count, and the
+alternative was a baseline that expires whenever somebody adds a paragraph.
+
+## Open Questions
+
+- [ ] Should `--baseline` warn when an entry names a document that no longer
+      exists at all? It is reported as stale today, which is correct but says
+      "paid" where "gone" would be more useful.
+- [ ] Named queries from [ADR-0005](0005-rules-are-queries.md) still have no
+      home, and a baseline of user-defined rules would need one first.
+
+## See also
+
+- [ADR-0009](0009-a-specification-is-a-region.md) - the stable identifiers this
+  keys on, and why they outlive a file.
+- [ADR-0010](0010-configuration-belongs-to-the-repository.md) - where the
+  baseline path is declared, and the report-and-continue contract for a broken
+  file.

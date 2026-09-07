@@ -9,8 +9,10 @@
  * itself could not run. A usage mistake never masquerades as a passing build.
  */
 
+import { applyBaseline, EMPTY_BASELINE, formatBaseline, parseBaseline, type Baseline } from './baseline.js';
 import { loadConfig, type SpecGraphConfig } from './config.js';
-import { analyse, DEFAULT_PATTERNS, type AnalyseOptions } from './runner.js';
+import { underRoot } from './glob.js';
+import { analyse, DEFAULT_PATTERNS, withDiagnostics, type AnalyseOptions } from './runner.js';
 import { formatGraph, formatJson, formatReport, shouldUseAscii, shouldUseColor, type GraphFormat } from './report.js';
 import { DEFAULT_SEVERITIES, resolveStrict, RULE_DESCRIPTIONS, RULE_IDS, RULE_QUERIES } from './rules.js';
 import { formatRef } from './source.js';
@@ -41,6 +43,12 @@ export interface CliOptions {
   readonly families: readonly string[];
   /** Families that are never citations. */
   readonly ignoreFamilies: readonly string[];
+  /** Files that log what was decided rather than deciding it. */
+  readonly historyPatterns: readonly string[];
+  /** Accepted-debt file to read. `null` means none was asked for. */
+  readonly baseline: string | null;
+  /** Where to write the current findings as accepted debt. */
+  readonly recordBaseline: string | null;
   /** Skip the repository configuration file entirely. */
   readonly noConfig: boolean;
   readonly format: 'human' | 'json';
@@ -93,6 +101,13 @@ OPTIONS
                           given, everything else stays prose. Repeatable.
   --ignore-family <name>  Families that are never citations - RFC when the repo
                           cites RFC 2119 and keeps its own RFCs. Repeatable.
+  --history <glob>        Files that log what was decided rather than deciding
+                          it - journals, changelogs, minutes. Their links are
+                          still checked; their obligations are not. Repeatable.
+  --baseline <file>       Accept the findings recorded in this file and report
+                          only what is new since. Missing file = accept nothing.
+  --record-baseline <f>   Write today's findings to this file as accepted debt,
+                          and exit 0 without judging them.
   --no-config             Ignore .spec-graph.json and the package.json key.
   --format human|json     Report format (default: human)
   --graph-format <fmt>    dot, mermaid or json (default: dot)
@@ -138,11 +153,23 @@ CONFIGURATION
     { "patterns": ["docs/**/*.md"],
       "ignoreReferences": ["trap *"],
       "ignoreFamilies": ["RFC"],
+      "historyPatterns": ["**/JOURNAL_*.md", "archive/**"],
+      "baseline": ".spec-graph-baseline.json",
       "severities": { "self-reference": "off" },
       "strict": true }
 
   A flag always wins over the file, and list flags add to it rather than
   replacing it.
+
+ADOPTING THIS ON AN OLD REPOSITORY
+  Record what is already wrong, then report only what happens next:
+
+    spec-graph check --record-baseline .spec-graph-baseline.json
+    git add .spec-graph-baseline.json
+
+  The file is keyed by specification and citation, not by line number, so it
+  survives edits, moves and renames. Findings that stop occurring are reported
+  so the file can be tightened; nothing new gets in.
 
 EXAMPLES
   spec-graph "docs/**/*.md"
@@ -150,6 +177,8 @@ EXAMPLES
   spec-graph query 'item[openness=open] -delegates-to-> document[phase=retired]'
   spec-graph check --ignore-ref "trap *"    # [[trap 55]] tags a concept, not a file
   spec-graph graph --documents-only --graph-format mermaid > graph.mmd
+  spec-graph check --history "**/JOURNAL_*.md"   # a log is not a specification
+  spec-graph check --baseline .spec-graph-baseline.json
 `;
 
 const SEVERITIES: readonly Severity[] = ['error', 'warn', 'info', 'off'];
@@ -172,6 +201,7 @@ export function parseArgs(argv: readonly string[], cwd: string): CliOptions {
   const ignoreReferences: string[] = [];
   const families: string[] = [];
   const ignoreFamilies: string[] = [];
+  const historyPatterns: string[] = [];
   let noConfig = false;
   const severities: Partial<Record<RuleId, Severity>> = {};
   let root = cwd;
@@ -184,6 +214,8 @@ export function parseArgs(argv: readonly string[], cwd: string): CliOptions {
   let max = 0;
   let maxWarnings = -1;
   let strict = false;
+  let baseline: string | null = null;
+  let recordBaseline: string | null = null;
   let selector: string | null = null;
   let help = false;
   let version = false;
@@ -258,6 +290,18 @@ export function parseArgs(argv: readonly string[], cwd: string): CliOptions {
         ignoreFamilies.push(next(arg, i));
         i += 1;
         break;
+      case '--history':
+        historyPatterns.push(next(arg, i));
+        i += 1;
+        break;
+      case '--baseline':
+        baseline = next(arg, i);
+        i += 1;
+        break;
+      case '--record-baseline':
+        recordBaseline = next(arg, i);
+        i += 1;
+        break;
       case '--no-config':
         noConfig = true;
         break;
@@ -322,6 +366,9 @@ export function parseArgs(argv: readonly string[], cwd: string): CliOptions {
     ignoreReferences,
     families,
     ignoreFamilies,
+    historyPatterns,
+    baseline,
+    recordBaseline,
     noConfig,
     format,
     graphFormat,
@@ -337,6 +384,28 @@ export function parseArgs(argv: readonly string[], cwd: string): CliOptions {
     help,
     version,
   };
+}
+
+function count(n: number, word: string, many?: string): string {
+  return `${n} ${n === 1 ? word : (many ?? `${word}s`)}`;
+}
+
+/**
+ * Reads a baseline file.
+ *
+ * A missing file is not an error: `--baseline` against a repository that has
+ * not recorded one yet should report everything, which is exactly what an empty
+ * baseline does.
+ */
+async function readBaseline(path: string, source: string): Promise<ReturnType<typeof parseBaseline>> {
+  let raw: string;
+  try {
+    const { readFile } = await import('node:fs/promises');
+    raw = await readFile(path, 'utf8');
+  } catch {
+    return { baseline: EMPTY_BASELINE, problems: [] };
+  }
+  return parseBaseline(raw, source);
 }
 
 function parseCount(flag: string, value: string): number {
@@ -407,6 +476,7 @@ export async function main(io: CliIO = {}): Promise<number> {
     ignoreReferences: [...(file.ignoreReferences ?? []), ...options.ignoreReferences],
     families: [...(file.families ?? []), ...options.families],
     ignoreFamilies: [...(file.ignoreFamilies ?? []), ...options.ignoreFamilies],
+    historyPatterns: [...(file.historyPatterns ?? []), ...options.historyPatterns],
     severities,
     ...(file.maxRelated !== undefined ? { maxRelated: file.maxRelated } : {}),
   };
@@ -450,13 +520,49 @@ export async function main(io: CliIO = {}): Promise<number> {
     }
 
     default: {
+      // Recording is not checking. It writes down what is wrong today so that
+      // tomorrow can be compared against it, and says nothing about whether
+      // today is acceptable - so it reports what it wrote and exits clean.
+      if (options.recordBaseline !== null) {
+        const text = formatBaseline(result.graph, result.diagnostics);
+        try {
+          const { writeFile } = await import('node:fs/promises');
+          await writeFile(underRoot(options.root, options.recordBaseline), text, 'utf8');
+        } catch (error) {
+          err(`spec-graph: cannot write ${options.recordBaseline}: ${(error as Error).message}\n`);
+          return EXIT_ERROR;
+        }
+        const entries = (JSON.parse(text) as Baseline).findings.length;
+        out(
+          `recorded ${count(result.diagnostics.length, 'finding')} as ${count(entries, 'entry', 'entries')} in ${options.recordBaseline}\n`,
+        );
+        return EXIT_OK;
+      }
+
+      const source = options.baseline ?? file.baseline ?? null;
+      let reported = result;
+      let note: { source: string; suppressed: number; stale: number } | undefined;
+      if (source !== null) {
+        const held = await readBaseline(underRoot(options.root, source), source);
+        for (const problem of held.problems) err(`spec-graph: ${problem}\n`);
+        const outcome = applyBaseline(result.graph, result.diagnostics, held.baseline);
+        reported = withDiagnostics(result, outcome.kept);
+        note = { source, suppressed: outcome.suppressed, stale: outcome.stale.length };
+        if (options.verbose) {
+          for (const entry of outcome.stale) {
+            out(`  paid: ${entry.rule} ${entry.document}${entry.subject === '' ? '' : ` "${entry.subject}"`}\n`);
+          }
+        }
+      }
+
+      const baselineNote = note === undefined ? {} : { baseline: note };
       out(
         options.format === 'json'
-          ? formatJson(result, { escalated })
-          : `${formatReport(result, { color, ascii, verbose: options.verbose, max: options.max, escalated })}\n`,
+          ? formatJson(reported, { escalated, ...baselineNote })
+          : `${formatReport(reported, { color, ascii, verbose: options.verbose, max: options.max, escalated, ...baselineNote })}\n`,
       );
-      if (!result.ok) return EXIT_FAILED;
-      if (options.maxWarnings >= 0 && result.summary.warnings > options.maxWarnings) return EXIT_FAILED;
+      if (!reported.ok) return EXIT_FAILED;
+      if (options.maxWarnings >= 0 && reported.summary.warnings > options.maxWarnings) return EXIT_FAILED;
       return EXIT_OK;
     }
   }

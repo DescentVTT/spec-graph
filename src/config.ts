@@ -44,6 +44,15 @@ export interface SpecGraphConfig {
   readonly families?: readonly string[] | undefined;
   /** Families that are never citations, whatever else the corpus contains. */
   readonly ignoreFamilies?: readonly string[] | undefined;
+  /**
+   * Files that are logs of what was decided rather than decisions themselves.
+   *
+   * Journals, changelogs, minutes. Their links are still checked; their
+   * obligations and lifecycle are not. See ADR-0011.
+   */
+  readonly historyPatterns?: readonly string[] | undefined;
+  /** Path to the accepted-debt baseline, relative to the root. See ADR-0012. */
+  readonly baseline?: string | undefined;
   readonly severities?: Partial<Record<RuleId, Severity>> | undefined;
   readonly strict?: boolean | undefined;
   readonly maxRelated?: number | undefined;
@@ -123,6 +132,15 @@ function readFields(raw: Record<string, unknown>, source: string): LoadedConfig 
   config.ignoreReferences = strings('ignoreReferences');
   config.families = strings('families');
   config.ignoreFamilies = strings('ignoreFamilies');
+  config.historyPatterns = strings('historyPatterns');
+
+  if (raw['baseline'] !== undefined) {
+    if (typeof raw['baseline'] !== 'string' || raw['baseline'].trim().length === 0) {
+      problems.push(`${source}: "baseline" must be a path`);
+    } else {
+      config.baseline = raw['baseline'];
+    }
+  }
 
   if (raw['strict'] !== undefined) {
     if (typeof raw['strict'] !== 'boolean') problems.push(`${source}: "strict" must be true or false`);
@@ -172,6 +190,8 @@ const KNOWN_KEYS: ReadonlySet<string> = new Set([
   'ignoreReferences',
   'families',
   'ignoreFamilies',
+  'historyPatterns',
+  'baseline',
   'severities',
   'strict',
   'maxRelated',

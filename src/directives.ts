@@ -20,9 +20,15 @@
 
 import type { HtmlComment } from './markdown.js';
 
-export type DirectiveName = 'spec-node' | 'spec-item' | 'spec-edge' | 'spec-ignore';
+export type DirectiveName = 'spec-node' | 'spec-item' | 'spec-edge' | 'spec-ignore' | 'spec-history';
 
-const KNOWN: ReadonlySet<string> = new Set<DirectiveName>(['spec-node', 'spec-item', 'spec-edge', 'spec-ignore']);
+const KNOWN: ReadonlySet<string> = new Set<DirectiveName>([
+  'spec-node',
+  'spec-item',
+  'spec-edge',
+  'spec-ignore',
+  'spec-history',
+]);
 
 export interface Attribute {
   readonly value: string;
@@ -48,6 +54,8 @@ const ATTRIBUTE = /([A-Za-z_][A-Za-z0-9_-]*)\s*(?:=\s*("([^"]*)"|'([^']*)'|([^\s
 /** Attributes each directive understands. Anything else is reported, not ignored. */
 const SCHEMA: Readonly<Record<DirectiveName, readonly string[]>> = {
   'spec-node': ['id', 'status', 'title', 'aliases', 'kind'],
+  // Takes no attributes: the file either is a record or it is not.
+  'spec-history': [],
   'spec-item': ['id', 'state', 'title', 'owner', 'note'],
   'spec-edge': ['kind', 'to', 'from', 'reason'],
   'spec-ignore': ['reason'],

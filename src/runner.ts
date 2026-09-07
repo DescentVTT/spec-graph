@@ -11,7 +11,7 @@ import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 
 import { extractSpecifications, type ExtractedDocument } from './extract.js';
-import { createReferenceFilter, walkFiles, type WalkedFile } from './glob.js';
+import { createGlobMatcher, createReferenceFilter, walkFiles, type WalkedFile } from './glob.js';
 import { buildGraph, type SpecGraph } from './graph.js';
 import { toPosix } from './paths.js';
 import { resolveCorpus, type ResolvedCorpus } from './resolve.js';
@@ -47,6 +47,13 @@ export interface AnalyseOptions {
   readonly families?: readonly string[] | undefined;
   /** Families that are never citations, whatever the corpus contains. */
   readonly ignoreFamilies?: readonly string[] | undefined;
+  /**
+   * Files that are logs of what was decided rather than decisions.
+   *
+   * Journals, changelogs, meeting minutes, sprint summaries. Their references
+   * are still checked; their obligations and lifecycle are not. See ADR-0011.
+   */
+  readonly historyPatterns?: readonly string[] | undefined;
   readonly severities?: Partial<Record<RuleId, Severity>> | undefined;
   readonly concurrency?: number | undefined;
   readonly maxRelated?: number | undefined;
@@ -89,6 +96,7 @@ export async function analyse(options: AnalyseOptions): Promise<AnalysisResult> 
       fileExists: (path) => present.has(path.toLowerCase()) || existsSync(`${root}/${path}`),
       isIgnoredReference: createReferenceFilter(options.ignoreReferences ?? []),
       isIgnoredFamily: createFamilyFilter(options.families, options.ignoreFamilies),
+      isRecord: createHistoryMatcher(options.historyPatterns),
       ...(options.severities !== undefined ? { severities: options.severities } : {}),
       ...(options.maxRelated !== undefined ? { maxRelated: options.maxRelated } : {}),
     }),
@@ -107,6 +115,20 @@ export interface AnalyseSourcesOptions extends RuleOptions {
   readonly fileExists?: ((path: string) => boolean) | undefined;
   readonly isIgnoredReference?: ((target: string) => boolean) | undefined;
   readonly isIgnoredFamily?: ((family: string) => boolean) | undefined;
+  /** Whether a path holds a historical record rather than a specification. */
+  readonly isRecord?: ((path: string) => boolean) | undefined;
+}
+
+/**
+ * Builds the record predicate, or nothing when no patterns were given.
+ *
+ * Returning `undefined` rather than a predicate that always says no keeps the
+ * common case free of a call per file, and makes "no history patterns" visible
+ * as an absent option rather than as a function nobody can read.
+ */
+export function createHistoryMatcher(patterns: readonly string[] | undefined): ((path: string) => boolean) | undefined {
+  if (patterns === undefined || patterns.length === 0) return undefined;
+  return createGlobMatcher(patterns);
 }
 
 /**
@@ -148,7 +170,13 @@ interface Analysed {
 export function analyseSources(sources: readonly Source[], options: AnalyseSourcesOptions = {}): Analysed {
   const extracted: ExtractedDocument[] = [];
   for (const source of sources) {
-    extracted.push(...extractSpecifications({ path: source.path, text: source.text }));
+    extracted.push(
+      ...extractSpecifications({
+        path: source.path,
+        text: source.text,
+        record: options.isRecord?.(source.path) === true,
+      }),
+    );
   }
 
   const corpus = resolveCorpus(extracted, {
@@ -165,12 +193,15 @@ function finish(analysed: Analysed, files: readonly string[], started: number): 
   const { graph, corpus, diagnostics } = analysed;
   const counts = { error: 0, warn: 0, info: 0 };
   for (const diagnostic of diagnostics) counts[diagnostic.severity] += 1;
+  const records = new Set(corpus.documents.filter((node) => node.phase === 'record').map((node) => node.id));
 
   const summary: AnalysisSummary = {
     documents: corpus.documents.length,
     items: corpus.items.length,
     edges: graph.edges.length,
-    openObligations: corpus.items.filter((item) => item.openness !== 'closed').length,
+    // A record's unchecked boxes are minutes, not work. Counting them would
+    // make the headline number the one thing in the report nobody can act on.
+    openObligations: corpus.items.filter((item) => item.openness !== 'closed' && !records.has(item.document)).length,
     errors: counts.error,
     warnings: counts.warn,
     infos: counts.info,
@@ -215,4 +246,22 @@ async function readAll(files: readonly WalkedFile[], concurrency: number): Promi
   out.length = written;
   // Deterministic order regardless of which worker finished first.
   return out.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+}
+
+/**
+ * Rebuilds a result around a narrower set of findings.
+ *
+ * The corpus, the graph and the counts of what is in them are unchanged - a
+ * baseline suppresses findings, never facts. Only the tallies that describe the
+ * findings, and the verdict that follows from them, move.
+ */
+export function withDiagnostics(result: AnalysisResult, diagnostics: readonly Diagnostic[]): AnalysisResult {
+  const counts = { error: 0, warn: 0, info: 0 };
+  for (const diagnostic of diagnostics) counts[diagnostic.severity] += 1;
+  return {
+    ...result,
+    diagnostics,
+    summary: { ...result.summary, errors: counts.error, warnings: counts.warn, infos: counts.info },
+    ok: counts.error === 0,
+  };
 }

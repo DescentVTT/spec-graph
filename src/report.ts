@@ -29,6 +29,14 @@ export interface ReporterOptions {
    * reader cannot tell what would happen without it.
    */
   readonly escalated?: ReadonlySet<RuleId> | undefined;
+  /**
+   * What a baseline accounted for on this run.
+   *
+   * Reported as counts rather than as a list: the point of accepted debt is
+   * that nobody has to read it every time. `stale` is the ratchet - debt that
+   * has been paid and can be struck from the file.
+   */
+  readonly baseline?: { readonly source: string; readonly suppressed: number; readonly stale: number } | undefined;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -166,7 +174,21 @@ export function formatReport(result: AnalysisResult, options: ReporterOptions = 
   if (raised > 0) {
     tally.push(paint.warn(`${raised} raised by --strict`));
   }
+  const baseline = options.baseline;
+  if (baseline !== undefined && baseline.suppressed > 0) {
+    tally.push(paint.dim(`${baseline.suppressed} accepted by ${baseline.source}`));
+  }
   lines.push(tally.join(` ${marks.separator} `));
+
+  if (baseline !== undefined && baseline.stale > 0) {
+    lines.push(
+      paint.dim(
+        `${baseline.stale} baseline ${plural(baseline.stale, 'entry', 'entries')} no longer ${
+          baseline.stale === 1 ? 'occurs' : 'occur'
+        } - tighten it: spec-graph check --record-baseline ${baseline.source}`,
+      ),
+    );
+  }
 
   lines.push(
     result.ok
@@ -217,8 +239,9 @@ function severityMark(severity: Exclude<Severity, 'off'>, paint: Painter, marks:
   }
 }
 
-function plural(count: number, word: string): string {
-  return count === 1 ? word : `${word}s`;
+function plural(count: number, word: string, plural?: string): string {
+  if (count === 1) return word;
+  return plural ?? `${word}s`;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -231,13 +254,17 @@ function plural(count: number, word: string): string {
  * Deliberately flat and versioned: this is the contract a CI annotator or a
  * dashboard builds against, and it must be safe to add fields to it later.
  */
-export function formatJson(result: AnalysisResult, options: { escalated?: ReadonlySet<RuleId> } = {}): string {
+export function formatJson(
+  result: AnalysisResult,
+  options: { escalated?: ReadonlySet<RuleId>; baseline?: ReporterOptions['baseline'] } = {},
+): string {
   const escalated = options.escalated ?? EMPTY_RULES;
   return `${JSON.stringify(
     {
       version: 1,
       ok: result.ok,
       strict: escalated.size > 0,
+      ...(options.baseline === undefined ? {} : { baseline: options.baseline }),
       summary: result.summary,
       files: result.files,
       diagnostics: result.diagnostics.map((diagnostic) => ({
@@ -248,6 +275,7 @@ export function formatJson(result: AnalysisResult, options: { escalated?: Readon
         message: diagnostic.message,
         hint: diagnostic.hint,
         nodes: diagnostic.nodes,
+        target: diagnostic.target,
         file: diagnostic.at.file,
         line: diagnostic.at.span.start.line,
         column: diagnostic.at.span.start.column,
@@ -373,6 +401,7 @@ const PHASE_FILL: Readonly<Record<string, string>> = {
   active: '#e6f4ea',
   frozen: '#e8eaed',
   retired: '#fce8e6',
+  record: '#f3e8fd',
   unknown: '#ffffff',
 };
 

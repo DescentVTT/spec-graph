@@ -37,6 +37,7 @@ function diagnostic(
     message: overrides.message ?? 'm',
     at,
     nodes: [],
+    target: null,
     related: [],
     hint: 'h',
   };

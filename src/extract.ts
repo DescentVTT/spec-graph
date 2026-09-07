@@ -398,6 +398,13 @@ export interface ExtractInput {
   /** Repository-relative POSIX path. */
   readonly path: string;
   readonly text: string;
+  /**
+   * This file is a historical record: a log of what was decided, not a
+   * decision. Matched against the caller's history patterns, because deciding
+   * which files those are is a repository's business and not a guess this
+   * layer could justify making. See ADR-0011.
+   */
+  readonly record?: boolean | undefined;
 }
 
 /**
@@ -477,7 +484,11 @@ export function extractDocument(input: ExtractInput): ExtractedDocument | null {
 
   const status = readStatus(scanned, byKey, nodeDirective, index, file);
   const pathPhase = phaseFromPath(input.path);
-  const phase: Phase = status.phase !== 'unknown' ? status.phase : pathPhase;
+  // A record is a categorical statement about what the file *is*, made by
+  // configuration or by an explicit directive, so it outranks a status word
+  // that happened to be written inside it.
+  const record = input.record === true || directives.some((directive) => directive.name === 'spec-history');
+  const phase: Phase = record ? 'record' : status.phase !== 'unknown' ? status.phase : pathPhase;
 
   const title =
     (nodeDirective ? attr(nodeDirective, 'title')?.value : null) ??
@@ -506,7 +517,19 @@ export function extractDocument(input: ExtractInput): ExtractedDocument | null {
   // as a table.
   const subSpecifications = regions
     .filter((region) => region.heading !== null || region.row !== null)
-    .map((region) => buildRegion({ region, containerId: identity.id, input, scanned, directives, index, file, pathPhase }));
+    .map((region) =>
+      buildRegion({
+        region,
+        containerId: identity.id,
+        input,
+        scanned,
+        directives,
+        index,
+        file,
+        pathPhase,
+        record,
+      }),
+    );
 
   const ownerAt = (offset: number): string => {
     const region = regionAt(regions, offset);
@@ -580,6 +603,8 @@ interface RegionInput {
   readonly index: LineIndex;
   readonly file: string;
   readonly pathPhase: Phase;
+  /** The whole file is a historical record, so every part of it is one too. */
+  readonly record: boolean;
 }
 
 interface BuiltRegion {
@@ -599,7 +624,7 @@ interface BuiltRegion {
  * answering to one path would make every link to that file ambiguous.
  */
 function buildRegion(context: RegionInput): BuiltRegion {
-  const { region, input, scanned, index, file, pathPhase } = context;
+  const { region, input, scanned, index, file, pathPhase, record } = context;
   const at = (start: number, end: number): SourceRef => refOf(file, index, start, end);
 
   const identity = identify({
@@ -627,7 +652,10 @@ function buildRegion(context: RegionInput): BuiltRegion {
     at: at(region.start, Math.min(region.end, region.heading?.end ?? region.row?.end ?? region.end)),
     path: input.path,
     aliases: identity.aliases,
-    phase: declaredPhase !== 'unknown' ? declaredPhase : pathPhase,
+    // A section of a journal is part of the journal, whatever status word it
+    // wrote for itself. Being a record is a statement about the file made from
+    // outside it, and it does not stop at a heading.
+    phase: record ? 'record' : declaredPhase !== 'unknown' ? declaredPhase : pathPhase,
     rawStatus,
     statusAt,
     frontMatter: {},

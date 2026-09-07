@@ -360,10 +360,73 @@ Directives are ordinary HTML comments — invisible in every Markdown renderer:
 <!-- @spec-item id="shard-key" state="narrowed" -->
 <!-- @spec-edge kind="delegates-to" to="ADR-0011#scope" -->
 <!-- @spec-ignore -->
+<!-- @spec-history -->
 ```
 
 A directive always wins, and the report says the state came from a directive, so
 an override is visible rather than mysterious.
+
+## Journals, changelogs and minutes
+
+A 2024 journal noting *"decision deferred to ADR-002"* is not delegating
+anything. It is reporting that somebody once did. When ADR-002 retires in 2026,
+the note does not become a defect — there is nothing in it for anyone to fix.
+
+Declare those files and spec-graph stops holding them to a lifecycle they never
+had:
+
+```json
+{ "historyPatterns": ["**/JOURNAL_*.md", "archive/**"] }
+```
+
+or, for one file, `<!-- @spec-history -->` at the top of it.
+
+|  |  |
+| --- | --- |
+| its links resolve | **still checked** — a broken link is broken whoever wrote it |
+| its checkboxes | not obligations, and not in the headline count |
+| its delegations | reports of what was said |
+| work handed **into** it | **still checked** — a log will never act on it |
+
+That last row is the point. Excluding the file with `--ignore` would have
+silenced the whole lot, including the links, and a journal full of 404s is
+exactly what this tool is for. See
+[ADR-0011](docs/adr/0011-a-record-is-not-a-specification.md).
+
+## Adopting this on a repository that predates it
+
+Fifty findings on day one is not a report, it is a decision to be ignored. So
+record what is already wrong, and check only what happens next:
+
+```bash
+spec-graph check --record-baseline .spec-graph-baseline.json
+git add .spec-graph-baseline.json
+```
+
+```json
+{
+  "version": 1,
+  "findings": [
+    { "rule": "broken-reference", "document": "ADR-0004", "subject": "docs/plans/x.md", "count": 1 }
+  ]
+}
+```
+
+CI is green from the first commit, every specification written afterwards is
+checked in full, and a new finding fails the build. When debt is paid, the run
+says so:
+
+```text
+16ms · 2 accepted by .spec-graph-baseline.json
+1 baseline entry no longer occurs - tighten it: spec-graph check --record-baseline ...
+```
+
+**It is keyed on the specification and the citation, never on a line number.**
+A baseline that expires when somebody reformats a paragraph is worse than none,
+so the entry survives edits, reordering, and the file being renamed — because
+`ADR-0004` is the decision's name, not its location. Repeats are counted rather
+than told apart, which is the deliberate cost of a key with no position in it.
+See [ADR-0012](docs/adr/0012-a-baseline-is-a-ratchet.md).
 
 ## Configuration
 
@@ -376,6 +439,8 @@ command. spec-graph reads the first of `.spec-graph.json`,
   "patterns": ["docs/**/*.md"],
   "ignoreReferences": ["trap *"],
   "ignoreFamilies": ["RFC"],
+  "historyPatterns": ["**/JOURNAL_*.md"],
+  "baseline": ".spec-graph-baseline.json",
   "severities": { "self-reference": "off" },
   "strict": true
 }
@@ -425,6 +490,9 @@ spec-graph rules [--explain]         List the diagnostics.
 --ignore-ref <glob>     Do not report these reference targets (repeatable)
 --family <name>         Families a bare identifier may name (repeatable)
 --ignore-family <name>  Families that are never citations (repeatable)
+--history <glob>        Files that log decisions rather than making them
+--baseline <file>       Accept these findings; report only what is new
+--record-baseline <f>   Write today's findings as accepted debt, exit 0
 --no-config             Ignore .spec-graph.json and the package.json key
 --format human|json     Report format
 --graph-format <fmt>    dot | mermaid | json
@@ -508,7 +576,7 @@ exported. Reporters, editor extensions and custom rules are all first-class.
 
 ## Design
 
-Ten ADRs, which `spec-graph` validates on every CI run:
+Twelve ADRs, which `spec-graph` validates on every CI run:
 
 - [ADR-0001 — A hand-written Markdown scanner](docs/adr/0001-hand-written-markdown-scanner.md)
 - [ADR-0002 — A four-phase lifecycle lattice](docs/adr/0002-lifecycle-lattice.md)
@@ -520,6 +588,8 @@ Ten ADRs, which `spec-graph` validates on every CI run:
 - [ADR-0008 — A wiki link carries a name, not a path](docs/adr/0008-wiki-links-carry-no-path.md)
 - [ADR-0009 — A specification is a region of a file, not a file](docs/adr/0009-a-specification-is-a-region.md)
 - [ADR-0010 — Configuration belongs to the repository](docs/adr/0010-configuration-belongs-to-the-repository.md)
+- [ADR-0011 — A historical record is not a specification](docs/adr/0011-a-record-is-not-a-specification.md)
+- [ADR-0012 — A baseline is a ratchet, keyed on identity](docs/adr/0012-a-baseline-is-a-ratchet.md)
 
 **Zero runtime dependencies.** Node 22+, native ESM, TypeScript strict with
 `noUncheckedIndexedAccess` and `exactOptionalPropertyTypes`. The Markdown

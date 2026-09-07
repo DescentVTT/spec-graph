@@ -64,7 +64,7 @@ export interface SourceRef {
  * `unknown` is a fifth, deliberately non-lattice value for documents that never
  * declared a status. Rules treat it permissively rather than guessing.
  */
-export type Phase = 'draft' | 'active' | 'frozen' | 'retired' | 'unknown';
+export type Phase = 'draft' | 'active' | 'frozen' | 'retired' | 'record' | 'unknown';
 
 /**
  * Can a document in this phase take on a *new* open obligation?
@@ -353,6 +353,15 @@ export interface Diagnostic {
   readonly at: SourceRef;
   /** Node ids involved, most relevant first. */
   readonly nodes: readonly string[];
+  /**
+   * The citation this finding is about, for the rules that are about one.
+   *
+   * `null` everywhere else, where `nodes` already names the subject. It exists
+   * because a broken reference names something that is not a node - that is
+   * what makes it broken - and a baseline still has to be able to tell one
+   * broken reference from another. See ADR-0012.
+   */
+  readonly target: string | null;
   /** Supporting locations: the other end of an edge, a cycle members. */
   readonly related: readonly RelatedLocation[];
   /** Concrete next action. */

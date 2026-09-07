@@ -203,6 +203,9 @@ export function receptivityOf(phase: Phase): Receptivity {
       return 'receptive';
     case 'frozen':
     case 'retired':
+    // A record was never asking for an obligation, so it cannot take one on.
+    // Sealed for the same reason a retired document is, by a different route.
+    case 'record':
       return 'sealed';
     case 'unknown':
       return 'unknown';
