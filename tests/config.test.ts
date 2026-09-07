@@ -245,3 +245,30 @@ describe('family rules in a corpus', () => {
     expect(analyseSources(prose).diagnostics).toEqual([]);
   });
 });
+
+describe('the newer keys', () => {
+  it('reads history patterns as a list of globs', () => {
+    const parsed = parseConfig(JSON.stringify({ historyPatterns: ['**/JOURNAL_*.md'] }), 'c.json');
+    expect(parsed.config.historyPatterns).toEqual(['**/JOURNAL_*.md']);
+    expect(parsed.problems).toEqual([]);
+    expect(parseConfig(JSON.stringify({ historyPatterns: 'one' }), 'c.json').problems[0]).toContain('array of strings');
+  });
+
+  it('reads a baseline path, and refuses one that is not a path', () => {
+    expect(parseConfig(JSON.stringify({ baseline: '.spec-graph-baseline.json' }), 'c.json').config.baseline).toBe(
+      '.spec-graph-baseline.json',
+    );
+    for (const bad of [7, '', '   ', null]) {
+      const parsed = parseConfig(JSON.stringify({ baseline: bad }), 'c.json');
+      expect(parsed.problems[0]).toContain('"baseline" must be a path');
+      expect(parsed.config.baseline).toBeUndefined();
+    }
+  });
+
+  it('leaves both unset when neither is written', () => {
+    const parsed = parseConfig('{}', 'c.json');
+    expect(parsed.config.historyPatterns).toBeUndefined();
+    expect(parsed.config.baseline).toBeUndefined();
+    expect(parsed.problems).toEqual([]);
+  });
+});

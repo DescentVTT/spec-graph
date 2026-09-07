@@ -1,7 +1,15 @@
 import { describe, expect, it } from 'vitest';
 
-import { applyBaseline, BASELINE_VERSION, formatBaseline, parseBaseline, type Baseline } from '../src/baseline.js';
+import {
+  applyBaseline,
+  BASELINE_VERSION,
+  fingerprintOf,
+  formatBaseline,
+  parseBaseline,
+  type Baseline,
+} from '../src/baseline.js';
 import { analyseSources, type Source } from '../src/runner.js';
+import type { Diagnostic } from '../src/types.js';
 
 /**
  * Accepted debt, and the ratchet.
@@ -190,6 +198,112 @@ describe('a document-level rule', () => {
     expect(diagnostics.map((finding) => finding.rule)).toContain('orphaned-obligation');
     expect((JSON.parse(formatBaseline(graph, diagnostics)) as Baseline).findings).toEqual([
       { rule: 'orphaned-obligation', document: 'ADR-0002', subject: '', count: 1 },
+    ]);
+  });
+});
+
+describe('the sort is total, so the file is stable field by field', () => {
+  const entry = (rule: string, document: string, subject: string) => ({ rule, document, subject, count: 1 });
+
+  it('orders by document when the rule is the same', () => {
+    const files = {
+      'docs/adr/0002-sharding.md': RETIRED,
+      'docs/adr/0009-b.md': ['# ADR-0009: B', '', '## Status', '', 'accepted', '', 'Depends on ADR-0002.'].join('\n'),
+      'docs/adr/0001-a.md': ['# ADR-0001: A', '', '## Status', '', 'accepted', '', 'Depends on ADR-0002.'].join('\n'),
+    };
+    expect(recorded(files).findings).toEqual([
+      entry('stale-premise', 'ADR-0001', 'ADR-0002'),
+      entry('stale-premise', 'ADR-0009', 'ADR-0002'),
+    ]);
+  });
+
+  it('orders by subject when the rule and document are the same', () => {
+    const files = {
+      'docs/adr/0004-plans.md': BROKEN.replace(
+        'See [the plan](docs/plans/x.md).',
+        'See [z](docs/plans/z.md) and [a](docs/plans/a.md).',
+      ),
+    };
+    expect(recorded(files).findings.map((row) => row.subject)).toEqual(['docs/plans/a.md', 'docs/plans/z.md']);
+  });
+});
+
+describe('fingerprinting the awkward shapes', () => {
+  const at = { file: 'a.md', span: { start: { offset: 0, line: 1, column: 1 }, end: { offset: 0, line: 1, column: 1 } } };
+  const of = (nodes: string[], target: string | null): Diagnostic => ({
+    rule: 'self-reference',
+    severity: 'info',
+    message: 'm',
+    at,
+    nodes,
+    target,
+    related: [],
+    hint: 'h',
+  });
+
+  it('leaves the subject empty when a finding names only one node', () => {
+    const { graph } = analyse(CORPUS);
+    expect(fingerprintOf(graph, of(['ADR-0003'], null))).toEqual({ document: 'ADR-0003', subject: '' });
+  });
+
+  it('falls back to the raw id when the graph does not know the node', () => {
+    // fingerprintOf is exported, so it has to survive being handed something
+    // the graph never saw rather than keying every such finding to the same
+    // empty document.
+    const { graph } = analyse(CORPUS);
+    expect(fingerprintOf(graph, of(['GONE-1', 'ALSO-GONE'], null))).toEqual({ document: 'GONE-1', subject: 'ALSO-GONE' });
+    expect(fingerprintOf(graph, of([], null))).toEqual({ document: '', subject: '' });
+  });
+
+  it('prefers a declared target over the second node', () => {
+    const { graph } = analyse(CORPUS);
+    expect(fingerprintOf(graph, of(['ADR-0003', 'ADR-0002'], 'docs/x.md')).subject).toBe('docs/x.md');
+  });
+});
+
+describe('a hand-edited baseline', () => {
+  it('rejects a row that is not an object, and one whose fields are not strings', () => {
+    const parsed = parseBaseline(
+      JSON.stringify({
+        version: BASELINE_VERSION,
+        findings: [
+          'not-an-object',
+          { rule: 'broken-reference', document: 7, subject: 'x' },
+          { rule: 'broken-reference', document: 'ADR-1', subject: 7 },
+        ],
+      }),
+      'b.json',
+    );
+    expect(parsed.baseline.findings).toEqual([]);
+    expect(parsed.problems).toHaveLength(3);
+    expect(parsed.problems[0]).toContain('must be an object');
+    expect(parsed.problems[1]).toContain('must be strings');
+  });
+
+  it('does not let the same entry claim its surplus twice', () => {
+    const twice: Baseline = {
+      version: BASELINE_VERSION,
+      findings: [
+        { rule: 'broken-reference', document: 'ADR-0004', subject: 'gone.md', count: 1 },
+        { rule: 'broken-reference', document: 'ADR-0004', subject: 'gone.md', count: 1 },
+      ],
+    };
+    const { graph, diagnostics } = analyse({ 'docs/adr/0002-sharding.md': RETIRED });
+    expect(applyBaseline(graph, diagnostics, twice).stale).toHaveLength(1);
+  });
+
+  it('sorts what it reports as paid', () => {
+    const many: Baseline = {
+      version: BASELINE_VERSION,
+      findings: [
+        { rule: 'stale-premise', document: 'ADR-9', subject: 'b', count: 1 },
+        { rule: 'broken-reference', document: 'ADR-9', subject: 'a', count: 1 },
+      ],
+    };
+    const { graph, diagnostics } = analyse({ 'docs/adr/0002-sharding.md': RETIRED });
+    expect(applyBaseline(graph, diagnostics, many).stale.map((row) => row.rule)).toEqual([
+      'broken-reference',
+      'stale-premise',
     ]);
   });
 });
