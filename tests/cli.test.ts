@@ -181,6 +181,41 @@ describe('check', () => {
   });
 });
 
+describe('--ignore-ref', () => {
+  const CONCEPTS = 'tests/fixtures/concepts';
+
+  it('is collected, repeatably', () => {
+    const options = parseArgs(['--ignore-ref', 'trap *', '--ignore-ref', 'Q-*'], '/repo');
+    expect(options.ignoreReferences).toEqual(['trap *', 'Q-*']);
+    expect(parseArgs([], '/repo').ignoreReferences).toEqual([]);
+  });
+
+  it('needs a value', () => {
+    expect(() => parseArgs(['--ignore-ref'], '/repo')).toThrow(/needs a value/);
+  });
+
+  it('reports concept tags by default, and names the flag that stops it', async () => {
+    const result = await run('check', '--root', CONCEPTS);
+    expect(result.code).toBe(EXIT_FAILED);
+    expect(result.out).toContain('does not resolve to any document');
+    expect(result.out).toContain('--ignore-ref "trap *"');
+  });
+
+  it('goes quiet once the convention is declared', async () => {
+    const result = await run('check', '--root', CONCEPTS, '--ignore-ref', 'trap *');
+    expect(result.code).toBe(EXIT_OK);
+    expect(result.out).toContain('the specification graph is consistent');
+  });
+
+  it('leaves the graph itself untouched', async () => {
+    // The filter suppresses findings, never edges. Exporting the graph with a
+    // pattern that matches everything must still show every relation.
+    const plain = await run('graph', '--root', CONCEPTS, '--graph-format', 'json');
+    const filtered = await run('graph', '--root', CONCEPTS, '--graph-format', 'json', '--ignore-ref', '*');
+    expect(filtered.out).toBe(plain.out);
+  });
+});
+
 describe('strict mode', () => {
   // A fixture whose only findings are warnings: a retired decision that never
   // says what replaced it, and a link to a real document outside the patterns.

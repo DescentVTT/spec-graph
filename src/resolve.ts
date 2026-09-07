@@ -40,6 +40,15 @@ export interface ResolveOptions {
    * different fixes.
    */
   readonly fileExists?: ((path: string) => boolean) | undefined;
+  /**
+   * Targets whose failure to resolve should not be reported.
+   *
+   * This is a *suppression* filter, not a resolution one: it is consulted only
+   * when a reference has already failed to resolve. A reference that resolves
+   * still becomes an edge no matter what this says, so no amount of
+   * configuration can silently delete a relation from the graph.
+   */
+  readonly isIgnoredReference?: ((target: string) => boolean) | undefined;
 }
 
 export interface ResolvedCorpus {
@@ -211,7 +220,7 @@ function resolveOne(
 
   // A pure `#anchor` points inside the citing document.
   if (bare.length === 0 && anchor !== null) {
-    return bindAnchor(candidate, entry.document.id, anchor, index, nodes);
+    return bindAnchor(candidate, entry.document.id, anchor, index, nodes, options.isIgnoredReference);
   }
 
   if (isExternal(bare)) return null;
@@ -224,6 +233,7 @@ function resolveOne(
 
   if (found.ids.length === 0) {
     if (candidate.opportunistic && !worthReporting(bare, index)) return null;
+    if (options.isIgnoredReference?.(candidate.target)) return null;
     // A trailing slash names a directory. Linking to one is ordinary - "the
     // decisions live in [archive/](archive/)" - and is not a citation of any
     // document. Resolution is still attempted first, so a directory-style
@@ -235,6 +245,7 @@ function resolveOne(
 
   if (found.ids.length > 1) {
     if (candidate.opportunistic) return null;
+    if (options.isIgnoredReference?.(candidate.target)) return null;
     return dangle(candidate, 'ambiguous', found.ids);
   }
 
@@ -245,7 +256,7 @@ function resolveOne(
   // link that points at its own document is a real mistake worth reporting.
   if (candidate.opportunistic && documentId === entry.document.id) return null;
 
-  if (anchor !== null) return bindAnchor(candidate, documentId, anchor, index, nodes);
+  if (anchor !== null) return bindAnchor(candidate, documentId, anchor, index, nodes, options.isIgnoredReference);
 
   return makeEdge(candidate, documentId);
 }
@@ -333,7 +344,8 @@ function bindAnchor(
   anchor: string,
   index: Index,
   nodes: ReadonlyMap<string, SpecNode>,
-): Edge | DanglingRef {
+  isIgnored: ((target: string) => boolean) | undefined,
+): Edge | DanglingRef | null {
   const itemId = `${documentId}#${anchor}`;
   if (index.itemIds.has(itemId)) return makeEdge(candidate, itemId);
 
@@ -344,6 +356,8 @@ function bindAnchor(
   // calling it broken.
   const loose = anchor.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-|-$/g, '');
   if (anchors?.has(loose)) return makeEdge(candidate, documentId);
+
+  if (isIgnored?.(candidate.target)) return null;
 
   const candidates = [...(nodes.keys() as Iterable<string>)].filter(
     (id) => id.startsWith(`${documentId}#`) && id.toLowerCase().includes(loose),

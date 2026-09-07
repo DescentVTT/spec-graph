@@ -173,6 +173,31 @@ export function createGlobMatcher(patterns: readonly string[]): GlobMatcher {
   };
 }
 
+/**
+ * Builds a predicate over reference *targets*, not paths.
+ *
+ * Separate from {@link createGlobMatcher} on purpose. That one is
+ * path-oriented: it expands a bare name to `name/**` because a directory means
+ * everything under it. A reference target has no such structure - `trap 55` is
+ * a name, not a location - so a bare pattern must match it literally and
+ * nothing else.
+ *
+ * Matching is case-insensitive on every platform. Path matching inherits the
+ * host filesystem's case rules, which is right for paths and wrong here: a
+ * repository's findings must not depend on which machine ran the check.
+ */
+export function createReferenceFilter(patterns: readonly string[]): (target: string) => boolean {
+  if (patterns.length === 0) return () => false;
+  const compiled = patterns
+    .filter((pattern) => pattern.trim().length > 0)
+    .map((pattern) => globToRegExp(pattern.trim().toLowerCase()));
+  if (compiled.length === 0) return () => false;
+  return (target: string): boolean => {
+    const value = target.trim().toLowerCase();
+    return compiled.some((expression) => expression.test(value));
+  };
+}
+
 /** The literal directory prefix of a pattern, used to avoid walking the world. */
 export function globBase(pattern: string): string {
   const normalised = normalisePosix(toPosix(pattern.startsWith('!') ? pattern.slice(1) : pattern));

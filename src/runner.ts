@@ -11,7 +11,7 @@ import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 
 import { extractDocument, type ExtractedDocument } from './extract.js';
-import { walkFiles, type WalkedFile } from './glob.js';
+import { createReferenceFilter, walkFiles, type WalkedFile } from './glob.js';
 import { buildGraph, type SpecGraph } from './graph.js';
 import { toPosix } from './paths.js';
 import { resolveCorpus, type ResolvedCorpus } from './resolve.js';
@@ -36,6 +36,13 @@ export interface AnalyseOptions {
   readonly root: string;
   readonly patterns?: readonly string[] | undefined;
   readonly ignore?: readonly string[] | undefined;
+  /**
+   * Reference targets to leave unreported when they do not resolve.
+   *
+   * For repositories where `[[...]]` tags concepts rather than naming files.
+   * Suppresses findings only; a reference that resolves is still an edge.
+   */
+  readonly ignoreReferences?: readonly string[] | undefined;
   readonly severities?: Partial<Record<RuleId, Severity>> | undefined;
   readonly concurrency?: number | undefined;
   readonly maxRelated?: number | undefined;
@@ -76,6 +83,7 @@ export async function analyse(options: AnalyseOptions): Promise<AnalysisResult> 
       // "that document does not exist" and "that document exists but your
       // include patterns did not reach it", which are different fixes.
       fileExists: (path) => present.has(path.toLowerCase()) || existsSync(`${root}/${path}`),
+      isIgnoredReference: createReferenceFilter(options.ignoreReferences ?? []),
       ...(options.severities !== undefined ? { severities: options.severities } : {}),
       ...(options.maxRelated !== undefined ? { maxRelated: options.maxRelated } : {}),
     }),
@@ -92,6 +100,7 @@ export interface Source {
 
 export interface AnalyseSourcesOptions extends RuleOptions {
   readonly fileExists?: ((path: string) => boolean) | undefined;
+  readonly isIgnoredReference?: ((target: string) => boolean) | undefined;
 }
 
 interface Analysed {
@@ -114,7 +123,10 @@ export function analyseSources(sources: readonly Source[], options: AnalyseSourc
     if (document) extracted.push(document);
   }
 
-  const corpus = resolveCorpus(extracted, { fileExists: options.fileExists });
+  const corpus = resolveCorpus(extracted, {
+    fileExists: options.fileExists,
+    isIgnoredReference: options.isIgnoredReference,
+  });
   const graph = buildGraph({ nodes: corpus.nodes, edges: corpus.edges });
   const diagnostics = runRules(graph, corpus, options);
   return { graph, corpus, diagnostics };

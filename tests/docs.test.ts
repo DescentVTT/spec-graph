@@ -174,6 +174,7 @@ describe('the CLI help and the README agree on the interface', () => {
   const flags = [
     '--root',
     '--ignore',
+    '--ignore-ref',
     '--format',
     '--graph-format',
     '--documents-only',

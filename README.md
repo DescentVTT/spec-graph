@@ -195,6 +195,36 @@ trusts:
 - **Source links are not spec links.** `[rules.ts](../../src/rules.ts)` is not a
   broken reference. That is [spec-guard](#relationship-to-spec-guard)'s job.
 
+### When `[[...]]` tags a concept
+
+A Markdown link with a path says where the target lives. A wiki link says only
+what it is called — and whether that name means a *document* is a property of
+your repository, not of the link:
+
+```md
+[[0007-sharding]]   a file stem, in an Obsidian-style vault
+[[trap 55]]         an entry in a catalogue that lives inside another document
+```
+
+spec-graph cannot tell them apart, so it validates by default — an unresolved
+`[[...]]` in a vault is the most common broken reference there is. Where the
+convention is the other one, say so once:
+
+```bash
+spec-graph --ignore-ref "trap *"
+```
+
+The tool names that flag in the hint, so it costs one run to find:
+
+```text
+> fix the identifier, or - if [[...]] tags a concept here - exclude it: --ignore-ref "trap *"
+```
+
+`--ignore-ref` suppresses *findings*, never edges. A reference that resolves is
+still a relation in the graph no matter what you exclude — not even
+`--ignore-ref "*"` can delete one. See
+[ADR-0008](docs/adr/0008-wiki-links-carry-no-path.md).
+
 ### Relations
 
 Relations are read from front matter, from link context, and from explicit
@@ -304,6 +334,7 @@ spec-graph rules [--explain]         List the diagnostics.
 
 --root <dir>            Directory patterns resolve against
 --ignore <glob>         Skip paths (repeatable)
+--ignore-ref <glob>     Do not report these reference targets (repeatable)
 --format human|json     Report format
 --graph-format <fmt>    dot | mermaid | json
 --documents-only        Hide items; their relations lift onto their documents
@@ -386,7 +417,7 @@ exported. Reporters, editor extensions and custom rules are all first-class.
 
 ## Design
 
-Seven ADRs, which `spec-graph` validates on every CI run:
+Eight ADRs, which `spec-graph` validates on every CI run:
 
 - [ADR-0001 — A hand-written Markdown scanner](docs/adr/0001-hand-written-markdown-scanner.md)
 - [ADR-0002 — A four-phase lifecycle lattice](docs/adr/0002-lifecycle-lattice.md)
@@ -395,6 +426,7 @@ Seven ADRs, which `spec-graph` validates on every CI run:
 - [ADR-0005 — The rules and the query language share one engine](docs/adr/0005-rules-are-queries.md)
 - [ADR-0006 — False positives cost more than misses](docs/adr/0006-false-positives-cost-more.md)
 - [ADR-0007 — Mutation testing, and what the score actually means](docs/adr/0007-mutation-testing.md)
+- [ADR-0008 — A wiki link carries a name, not a path](docs/adr/0008-wiki-links-carry-no-path.md)
 
 **Zero runtime dependencies.** Node 22+, native ESM, TypeScript strict with
 `noUncheckedIndexedAccess` and `exactOptionalPropertyTypes`. The Markdown

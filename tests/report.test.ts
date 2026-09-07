@@ -59,6 +59,14 @@ function result(sources: Source[] = SOURCES): AnalysisResult {
 /* -------------------------------------------------------------------------- */
 
 describe('colour detection', () => {
+  it('treats an empty variable as unset, which is what the convention means', () => {
+    // `NO_COLOR=` in a shell script is how a variable gets cleared. Reading it
+    // as "set" would turn colour off for anyone who tried to turn it back on.
+    expect(shouldUseColor({ isTTY: true, env: { NO_COLOR: '' } })).toBe(true);
+    expect(shouldUseColor({ isTTY: false, env: { FORCE_COLOR: '' } })).toBe(false);
+    expect(shouldUseColor({ isTTY: true, env: { CI: '' } })).toBe(true);
+  });
+
   it('honours NO_COLOR above everything else', () => {
     expect(shouldUseColor({ isTTY: true, env: { NO_COLOR: '1' } })).toBe(false);
     expect(shouldUseColor({ isTTY: true, env: { NO_COLOR: '1', FORCE_COLOR: '1' } })).toBe(false);
@@ -80,22 +88,73 @@ describe('colour detection', () => {
     expect(shouldUseColor({ env: {} })).toBe(false);
   });
 
-  it('honours an explicit ASCII request', () => {
-    expect(shouldUseAscii({ env: { SPEC_GRAPH_ASCII: '1' } })).toBe(true);
-    expect(shouldUseAscii({ env: { SPEC_GRAPH_ASCII: '' } })).toBe(process.platform === 'win32');
+  it('honours an explicit ASCII request whatever the platform', () => {
+    for (const platform of ['win32', 'linux', 'darwin'] as const) {
+      expect(shouldUseAscii({ env: { SPEC_GRAPH_ASCII: '1' }, platform }), platform).toBe(true);
+    }
+  });
+
+  it('treats an empty ASCII variable as unset', () => {
+    expect(shouldUseAscii({ env: { SPEC_GRAPH_ASCII: '' }, platform: 'linux' })).toBe(false);
+  });
+
+  it('assumes a capable terminal everywhere but Windows', () => {
+    for (const platform of ['linux', 'darwin', 'freebsd'] as const) {
+      expect(shouldUseAscii({ env: {}, platform }), platform).toBe(false);
+    }
+  });
+
+  it('degrades on Windows only for the legacy console', () => {
+    // Windows Terminal and modern shells announce themselves; the old
+    // conhost.exe does not, and it renders box-drawing as mojibake.
+    expect(shouldUseAscii({ env: {}, platform: 'win32' })).toBe(true);
+    expect(shouldUseAscii({ env: { WT_SESSION: 'x' }, platform: 'win32' })).toBe(false);
+    expect(shouldUseAscii({ env: { TERM_PROGRAM: 'vscode' }, platform: 'win32' })).toBe(false);
+    // Either marker is enough on its own.
+    expect(shouldUseAscii({ env: { WT_SESSION: 'x', TERM_PROGRAM: 'vscode' }, platform: 'win32' })).toBe(false);
+  });
+
+  it('defaults to the real platform when none is given', () => {
+    expect(shouldUseAscii({ env: {} })).toBe(process.platform === 'win32');
   });
 });
 
+const ROLES = ['error', 'warn', 'info', 'dim', 'bold', 'hint', 'location'] as const;
+
 describe('painter', () => {
   it('emits escape codes only when colour is on', () => {
-    expect(createPainter(true).error('x')).toBe('[31mx[0m');
+    expect(createPainter(true).error('x')).toBe('\u001b[31mx\u001b[0m');
     expect(createPainter(false).error('x')).toBe('x');
   });
 
-  it('gives every severity a distinct colour', () => {
+  it('uses the conventional colour for each role', () => {
+    // These are the SGR codes a reader's eye is trained on: red for an error,
+    // yellow for a warning, cyan for a note, green for the way out.
     const paint = createPainter(true);
-    const codes = [paint.error('x'), paint.warn('x'), paint.info('x')];
-    expect(new Set(codes).size).toBe(3);
+    const code = (painted: string): string => /\u001b\[(\d+)m/.exec(painted)?.[1] ?? '';
+    expect(code(paint.error('x'))).toBe('31');
+    expect(code(paint.warn('x'))).toBe('33');
+    expect(code(paint.info('x'))).toBe('36');
+    expect(code(paint.hint('x'))).toBe('32');
+    expect(code(paint.dim('x'))).toBe('2');
+    expect(code(paint.bold('x'))).toBe('1');
+    expect(code(paint.location('x'))).toBe('4');
+  });
+
+  it('gives every role a distinct code, so none is silently the same as another', () => {
+    const paint = createPainter(true);
+    const painted = ROLES.map((role) => paint[role]('x'));
+    expect(new Set(painted).size).toBe(ROLES.length);
+  });
+
+  it('always closes what it opens', () => {
+    const paint = createPainter(true);
+    for (const role of ROLES) expect(paint[role]('x'), role).toMatch(/^\u001b\[\d+mx\u001b\[0m$/);
+  });
+
+  it('passes text through untouched when colour is off', () => {
+    const paint = createPainter(false);
+    for (const role of ROLES) expect(paint[role]('unchanged'), role).toBe('unchanged');
   });
 });
 
@@ -159,6 +218,71 @@ describe('human report', () => {
   });
 });
 
+describe('every severity reaches the report', () => {
+  // A self-link is an `info`; an unacknowledged supersession is a `warn`. The
+  // error path is exercised everywhere else, so between them all three
+  // severities and all three glyphs are covered.
+  const mixed = (): AnalysisResult =>
+    result([
+      { path: 'docs/adr/0001-old.md', text: '---\nstatus: archived\n---\n\n# Old\n' },
+      {
+        path: 'docs/adr/0002-new.md',
+        text: [
+          '---',
+          'status: accepted',
+          'supersedes: ADR-0001',
+          '---',
+          '',
+          '# New',
+          '',
+          '## Open Questions',
+          '',
+          '- [ ] Who owns this? Deferred to [ADR-0002](0002-new.md).',
+        ].join('\n'),
+      },
+    ]);
+
+  it('marks a note distinctly from a warning and an error', () => {
+    const text = formatReport(mixed(), { ascii: true });
+    expect(text).toContain('self-reference');
+    expect(text).toContain('unreciprocated-supersession');
+    // ASCII glyphs: `i` for a note, `!` for a warning.
+    expect(text).toMatch(/^i .*self-reference/m);
+    expect(text).toMatch(/^! .*unreciprocated-supersession/m);
+  });
+
+  it('tallies notes alongside warnings', () => {
+    const report = mixed();
+    expect(report.summary.infos).toBeGreaterThan(0);
+    const text = formatReport(report, { ascii: true });
+    expect(text).toMatch(/\d+ notes?/);
+    expect(text).toMatch(/\d+ warnings?/);
+  });
+
+  it('still passes the build, because neither is an error', () => {
+    const report = mixed();
+    expect(report.summary.errors).toBe(0);
+    expect(formatReport(report, { ascii: true })).toContain('no errors - the specification graph holds');
+  });
+
+  it('uses a tick for success in unicode and a word in ASCII', () => {
+    const clean = result([{ path: 'docs/adr/0001-a.md', text: '# A\n' }]);
+    expect(formatReport(clean, { ascii: false })).toContain('\u2714');
+    expect(formatReport(clean, { ascii: true })).toMatch(/^ok /m);
+    expect(formatReport(clean, { ascii: true })).not.toContain('\u2714');
+  });
+
+  it('pluralises each tally on its own', () => {
+    const one = mixed();
+    const text = formatReport(one, { ascii: true });
+    // One of each here: neither may be rendered as a plural.
+    expect(text).toContain('1 warning ');
+    expect(text).toContain('1 note');
+    expect(text).not.toContain('1 warnings');
+    expect(text).not.toContain('1 notes');
+  });
+});
+
 describe('json report', () => {
   it('is versioned, and carries positions for every finding', () => {
     const parsed: {
@@ -176,6 +300,39 @@ describe('json report', () => {
 
   it('ends with a newline so it concatenates cleanly', () => {
     expect(formatJson(result()).endsWith('\n')).toBe(true);
+  });
+
+  it('carries parse problems, not only findings', () => {
+    // A malformed directive is a problem with the input rather than a defect in
+    // the graph, and a bot annotating a diff still needs to see it.
+    const withProblem = result([
+      { path: 'docs/adr/0001-a.md', text: '<!-- @spec-node id="ADR-0001" colour="red" -->\n\n# A\n' },
+    ]);
+    const parsed: { problems: { message: string; file: string; line: number }[] } = JSON.parse(
+      formatJson(withProblem),
+    );
+    expect(parsed.problems).toHaveLength(1);
+    expect(parsed.problems[0]?.message).toContain('colour');
+    expect(parsed.problems[0]?.file).toBe('docs/adr/0001-a.md');
+    expect(parsed.problems[0]?.line).toBeGreaterThan(0);
+  });
+
+  it('carries the related locations of each finding', () => {
+    const parsed: { diagnostics: { related: { file: string; line: number; note: string }[] }[] } = JSON.parse(
+      formatJson(result()),
+    );
+    const withRelated = parsed.diagnostics.find((d) => d.related.length > 0);
+    expect(withRelated).toBeDefined();
+    for (const entry of withRelated?.related ?? []) {
+      expect(entry.file.length).toBeGreaterThan(0);
+      expect(entry.line).toBeGreaterThan(0);
+      expect(entry.note.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('lists the files it read', () => {
+    const parsed: { files: string[] } = JSON.parse(formatJson(result()));
+    expect(parsed.files).toEqual(SOURCES.map((s) => s.path));
   });
 });
 
@@ -195,6 +352,28 @@ describe('graph export', () => {
     // Retired and active must not look the same.
     expect(dot).toMatch(/"ADR-0002".*fillcolor="#fce8e6"/);
     expect(dot).toMatch(/"ADR-0003".*fillcolor="#e6f4ea"/);
+  });
+
+  it('draws items differently from documents', () => {
+    // An obligation is not a decision, and a reader scanning the graph should
+    // not have to read the label to tell them apart.
+    const dot = formatGraph(graph, 'dot');
+    const item = dot.split('\n').find((line) => line.includes('#open-questions'));
+    const document = dot.split('\n').find((line) => line.includes('"ADR-0003" ['));
+    expect(item).toContain('shape=note');
+    expect(document).toContain('shape=box');
+    expect(item).not.toContain(document?.match(/fillcolor="(#[0-9a-f]+)"/)?.[1] ?? 'unreachable');
+  });
+
+  it('gives a document with no declared phase a neutral fill rather than none', () => {
+    const unknown = analyseSources([{ path: 'docs/adr/0009-x.md', text: '# X\n' }]).graph;
+    expect(formatGraph(unknown, 'dot')).toContain('fillcolor="#ffffff"');
+  });
+
+  it('draws contains edges differently from relations', () => {
+    const dot = formatGraph(graph, 'dot');
+    expect(dot).toMatch(/label="contains", style=dotted/);
+    expect(dot).toMatch(/label="delegates-to"\]/);
   });
 
   it('emits Mermaid with safe identifiers', () => {

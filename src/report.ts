@@ -38,6 +38,15 @@ export interface ReporterOptions {
 export interface ColorEnvironment {
   readonly isTTY?: boolean | undefined;
   readonly env?: Readonly<Record<string, string | undefined>> | undefined;
+  /**
+   * Host platform, defaulting to the real one.
+   *
+   * Injected for the same reason `env` is: without it half of
+   * {@link shouldUseAscii} is unreachable from a test, and a rule about
+   * Windows consoles that only Windows can exercise is a rule that breaks on
+   * Windows and nowhere else.
+   */
+  readonly platform?: NodeJS.Platform | undefined;
 }
 
 /** Honours `NO_COLOR`, `FORCE_COLOR` and `TERM=dumb` before falling back to TTY. */
@@ -57,7 +66,7 @@ export function shouldUseColor(environment: ColorEnvironment = {}): boolean {
 export function shouldUseAscii(environment: ColorEnvironment = {}): boolean {
   const env = environment.env ?? process.env;
   if (env['SPEC_GRAPH_ASCII'] !== undefined && env['SPEC_GRAPH_ASCII'] !== '') return true;
-  if (process.platform !== 'win32') return false;
+  if ((environment.platform ?? process.platform) !== 'win32') return false;
   // Windows Terminal and modern shells set these; the legacy console does not.
   return env['WT_SESSION'] === undefined && env['TERM_PROGRAM'] === undefined;
 }

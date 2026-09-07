@@ -297,6 +297,12 @@ function brokenMessage(ref: DanglingRef): string {
 
 function brokenHint(ref: DanglingRef): string {
   if (ref.candidates.length > 0) return `did you mean ${ref.candidates.slice(0, 3).join(', ')}?`;
+  // A wiki link carries no path, only a name, so whether it means a document at
+  // all is a repository convention. Naming the flag here is what keeps that a
+  // one-run discovery rather than a support question.
+  if (ref.raw.startsWith('[[') && ref.reason === 'unknown-target') {
+    return `fix the identifier, or - if [[...]] tags a concept here - exclude it: --ignore-ref "${suggestReferenceGlob(ref.target)}"`;
+  }
   switch (ref.reason) {
     case 'unknown-anchor':
       return 'check the heading or item id it is meant to address';
@@ -307,6 +313,20 @@ function brokenHint(ref: DanglingRef): string {
     default:
       return 'fix the identifier, or add the document it names';
   }
+}
+
+/**
+ * A glob covering the family of concept tags a target belongs to.
+ *
+ * `trap 55` suggests `trap *` rather than `trap 55`, because these tags come in
+ * numbered series and excluding them one at a time is not a fix anybody would
+ * accept. A target with no trailing number is suggested verbatim.
+ */
+function suggestReferenceGlob(target: string): string {
+  const trimmed = target.trim();
+  const series = /^(.*?)[\s._-]*\d+$/.exec(trimmed);
+  const stem = series?.[1]?.trim();
+  return stem !== undefined && stem.length > 0 ? `${stem} *` : trimmed;
 }
 
 /**

@@ -34,6 +34,8 @@ export interface CliOptions {
   readonly patterns: readonly string[];
   readonly root: string;
   readonly ignore: readonly string[];
+  /** Reference targets to leave unreported when they do not resolve. */
+  readonly ignoreReferences: readonly string[];
   readonly format: 'human' | 'json';
   readonly graphFormat: GraphFormat;
   readonly severities: Partial<Record<RuleId, Severity>>;
@@ -76,6 +78,10 @@ COMMANDS
 OPTIONS
   --root <dir>            Directory the patterns resolve against (default: cwd)
   --ignore <glob>         Skip paths. Repeatable.
+  --ignore-ref <glob>     Do not report these reference targets when they fail
+                          to resolve, for repositories where [[...]] tags a
+                          concept rather than naming a file. Repeatable.
+                          Suppresses findings only, never edges.
   --format human|json     Report format (default: human)
   --graph-format <fmt>    dot, mermaid or json (default: dot)
   --documents-only        Leave items out of the exported graph
@@ -114,6 +120,7 @@ EXAMPLES
   spec-graph "docs/**/*.md"
   spec-graph check --rule self-reference=off --format json
   spec-graph query 'item[openness=open] -delegates-to-> document[phase=retired]'
+  spec-graph check --ignore-ref "trap *"    # [[trap 55]] tags a concept, not a file
   spec-graph graph --documents-only --graph-format mermaid > graph.mmd
 `;
 
@@ -134,6 +141,7 @@ export function parseArgs(argv: readonly string[], cwd: string): CliOptions {
 
   const patterns: string[] = [];
   const ignore: string[] = [];
+  const ignoreReferences: string[] = [];
   const severities: Partial<Record<RuleId, Severity>> = {};
   let root = cwd;
   let format: 'human' | 'json' = 'human';
@@ -207,6 +215,10 @@ export function parseArgs(argv: readonly string[], cwd: string): CliOptions {
         ignore.push(next(arg, i));
         i += 1;
         break;
+      case '--ignore-ref':
+        ignoreReferences.push(next(arg, i));
+        i += 1;
+        break;
       case '--format': {
         const value = next(arg, i);
         if (value !== 'human' && value !== 'json') {
@@ -265,6 +277,7 @@ export function parseArgs(argv: readonly string[], cwd: string): CliOptions {
     patterns,
     root,
     ignore,
+    ignoreReferences,
     format,
     graphFormat,
     severities,
@@ -337,6 +350,7 @@ export async function main(io: CliIO = {}): Promise<number> {
     root: options.root,
     patterns: options.patterns.length > 0 ? options.patterns : DEFAULT_PATTERNS,
     ignore: options.ignore,
+    ignoreReferences: options.ignoreReferences,
     severities,
   };
 

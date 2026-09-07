@@ -127,6 +127,7 @@ export type { DocumentIdentity, IdentityInput } from './identity.js';
 
 export {
   createGlobMatcher,
+  createReferenceFilter,
   globBase,
   globToRegExp,
   isGlob,
