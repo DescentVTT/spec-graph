@@ -198,3 +198,47 @@ describe('vault-style repositories keep their checks', () => {
     expect(graph.out('0001-intro').some((edge) => edge.to === '0002-detail')).toBe(true);
   });
 });
+
+describe('one written citation is one reference', () => {
+  // `Superseded by ADR-0009` in a status section is read by the status reader
+  // and again by prose scanning. Both are right about the fact and there is one
+  // line to fix, so there is one finding. Invisible while the target resolves,
+  // because two identical edges collapse into one - and this is where it shows.
+  const SUPERSEDED = ['# ADR-0002: Sharding', '', '## Status', '', 'Superseded by ADR-0003'].join('\n');
+
+  it('does not report a missing supersession target twice', () => {
+    const found = analyse({ 'docs/adr/0002-sharding.md': SUPERSEDED }).diagnostics.filter(
+      (diagnostic) => diagnostic.rule === 'broken-reference',
+    );
+    expect(found).toHaveLength(1);
+    // The narrower span wins: it points at the identifier, not at the line.
+    expect(found[0]?.at.span.start.column).toBe(15);
+  });
+
+  it('still resolves to one edge when the target exists', () => {
+    const { graph } = analyse({
+      'docs/adr/0002-sharding.md': SUPERSEDED,
+      'docs/adr/0003-many.md': ['# ADR-0003: Many writers', '', '## Status', '', 'accepted'].join('\n'),
+    });
+    expect(graph.in('ADR-0002', ['supersedes']).map((edge) => edge.from)).toEqual(['ADR-0003']);
+  });
+
+  it('still reports two separate sentences citing the same missing document', () => {
+    // Two citations a reader has to fix in two places. Collapsing these would
+    // leave the second to be discovered on the next run.
+    const files = {
+      'docs/adr/0004-a.md': [
+        '# ADR-0004: A',
+        '',
+        '## Status',
+        '',
+        'accepted',
+        '',
+        'This depends on ADR-0099.',
+        '',
+        'It also assumes ADR-0099.',
+      ].join('\n'),
+    };
+    expect(analyse(files).diagnostics.filter((d) => d.rule === 'broken-reference')).toHaveLength(2);
+  });
+});

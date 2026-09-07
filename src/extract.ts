@@ -1057,7 +1057,50 @@ function extractReferences(context: ReferenceContext): ReferenceCandidate[] {
     });
   }
 
+  return withoutOverlaps(out);
+}
+
+/**
+ * Collapses candidates that describe the same written citation.
+ *
+ * `Superseded by ADR-0009` in a status section is read twice: the status
+ * reader reports the whole line, and prose scanning reports the identifier
+ * inside it. One written citation is one reference - so when the target
+ * resolves it must not become two edges, and when it does not it must not
+ * become two findings on one line a reader can only fix once.
+ *
+ * The narrower span wins, because it points at the text that has to change.
+ *
+ * Only overlapping spans collapse. Two sentences citing the same missing
+ * document are two citations, and silently reporting one of them would leave
+ * the other to be discovered on the next run.
+ */
+function withoutOverlaps(candidates: readonly ReferenceCandidate[]): ReferenceCandidate[] {
+  const out: ReferenceCandidate[] = [];
+  for (const candidate of candidates) {
+    const index = out.findIndex(
+      (other) =>
+        other.kind === candidate.kind &&
+        other.from === candidate.from &&
+        other.inverted === candidate.inverted &&
+        normaliseRef(other.target) === normaliseRef(candidate.target) &&
+        overlapping(other.declaredAt, candidate.declaredAt),
+    );
+    if (index === -1) {
+      out.push(candidate);
+      continue;
+    }
+    const held = out[index] as ReferenceCandidate;
+    if (width(candidate.declaredAt) < width(held.declaredAt)) out[index] = candidate;
+  }
   return out;
+}
+
+const width = (ref: SourceRef): number => ref.span.end.offset - ref.span.start.offset;
+
+function overlapping(a: SourceRef, b: SourceRef): boolean {
+  if (a.file !== b.file) return false;
+  return a.span.start.offset < b.span.end.offset && b.span.start.offset < a.span.end.offset;
 }
 
 /** The item whose block contains an offset, if any. */
