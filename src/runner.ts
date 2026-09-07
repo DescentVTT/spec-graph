@@ -43,6 +43,10 @@ export interface AnalyseOptions {
    * Suppresses findings only; a reference that resolves is still an edge.
    */
   readonly ignoreReferences?: readonly string[] | undefined;
+  /** Families a bare identifier may name. Unset means any family in the corpus. */
+  readonly families?: readonly string[] | undefined;
+  /** Families that are never citations, whatever the corpus contains. */
+  readonly ignoreFamilies?: readonly string[] | undefined;
   readonly severities?: Partial<Record<RuleId, Severity>> | undefined;
   readonly concurrency?: number | undefined;
   readonly maxRelated?: number | undefined;
@@ -84,6 +88,7 @@ export async function analyse(options: AnalyseOptions): Promise<AnalysisResult> 
       // include patterns did not reach it", which are different fixes.
       fileExists: (path) => present.has(path.toLowerCase()) || existsSync(`${root}/${path}`),
       isIgnoredReference: createReferenceFilter(options.ignoreReferences ?? []),
+      isIgnoredFamily: createFamilyFilter(options.families, options.ignoreFamilies),
       ...(options.severities !== undefined ? { severities: options.severities } : {}),
       ...(options.maxRelated !== undefined ? { maxRelated: options.maxRelated } : {}),
     }),
@@ -101,6 +106,30 @@ export interface Source {
 export interface AnalyseSourcesOptions extends RuleOptions {
   readonly fileExists?: ((path: string) => boolean) | undefined;
   readonly isIgnoredReference?: ((target: string) => boolean) | undefined;
+  readonly isIgnoredFamily?: ((family: string) => boolean) | undefined;
+}
+
+/**
+ * Builds the family predicate from an allowlist and a denylist.
+ *
+ * An allowlist is the stronger statement - "these are the families this
+ * repository has" - and turns every other noun-number construct back into
+ * prose. A denylist handles the narrower case where the corpus genuinely owns a
+ * family but some of its numbers belong to somebody else, which is exactly
+ * `RFC 2119` in a repository of local RFCs.
+ */
+export function createFamilyFilter(
+  families: readonly string[] | undefined,
+  ignoreFamilies: readonly string[] | undefined,
+): ((family: string) => boolean) | undefined {
+  const allowed = families && families.length > 0 ? new Set(families.map((f) => f.trim().toUpperCase())) : null;
+  const denied = new Set((ignoreFamilies ?? []).map((f) => f.trim().toUpperCase()));
+  if (allowed === null && denied.size === 0) return undefined;
+  return (family: string): boolean => {
+    const key = family.toUpperCase();
+    if (denied.has(key)) return true;
+    return allowed !== null && !allowed.has(key);
+  };
 }
 
 interface Analysed {
@@ -125,6 +154,7 @@ export function analyseSources(sources: readonly Source[], options: AnalyseSourc
   const corpus = resolveCorpus(extracted, {
     fileExists: options.fileExists,
     isIgnoredReference: options.isIgnoredReference,
+    isIgnoredFamily: options.isIgnoredFamily,
   });
   const graph = buildGraph({ nodes: corpus.nodes, edges: corpus.edges });
   const diagnostics = runRules(graph, corpus, options);

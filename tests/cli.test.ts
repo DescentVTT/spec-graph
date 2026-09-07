@@ -216,6 +216,70 @@ describe('--ignore-ref', () => {
   });
 });
 
+describe('family rules', () => {
+  const RFCS = ['docs/**/*.md', '--root', 'tests/fixtures/rfcs'];
+
+  it('are collected, repeatably', () => {
+    const options = parseArgs(['--family', 'ADR', '--family', 'KEP', '--ignore-family', 'RFC'], '/repo');
+    expect(options.families).toEqual(['ADR', 'KEP']);
+    expect(options.ignoreFamilies).toEqual(['RFC']);
+  });
+
+  it('need a value', () => {
+    expect(() => parseArgs(['--family'], '/repo')).toThrow(/needs a value/);
+    expect(() => parseArgs(['--ignore-family'], '/repo')).toThrow(/needs a value/);
+  });
+
+  it('report a cited standard the repository does not hold', async () => {
+    const result = await run('check', ...RFCS);
+    expect(result.code).toBe(EXIT_FAILED);
+    expect(result.out).toContain('"RFC 2119"');
+  });
+
+  it('go quiet once the family is declared not ours', async () => {
+    const result = await run('check', ...RFCS, '--ignore-family', 'RFC');
+    expect(result.code).toBe(EXIT_OK);
+  });
+
+  it('go quiet under an allowlist that excludes it', async () => {
+    const result = await run('check', ...RFCS, '--family', 'ADR');
+    expect(result.code).toBe(EXIT_OK);
+  });
+
+  it('never cost a relation that resolved', async () => {
+    const result = await run('graph', ...RFCS, '--graph-format', 'json', '--ignore-family', 'RFC');
+    const parsed: { edges: { from: string; to: string }[] } = JSON.parse(result.out);
+    expect(parsed.edges.some((e) => e.from === 'RFC-0002' && e.to === 'RFC-0001')).toBe(true);
+  });
+});
+
+describe('repository configuration', () => {
+  const CONFIGURED = ['--root', 'tests/fixtures/configured'];
+
+  it('is read without any flags', async () => {
+    const result = await run('check', ...CONFIGURED);
+    expect(result.code).toBe(EXIT_OK);
+  });
+
+  it('names its source under --verbose', async () => {
+    const result = await run('check', ...CONFIGURED, '--verbose');
+    expect(result.out).toContain('configuration: .spec-graph.json');
+  });
+
+  it('is skipped entirely with --no-config', async () => {
+    const result = await run('check', 'docs/**/*.md', ...CONFIGURED, '--no-config');
+    expect(result.code).toBe(EXIT_FAILED);
+    expect(parseArgs(['--no-config'], '/repo').noConfig).toBe(true);
+  });
+
+  it('adds to its list options rather than being replaced by a flag', async () => {
+    // A --ignore-ref on the command line is one more exclusion, not a decision
+    // to discard the ones the repository already declared.
+    const result = await run('check', ...CONFIGURED, '--ignore-ref', 'never-matches-*');
+    expect(result.code).toBe(EXIT_OK);
+  });
+});
+
 describe('strict mode', () => {
   // A fixture whose only findings are warnings: a retired decision that never
   // says what replaced it, and a link to a real document outside the patterns.

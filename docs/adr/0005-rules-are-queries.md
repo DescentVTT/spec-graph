@@ -57,7 +57,10 @@ document that links to itself is a formatting quirk, not a relationship.
 - [ ] Should selectors support disjunction (`a, b` at the top level)? Every rule
       so far is expressible as a union of separate queries, which is clearer.
 - [ ] Should users be able to register a named query as a project rule with its
-      own severity? This is the natural next step and wants a config file first.
+      own severity? The config file it wanted now exists
+      ([ADR-0010](0010-configuration-belongs-to-the-repository.md)), but a query
+      needs a severity and a message before it is a rule, and that is a larger
+      design than a place to put it.
 
 ## See also
 

@@ -44,7 +44,7 @@ describe('the source tree', () => {
     // first-class entry point and why the tests can build pathological corpora
     // in memory. A governance document that misstates it is the drift this
     // project exists to catch, so the statement is checked rather than trusted.
-    const EDGES = ['src/glob.ts', 'src/runner.ts', 'src/cli.ts'];
+    const EDGES = ['src/glob.ts', 'src/runner.ts', 'src/config.ts', 'src/cli.ts'];
     // Static and dynamic forms both count: `cli.ts` reaches for its own version
     // through `await import('node:fs/promises')`.
     const imports = /(?:from|import\()\s*'(?:node:)?fs(?:\/promises)?'/;
@@ -189,6 +189,9 @@ describe('the CLI help and the README agree on the interface', () => {
     '--root',
     '--ignore',
     '--ignore-ref',
+    '--family',
+    '--ignore-family',
+    '--no-config',
     '--format',
     '--graph-format',
     '--documents-only',

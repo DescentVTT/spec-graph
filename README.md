@@ -195,6 +195,43 @@ trusts:
 - **Source links are not spec links.** `[rules.ts](../../src/rules.ts)` is not a
   broken reference. That is [spec-guard](#relationship-to-spec-guard)'s job.
 
+### Registers: many specifications in one file
+
+One file per decision is the MADR, KEP and RFC layout, and it is what most
+repositories do. Plenty keep a register instead — one document holding dozens of
+decisions. **A specification is a region of a file, not a file**, so both work:
+
+```md
+## ADR-0007: Shard the write path
+
+**Status:** Superseded by ADR-0012
+
+Shard by tenant id.
+```
+
+Each section with an identifier *and* a status becomes a specification in its own
+right, with its own lifecycle, its own obligations and its own relations —
+resolvable from anywhere in the corpus as `ADR-0007`, whether it lives in a
+register or in its own file. Moving it out later breaks no citation.
+
+A register kept as a table works the same way, with relations typed by the column
+header you wrote:
+
+```md
+| ID       | Title          | Status     | Depends on | Superseded by |
+| :------- | :------------- | :--------- | :--------- | :------------ |
+| ADR-0001 | Use one writer | Superseded | -          | ADR-0003      |
+| ADR-0002 | Cache eviction | Accepted   | ADR-0001   | -             |
+```
+
+Findings point at the declaring cell, not at the file.
+
+Both forms need **two** signals, and that is deliberate: `## Q3 2026 Roadmap`
+parses as family `Q`, number 3, and `## v1.2.0` in a changelog parses as family
+`v`, number 1. Neither declares a status, so neither is a specification. A table
+of identifiers and prose is a citation list, not a register. See
+[ADR-0009](docs/adr/0009-a-specification-is-a-region.md).
+
 ### When `[[...]]` tags a concept
 
 A Markdown link with a path says where the target lives. A wiki link says only
@@ -324,6 +361,53 @@ Directives are ordinary HTML comments — invisible in every Markdown renderer:
 A directive always wins, and the report says the state came from a directive, so
 an override is visible rather than mysterious.
 
+## Configuration
+
+Anything you repeat on every run belongs to the repository rather than to the
+command. spec-graph reads the first of `.spec-graph.json`,
+`spec-graph.config.json`, or a `"spec-graph"` key in `package.json`:
+
+```json
+{
+  "patterns": ["docs/**/*.md"],
+  "ignoreReferences": ["trap *"],
+  "ignoreFamilies": ["RFC"],
+  "severities": { "self-reference": "off" },
+  "strict": true
+}
+```
+
+A flag always wins over the file, and list flags **add** to it rather than
+replacing it — a `--ignore-ref` on the command line is one more exclusion, not a
+decision to discard what the repository already declared. `--verbose` prints
+which file was read; `--no-config` skips the mechanism entirely.
+
+A broken config is reported and the run continues on defaults, including an
+unknown key: a silently ignored `ignoreReference` is a configuration that looks
+applied and is not.
+
+### Family rules
+
+Every specification cites RFC 2119. In a repository that also keeps its own
+`RFC-*` documents, that sentence reads as a dangling reference to a local RFC
+2119 it does not have:
+
+```json
+{ "ignoreFamilies": ["RFC"] }
+```
+
+`families` is the stronger statement — *these* are the families this repository
+has — and turns every other noun-number construct back into prose.
+
+Both are consulted only after resolution has already failed, so `RFC 0001` still
+resolves to your local RFC-0001 with `RFC` on the ignore list. No configuration
+can delete an edge. See
+[ADR-0010](docs/adr/0010-configuration-belongs-to-the-repository.md).
+
+Prose like `Phase 1`, `R69`, `Q-120`, `Table 2` and `Step 4` has never needed
+this: an identifier found in prose is only read as a citation when its family
+already exists in the corpus.
+
 ## CLI
 
 ```text
@@ -335,6 +419,9 @@ spec-graph rules [--explain]         List the diagnostics.
 --root <dir>            Directory patterns resolve against
 --ignore <glob>         Skip paths (repeatable)
 --ignore-ref <glob>     Do not report these reference targets (repeatable)
+--family <name>         Families a bare identifier may name (repeatable)
+--ignore-family <name>  Families that are never citations (repeatable)
+--no-config             Ignore .spec-graph.json and the package.json key
 --format human|json     Report format
 --graph-format <fmt>    dot | mermaid | json
 --documents-only        Hide items; their relations lift onto their documents
@@ -417,7 +504,7 @@ exported. Reporters, editor extensions and custom rules are all first-class.
 
 ## Design
 
-Eight ADRs, which `spec-graph` validates on every CI run:
+Ten ADRs, which `spec-graph` validates on every CI run:
 
 - [ADR-0001 — A hand-written Markdown scanner](docs/adr/0001-hand-written-markdown-scanner.md)
 - [ADR-0002 — A four-phase lifecycle lattice](docs/adr/0002-lifecycle-lattice.md)
@@ -427,6 +514,8 @@ Eight ADRs, which `spec-graph` validates on every CI run:
 - [ADR-0006 — False positives cost more than misses](docs/adr/0006-false-positives-cost-more.md)
 - [ADR-0007 — Mutation testing, and what the score actually means](docs/adr/0007-mutation-testing.md)
 - [ADR-0008 — A wiki link carries a name, not a path](docs/adr/0008-wiki-links-carry-no-path.md)
+- [ADR-0009 — A specification is a region of a file, not a file](docs/adr/0009-a-specification-is-a-region.md)
+- [ADR-0010 — Configuration belongs to the repository](docs/adr/0010-configuration-belongs-to-the-repository.md)
 
 **Zero runtime dependencies.** Node 22+, native ESM, TypeScript strict with
 `noUncheckedIndexedAccess` and `exactOptionalPropertyTypes`. The Markdown

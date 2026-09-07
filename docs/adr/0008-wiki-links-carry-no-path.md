@@ -107,9 +107,11 @@ citation style the resolver does not understand, without a second option.
 
 ## Open Questions
 
-- [ ] Should these patterns live in a config file rather than a flag? An npm
-      script is doing that job today, and a config file is a larger decision
-      than this one - see the open question in [ADR-0005](0005-rules-are-queries.md).
+- [x] Should these patterns live in a config file rather than a flag?
+      **Resolved (2026-09-07):** yes - see
+      [ADR-0010](0010-configuration-belongs-to-the-repository.md).
+      `ignoreReferences` in `.spec-graph.json`, with the flag still available
+      and still winning.
 - [ ] Should a suppressed reference still appear somewhere, so a repository can
       audit what it has silenced? `--verbose` is the obvious home.
 

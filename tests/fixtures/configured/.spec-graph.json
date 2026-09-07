@@ -1,0 +1,5 @@
+{
+  "patterns": ["docs/**/*.md"],
+  "ignoreReferences": ["trap *"],
+  "ignoreFamilies": ["RFC"]
+}

@@ -9,6 +9,7 @@
  * itself could not run. A usage mistake never masquerades as a passing build.
  */
 
+import { loadConfig, type SpecGraphConfig } from './config.js';
 import { analyse, DEFAULT_PATTERNS, type AnalyseOptions } from './runner.js';
 import { formatGraph, formatJson, formatReport, shouldUseAscii, shouldUseColor, type GraphFormat } from './report.js';
 import { DEFAULT_SEVERITIES, resolveStrict, RULE_DESCRIPTIONS, RULE_IDS, RULE_QUERIES } from './rules.js';
@@ -36,6 +37,12 @@ export interface CliOptions {
   readonly ignore: readonly string[];
   /** Reference targets to leave unreported when they do not resolve. */
   readonly ignoreReferences: readonly string[];
+  /** Families a bare identifier may name. Empty means any family in the corpus. */
+  readonly families: readonly string[];
+  /** Families that are never citations. */
+  readonly ignoreFamilies: readonly string[];
+  /** Skip the repository configuration file entirely. */
+  readonly noConfig: boolean;
   readonly format: 'human' | 'json';
   readonly graphFormat: GraphFormat;
   readonly severities: Partial<Record<RuleId, Severity>>;
@@ -82,6 +89,11 @@ OPTIONS
                           to resolve, for repositories where [[...]] tags a
                           concept rather than naming a file. Repeatable.
                           Suppresses findings only, never edges.
+  --family <name>         Families a bare identifier in prose may name. When
+                          given, everything else stays prose. Repeatable.
+  --ignore-family <name>  Families that are never citations - RFC when the repo
+                          cites RFC 2119 and keeps its own RFCs. Repeatable.
+  --no-config             Ignore .spec-graph.json and the package.json key.
   --format human|json     Report format (default: human)
   --graph-format <fmt>    dot, mermaid or json (default: dot)
   --documents-only        Leave items out of the exported graph
@@ -116,6 +128,22 @@ EXIT CODES
   1  findings at error severity (or over --max-warnings)
   2  the tool could not run
 
+CONFIGURATION
+  Anything repeated on every run belongs in the repository rather than in the
+  command. spec-graph reads the first of these that exists:
+
+    .spec-graph.json, spec-graph.config.json, or a "spec-graph" key in
+    package.json
+
+    { "patterns": ["docs/**/*.md"],
+      "ignoreReferences": ["trap *"],
+      "ignoreFamilies": ["RFC"],
+      "severities": { "self-reference": "off" },
+      "strict": true }
+
+  A flag always wins over the file, and list flags add to it rather than
+  replacing it.
+
 EXAMPLES
   spec-graph "docs/**/*.md"
   spec-graph check --rule self-reference=off --format json
@@ -142,6 +170,9 @@ export function parseArgs(argv: readonly string[], cwd: string): CliOptions {
   const patterns: string[] = [];
   const ignore: string[] = [];
   const ignoreReferences: string[] = [];
+  const families: string[] = [];
+  const ignoreFamilies: string[] = [];
+  let noConfig = false;
   const severities: Partial<Record<RuleId, Severity>> = {};
   let root = cwd;
   let format: 'human' | 'json' = 'human';
@@ -219,6 +250,17 @@ export function parseArgs(argv: readonly string[], cwd: string): CliOptions {
         ignoreReferences.push(next(arg, i));
         i += 1;
         break;
+      case '--family':
+        families.push(next(arg, i));
+        i += 1;
+        break;
+      case '--ignore-family':
+        ignoreFamilies.push(next(arg, i));
+        i += 1;
+        break;
+      case '--no-config':
+        noConfig = true;
+        break;
       case '--format': {
         const value = next(arg, i);
         if (value !== 'human' && value !== 'json') {
@@ -278,6 +320,9 @@ export function parseArgs(argv: readonly string[], cwd: string): CliOptions {
     root,
     ignore,
     ignoreReferences,
+    families,
+    ignoreFamilies,
+    noConfig,
     format,
     graphFormat,
     severities,
@@ -342,17 +387,31 @@ export async function main(io: CliIO = {}): Promise<number> {
     return EXIT_OK;
   }
 
-  // Strict is resolved before the run, so the rules themselves see the raised
-  // severities and `result.ok` needs no special casing at the exit-code layer.
-  const { severities, escalated } = resolveStrict(options.severities, options.strict);
+  // Configuration is what is true of the repository; a flag is somebody
+  // overriding it for one run. So a flag always wins, and lists add rather than
+  // replace - a `--ignore-ref` on the command line is one more exclusion, not a
+  // decision to throw away the ones the repository already declared.
+  const loaded = options.noConfig ? { config: {} as SpecGraphConfig, source: null, problems: [] } : loadConfig(options.root);
+  for (const problem of loaded.problems) err(`spec-graph: ${problem}\n`);
+  const file = loaded.config;
+
+  const patterns =
+    options.patterns.length > 0 ? options.patterns : (file.patterns ?? DEFAULT_PATTERNS);
+  const severityOverrides = { ...(file.severities ?? {}), ...options.severities };
+  const { severities, escalated } = resolveStrict(severityOverrides, options.strict || (file.strict ?? false));
 
   const analyseOptions: AnalyseOptions = {
     root: options.root,
-    patterns: options.patterns.length > 0 ? options.patterns : DEFAULT_PATTERNS,
-    ignore: options.ignore,
-    ignoreReferences: options.ignoreReferences,
+    patterns,
+    ignore: [...(file.ignore ?? []), ...options.ignore],
+    ignoreReferences: [...(file.ignoreReferences ?? []), ...options.ignoreReferences],
+    families: [...(file.families ?? []), ...options.families],
+    ignoreFamilies: [...(file.ignoreFamilies ?? []), ...options.ignoreFamilies],
     severities,
+    ...(file.maxRelated !== undefined ? { maxRelated: file.maxRelated } : {}),
   };
+
+  if (options.verbose && loaded.source !== null) out(`configuration: ${loaded.source}\n`);
 
   let result;
   try {

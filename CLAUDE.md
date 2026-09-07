@@ -17,11 +17,12 @@ These are not preferences. Breaking one is a decision that needs an ADR.
 - **Vitest 4** for tests, **Stryker** for mutation testing.
 - **LF line endings, no NUL bytes.** Enforced by `tests/docs.test.ts`; a stray
   NUL makes a file read as binary to grep, diff and review tooling.
-- **I/O stays at the edges.** `glob.ts` walks, `runner.ts` reads, `cli.ts` looks
-  up its own version. Everything between - the scanner, extraction, resolution,
-  the graph, the rules, the reporters - is a pure function of text. That is why
-  tests can build pathological corpora in memory, and why `analyseSources()`
-  exists as a first-class entry point rather than a testing seam.
+- **I/O stays at the edges.** `glob.ts` walks, `runner.ts` reads, `config.ts`
+  loads configuration, `cli.ts` looks up its own version. Everything between -
+  the scanner, extraction, resolution, the graph, the rules, the reporters - is
+  a pure function of text. That is why tests can build pathological corpora in
+  memory, and why `analyseSources()` exists as a first-class entry point rather
+  than a testing seam.
 
 ## Verification
 

@@ -49,6 +49,15 @@ export interface ResolveOptions {
    * configuration can silently delete a relation from the graph.
    */
   readonly isIgnoredReference?: ((target: string) => boolean) | undefined;
+  /**
+   * Families that are never citations in this repository.
+   *
+   * `RFC 2119` is the canonical case: every specification cites it, and a
+   * repository that keeps its own `RFC-*` documents will otherwise read that
+   * sentence as a dangling reference to a local RFC 2119 it does not have.
+   * Consulted only after resolution has failed, like every other filter here.
+   */
+  readonly isIgnoredFamily?: ((family: string) => boolean) | undefined;
 }
 
 export interface ResolvedCorpus {
@@ -220,7 +229,7 @@ function resolveOne(
 
   // A pure `#anchor` points inside the citing document.
   if (bare.length === 0 && anchor !== null) {
-    return bindAnchor(candidate, entry.document.id, anchor, index, nodes, options.isIgnoredReference);
+    return bindAnchor(candidate, entry.document.id, anchor, index, nodes, options);
   }
 
   if (isExternal(bare)) return null;
@@ -233,7 +242,7 @@ function resolveOne(
 
   if (found.ids.length === 0) {
     if (candidate.opportunistic && !worthReporting(bare, index)) return null;
-    if (options.isIgnoredReference?.(candidate.target)) return null;
+    if (isFiltered(candidate.target, bare, options)) return null;
     // A trailing slash names a directory. Linking to one is ordinary - "the
     // decisions live in [archive/](archive/)" - and is not a citation of any
     // document. Resolution is still attempted first, so a directory-style
@@ -245,7 +254,7 @@ function resolveOne(
 
   if (found.ids.length > 1) {
     if (candidate.opportunistic) return null;
-    if (options.isIgnoredReference?.(candidate.target)) return null;
+    if (isFiltered(candidate.target, bare, options)) return null;
     return dangle(candidate, 'ambiguous', found.ids);
   }
 
@@ -256,7 +265,7 @@ function resolveOne(
   // link that points at its own document is a real mistake worth reporting.
   if (candidate.opportunistic && documentId === entry.document.id) return null;
 
-  if (anchor !== null) return bindAnchor(candidate, documentId, anchor, index, nodes, options.isIgnoredReference);
+  if (anchor !== null) return bindAnchor(candidate, documentId, anchor, index, nodes, options);
 
   return makeEdge(candidate, documentId);
 }
@@ -309,6 +318,13 @@ function lookup(target: string, entry: ExtractedDocument, index: Index): Lookup 
   return { ids: [], near: [] };
 }
 
+/** Whether a repository has declared this reference none of its business. */
+function isFiltered(target: string, bare: string, options: ResolveOptions): boolean {
+  if (options.isIgnoredReference?.(target)) return true;
+  const prefixed = parsePrefixedRef(bare);
+  return prefixed !== null && options.isIgnoredFamily?.(prefixed.family) === true;
+}
+
 /**
  * Whether an unresolved bare identifier deserves a report.
  *
@@ -344,7 +360,7 @@ function bindAnchor(
   anchor: string,
   index: Index,
   nodes: ReadonlyMap<string, SpecNode>,
-  isIgnored: ((target: string) => boolean) | undefined,
+  options: ResolveOptions,
 ): Edge | DanglingRef | null {
   const itemId = `${documentId}#${anchor}`;
   if (index.itemIds.has(itemId)) return makeEdge(candidate, itemId);
@@ -357,7 +373,7 @@ function bindAnchor(
   const loose = anchor.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-|-$/g, '');
   if (anchors?.has(loose)) return makeEdge(candidate, documentId);
 
-  if (isIgnored?.(candidate.target)) return null;
+  if (isFiltered(candidate.target, splitAnchor(candidate.target).target, options)) return null;
 
   const candidates = [...(nodes.keys() as Iterable<string>)].filter(
     (id) => id.startsWith(`${documentId}#`) && id.toLowerCase().includes(loose),
