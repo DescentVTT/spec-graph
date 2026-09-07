@@ -43,9 +43,9 @@ moves up as the measurement does: 60 against 63.31%, then 70 against 74.05%.
 
 ## Consequences
 
-The measured score is **76.52% over 7,642 mutants** at commit `9ea5f94`. It has
-moved 48.11% → 60.6% → 63.31% → 74.05% → 74.73% → 75.68% → 76.52% as the suite
-grew from 149 to 614 tests.
+The measured score is **77.16% over 7,720 mutants** at commit `6d92265`. It has
+moved 48.11% → 60.6% → 63.31% → 74.05% → 74.73% → 75.68% → 76.52% → 77.16% as
+the suite grew from 149 to 617 tests.
 
 **Read "no coverage" before reading the score.** The v0.2.0 modules landed at
 74.61% and 83.08%, and the number worth acting on was neither: it was that 42 of

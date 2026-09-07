@@ -1091,6 +1091,11 @@ function withoutOverlaps(candidates: readonly ReferenceCandidate[]): ReferenceCa
       continue;
     }
     const held = out[index] as ReferenceCandidate;
+    // The status reader runs before prose scanning, so today the wider span is
+    // always the one already held and this comparison always replaces it. It is
+    // written as a comparison rather than an unconditional swap because which
+    // reader runs first is not a property worth depending on, and a mutant that
+    // makes it unconditional is equivalent only by that accident.
     if (width(candidate.declaredAt) < width(held.declaredAt)) out[index] = candidate;
   }
   return out;
@@ -1098,8 +1103,13 @@ function withoutOverlaps(candidates: readonly ReferenceCandidate[]): ReferenceCa
 
 const width = (ref: SourceRef): number => ref.span.end.offset - ref.span.start.offset;
 
+/**
+ * Whether two spans cover any of the same text.
+ *
+ * Offsets alone, with no file comparison: every candidate here was built from
+ * one scan of one file, so there is no second file for them to be offsets into.
+ */
 function overlapping(a: SourceRef, b: SourceRef): boolean {
-  if (a.file !== b.file) return false;
   return a.span.start.offset < b.span.end.offset && b.span.start.offset < a.span.end.offset;
 }
 
