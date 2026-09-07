@@ -40,7 +40,9 @@ Two thresholds are regression guards, set below the last measurement. They move
 accommodate a regression:
 
 - **Mutation score >= 70** (`break` in `stryker.config.mjs`; last measured
-  74.73% over 6,232 mutants).
+  75.68% over 7,249 mutants). The guard stays at 70 while ~300 mutants are
+  detected by timeout: if a slow machine turned all of them into survivors the
+  score would read 71.5%, and the guard must not fail a build for being slow.
 - **Coverage floors** in `vitest.config.ts`. Branches sits lowest on purpose;
   the remainder is defensive fallbacks and platform paths of which only one can
   run per machine.

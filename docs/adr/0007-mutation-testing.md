@@ -43,9 +43,17 @@ moves up as the measurement does: 60 against 63.31%, then 70 against 74.05%.
 
 ## Consequences
 
-The measured score is **74.73% over 6,232 mutants** at commit `3a2cddd`. It has
-moved 48.11% → 60.6% → 63.31% → 74.05% → 74.73% as the suite grew from 149 to
-463 tests.
+The measured score is **75.68% over 7,249 mutants** at commit `aababc5`. It has
+moved 48.11% → 60.6% → 63.31% → 74.05% → 74.73% → 75.68% as the suite grew from
+149 to 568 tests.
+
+**`break` stays at 70 even though the measurement rose.** The guard has to clear
+the noise, and the noise here has a size: 303 of those mutants were detected by
+timeout, and a timeout is a timing measurement. If every one of them flipped to
+`survived` on a slower machine the score would read 71.5%. A guard at 72 would
+fail that build for being slow rather than for being wrong. 70 is the closest
+round number that survives the worst case, so it stays where it is until the
+timeout population shrinks.
 
 It is worth being straight about what that number is and is not.
 

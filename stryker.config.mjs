@@ -52,7 +52,7 @@ export default {
   timeoutMS: 15000,
   concurrency: 8,
   // `break` is a regression guard, not an aspiration: it sits a few points below
-  // the measured score (74.73% over 6,232 mutants, commit 3a2cddd) so that
+  // the measured score (75.68% over 7,249 mutants, commit aababc5) so that
   // losing ground fails the build while ordinary refactoring does not.
   //
   // It stays at 70 rather than tracking the +0.68 from the previous run. That
