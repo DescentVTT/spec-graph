@@ -65,6 +65,24 @@ corpus a human can actually work through. The tool survives contact with a
 repository it has never seen, which is the only condition under which it catches
 anything at all.
 
+**Running against an unseen corpus keeps finding these, and nothing else does.**
+Two more surfaced on the v0.1.2 pass, both in how far a governing verb reaches,
+and neither was visible to 454 passing tests:
+
+- The look-behind window crossed a **table cell edge**. An index of archived
+  documents whose column ended "...read the banner before assuming the drift was
+  fixed" made every following row's link an `assumes` edge, and so made every
+  archived document it listed a stale premise. A table row is a list of
+  independent fields; the cell edge now ends a statement.
+- A verb reached across a **negation**. "Owned by nobody today and disclaimed by
+  [138]" was read as a delegation *to* 138 - the opposite of what the sentence
+  says. An inference that inverts its own source is worse than no inference.
+
+Nine of eighteen findings on that corpus were these two bugs. The lesson is not
+that the heuristics were badly chosen; it is that a synthetic fixture never
+writes a sentence like that, and only a repository nobody wrote for the tool
+will.
+
 ## Open Questions
 
 - [ ] Should the default include patterns be widened, or is naming the fix in

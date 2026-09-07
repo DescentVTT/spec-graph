@@ -216,6 +216,18 @@ const VERB_RULES: readonly { kind: EdgeKind; inverted: boolean; phrases: readonl
   },
 ];
 
+/**
+ * Words that cancel a governing phrase standing before them.
+ *
+ * The window allows a short noun phrase between a verb and the reference it
+ * governs - "deferred to the sharding decision in [ADR-7]" is one statement.
+ * It cannot allow a negation. A table entry reading "Owned by nobody today and
+ * disclaimed by [138]" was being read as a delegation *to* 138, which is the
+ * opposite of what the sentence says, and an inference that inverts its source
+ * is worse than no inference at all.
+ */
+const NEGATION = /(?:^|\s)(?:no|not|nobody|none|never|neither|nor|nothing|without)(?:\s|$)/;
+
 /** How close a governing phrase must sit to the reference it governs. */
 const VERB_WINDOW = 40;
 
@@ -842,8 +854,12 @@ export function classifyReference(
   VERB_PATTERN.lastIndex = 0;
   for (let m = VERB_PATTERN.exec(before); m !== null; m = VERB_PATTERN.exec(before)) {
     const phrase = m[0] as string;
-    const distance = before.length - ((m.index ?? 0) + phrase.length);
+    const end = (m.index ?? 0) + phrase.length;
+    const distance = before.length - end;
     if (distance > VERB_WINDOW) continue;
+    // What sits between the phrase and the reference has to be connective. A
+    // negation in there reverses the claim the phrase would otherwise make.
+    if (NEGATION.test(before.slice(end))) continue;
     const rule = VERB_LOOKUP.get(phrase);
     if (rule) best = rule;
   }
@@ -872,7 +888,17 @@ export function classifyReference(
 }
 
 /** A sentence end, a blank line, or the start of a new block-level item. */
-const STATEMENT_BREAK = /[.?!;]\s|\n\s*\n|\n\s*[-*+>#]/g;
+/**
+ * A table cell edge ends a statement too.
+ *
+ * The pipe matters more than it looks. A table row is a list of independent
+ * fields, and without it the look-behind window reaches back across the row
+ * boundary into the previous row's prose. An index of archived documents whose
+ * last column ended "...before assuming the drift was fixed" turned every
+ * following row's link into an `assumes` edge, and so turned every archived
+ * document it listed into a stale premise.
+ */
+const STATEMENT_BREAK = /[.?!;]\s|\n\s*\n|\n\s*[-*+>#]|\|/g;
 
 /**
  * Lower-cased, whitespace-collapsed text back to the start of the statement.
@@ -897,7 +923,7 @@ function sentenceBefore(text: string, start: number): string {
 
 function sentenceAfter(text: string, end: number): string {
   const window = text.slice(end, Math.min(text.length, end + 80));
-  const stop = /[.?!;\n]/.exec(window);
+  const stop = /[.?!;\n|]/.exec(window);
   const cut = stop ? window.slice(0, stop.index) : window;
   return cut.toLowerCase().replace(/[`*_~"'()\[\],]/g, ' ').replace(/\s+/g, ' ').trim();
 }

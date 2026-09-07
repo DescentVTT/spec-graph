@@ -87,6 +87,162 @@ describe('report ordering is total', () => {
 });
 
 /* -------------------------------------------------------------------------- */
+/* How far a governing verb reaches                                           */
+/* -------------------------------------------------------------------------- */
+
+describe('verb governance', () => {
+  const retired = { 'docs/adr/0002-old.md': '---\nstatus: archived\n---\n\n# Old\n' };
+
+  it('does not reach across a table cell edge', () => {
+    // A table row is a list of independent fields. Found on a real index of
+    // archived documents whose previous row ended "...before assuming the
+    // drift was fixed": every following row's link became an `assumes` edge,
+    // and so every archived document it listed became a stale premise.
+    const { diagnostics } = analyse({
+      ...retired,
+      'docs/adr/0003-index.md': [
+        '---',
+        'status: accepted',
+        '---',
+        '',
+        '# Index',
+        '',
+        '| Ref | Note |',
+        '| :-- | :--- |',
+        '| a | read the banner before assuming the drift was fixed |',
+        '| [ADR-0002](0002-old.md) | executed |',
+      ].join('\n'),
+    });
+    expect(diagnostics.map((d) => d.rule)).not.toContain('stale-premise');
+  });
+
+  it('does not reach across a row boundary either', () => {
+    const { diagnostics } = analyse({
+      ...retired,
+      'docs/adr/0003-index.md': [
+        '---',
+        'status: accepted',
+        '---',
+        '',
+        '# Index',
+        '',
+        '| a | assuming the drift was fixed |',
+        '| [ADR-0002](0002-old.md) | executed |',
+      ].join('\n'),
+    });
+    expect(diagnostics.map((d) => d.rule)).not.toContain('stale-premise');
+  });
+
+  it('still governs a reference in its own cell', () => {
+    // The fix must not cost the legitimate case: a verb and the link it governs
+    // inside one cell are still one statement.
+    const { graph } = analyse({
+      ...retired,
+      'docs/adr/0003-index.md': [
+        '---',
+        'status: accepted',
+        '---',
+        '',
+        '# Index',
+        '',
+        '| Ref | Note |',
+        '| :-- | :--- |',
+        '| a | assuming [ADR-0002](0002-old.md) still holds |',
+      ].join('\n'),
+    });
+    expect(graph.out('ADR-0003', ['assumes']).map((e) => e.to)).toEqual(['ADR-0002']);
+  });
+
+  it('is cancelled by a negation between the verb and the reference', () => {
+    // "Owned by nobody today and disclaimed by [138]" was read as a delegation
+    // *to* 138. An inference that inverts its own source is worse than none.
+    const { diagnostics, graph } = analyse({
+      ...retired,
+      'docs/adr/0003-c.md': [
+        '---',
+        'status: accepted',
+        '---',
+        '',
+        '# C',
+        '',
+        '## Open Questions',
+        '',
+        '- [ ] Who owns this? Owned by nobody today and disclaimed by [ADR-0002](0002-old.md).',
+      ].join('\n'),
+    });
+    expect(diagnostics.map((d) => d.rule)).not.toContain('ghost-handover');
+    expect(graph.edges.filter((e) => e.kind === 'delegates-to')).toEqual([]);
+  });
+
+  it('still governs when nothing negates it', () => {
+    const { graph } = analyse({
+      ...retired,
+      'docs/adr/0003-c.md': [
+        '---',
+        'status: accepted',
+        '---',
+        '',
+        '# C',
+        '',
+        '## Open Questions',
+        '',
+        '- [ ] Who owns this? Owned by [ADR-0002](0002-old.md).',
+      ].join('\n'),
+    });
+    expect(graph.edges.some((e) => e.kind === 'delegates-to' && e.to === 'ADR-0002')).toBe(true);
+  });
+
+  it('lets a wrapped sentence keep governing across a line break', () => {
+    // The cell edge is a boundary; an ordinary newline inside a wrapped item is
+    // not, or every multi-line obligation would lose its verb.
+    const { diagnostics } = analyse({
+      ...retired,
+      'docs/adr/0003-c.md': [
+        '---',
+        'status: accepted',
+        '---',
+        '',
+        '# C',
+        '',
+        '## Open Questions',
+        '',
+        '- [ ] Which policy applies once the migration completes? This is',
+        '      deferred to',
+        '      [ADR-0002](0002-old.md) for now.',
+      ].join('\n'),
+    });
+    expect(diagnostics.map((d) => d.rule)).toContain('ghost-handover');
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/* A document that declares itself history                                    */
+/* -------------------------------------------------------------------------- */
+
+describe('historical documents', () => {
+  const files = {
+    'archive/0108-front-door.md': '# Front door\n',
+    'JOURNAL.md': '# Journal\n\nIt shipped because [108](archive/0108-front-door.md) ran that day.\n',
+  };
+
+  it('rest on archived decisions, and say so only in prose', () => {
+    // A journal citing an archived brief is a historical record, not a stale
+    // premise - but with no declared status the document is `unknown`, and a
+    // banner reading "THIS IS HISTORY" is exactly the kind of claim no machine
+    // can check. That is the problem this project exists for.
+    expect(rules(files)).toContain('stale-premise');
+  });
+
+  it('go quiet once the banner is a field the tool can read', () => {
+    const marked = {
+      ...files,
+      'JOURNAL.md': `---\nstatus: historical\n---\n\n${files['JOURNAL.md']}`,
+    };
+    expect(analyse(marked).diagnostics).toEqual([]);
+  });
+});
+
+/* -------------------------------------------------------------------------- */
 /* Cycle detection, both modes                                                */
 /* -------------------------------------------------------------------------- */
 
