@@ -39,6 +39,20 @@ describe('the source tree', () => {
     expect(offenders).toEqual([]);
   });
 
+  it('keeps I/O at the edges, as CLAUDE.md claims', () => {
+    // The claim is load-bearing: it is why `analyseSources()` can be a
+    // first-class entry point and why the tests can build pathological corpora
+    // in memory. A governance document that misstates it is the drift this
+    // project exists to catch, so the statement is checked rather than trusted.
+    const EDGES = ['src/glob.ts', 'src/runner.ts', 'src/cli.ts'];
+    // Static and dynamic forms both count: `cli.ts` reaches for its own version
+    // through `await import('node:fs/promises')`.
+    const imports = /(?:from|import\()\s*'(?:node:)?fs(?:\/promises)?'/;
+    const touchesDisk = [...walk('src')].filter((file) => imports.test(readFileSync(file, 'utf8')));
+    expect(touchesDisk.sort()).toEqual(EDGES.sort());
+    for (const edge of EDGES) expect(readFileSync('CLAUDE.md', 'utf8')).toContain(edge.replace('src/', ''));
+  });
+
   it('is committed with LF line endings', () => {
     // bin/spec-graph.js starts with a shebang: a CRLF there makes Linux look
     // for an interpreter named "node\r".
