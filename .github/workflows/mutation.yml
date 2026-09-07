@@ -42,7 +42,12 @@ jobs:
     # dependency bump or the weekly rebuild all take the long path, and a cap
     # that only fits the fast case is the cap that produced fourteen cancelled
     # runs.
-    timeout-minutes: 90
+    #
+    # The full run measures 80 minutes today. The corpus grew a quarter in this
+    # project's first eight releases, and a cap fitting the present size is how
+    # the last one failed: it passed once, then never again. A ceiling costs
+    # nothing unless it is reached.
+    timeout-minutes: 120
 
     # Decided once. Writing the condition twice and negating it by hand is how
     # the comment above came to promise a full run on manual dispatch while the

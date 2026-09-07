@@ -75,6 +75,14 @@ paid in honesty instead: **the hosted figure is the one that governs**, because
 that is where the build actually fails, and the developer figure is a fast local
 proxy that reads a few points high.
 
+**Incremental runs are trusted for the gate, and rebuilt weekly anyway.** A full
+hosted run takes 80 minutes; an incremental one on a warm cache takes 36
+seconds. Measured against each other on the same source, they read 73.82% and
+73.34% - within half a point, with incremental reporting 35 more survivors than
+the rebuild. It errs low, which is the safe direction for something that fails a
+build: it can cost a false alarm, and it cannot hide a regression by reading
+high. The weekly rebuild is what keeps that half-point from accumulating.
+
 This also corrects the headroom. Against 73.32% with 305 timeouts - four percent
 of the corpus, and a timeout is a timing measurement - a bad run reads 69.3%.
 `break: 70` has about three points of real margin, not seven, which is the
