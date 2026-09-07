@@ -8,9 +8,24 @@ name: Mutation
 #
 # There is no paths filter. A dependency bump can move the score as easily as a
 # source edit can, and filtering on src/** would miss it.
+#
+# That policy was unenforceable as written. A full run took 45 minutes on a
+# hosted runner against the 45-minute cap, so it passed once and then never
+# again as the corpus grew from 6,232 mutants to 7,720 - fourteen consecutive
+# runs cancelled at the limit, each burning three quarters of an hour to report
+# nothing. The score has not been checked in CI since v0.1.2.
+#
+# So: incremental on a push, which re-tests only what the change can have
+# affected, and a full run where the number has to be trustworthy rather than
+# fast - a tag, the weekly schedule, or a manual dispatch.
 on:
   push:
   pull_request:
+  schedule:
+    # Monday, 03:00 UTC. Incremental reuse is an inference about which mutants a
+    # change could reach; once a week the whole corpus is measured from scratch
+    # so a wrong inference cannot accumulate unnoticed.
+    - cron: '0 3 * * 1'
   workflow_dispatch:
 
 # A push to a branch that also has an open pull request triggers both events.
@@ -23,7 +38,11 @@ jobs:
   stryker:
     name: stryker
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    # Sized for the full run, not the incremental one. A cold cache, a
+    # dependency bump or the weekly rebuild all take the long path, and a cap
+    # that only fits the fast case is the cap that produced fourteen cancelled
+    # runs.
+    timeout-minutes: 90
 
     steps:
       - uses: actions/checkout@v5
@@ -35,10 +54,26 @@ jobs:
 
       - run: npm ci
 
+      # Keyed on the commit so every run leaves a fresh entry, and restored from
+      # the most recent one by prefix. A miss is not a failure: it costs the
+      # full run, which is what used to happen every time.
+      - name: Restore the incremental report
+        uses: actions/cache@v4
+        with:
+          path: reports/stryker-incremental.json
+          key: stryker-${{ runner.os }}-${{ github.sha }}
+          restore-keys: |
+            stryker-${{ runner.os }}-
+
       # The config's concurrency of 8 is tuned for a developer machine. Hosted
       # runners have 4 vCPUs and each Stryker worker drives a vitest process of
       # its own, so oversubscribing here makes the run slower, not faster.
-      - name: Mutation test
+      - name: Mutation test (incremental)
+        if: github.event_name != 'schedule' && !startsWith(github.ref, 'refs/tags/')
+        run: npx stryker run --concurrency 4 --incremental
+
+      - name: Mutation test (full)
+        if: github.event_name == 'schedule' || startsWith(github.ref, 'refs/tags/')
         run: npx stryker run --concurrency 4
 
       - uses: actions/upload-artifact@v7
