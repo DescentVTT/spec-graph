@@ -43,9 +43,42 @@ moves up as the measurement does: 60 against 63.31%, then 70 against 74.05%.
 
 ## Consequences
 
-The measured score is **77.16% over 7,720 mutants** at commit `6d92265`. It has
-moved 48.11% → 60.6% → 63.31% → 74.05% → 74.73% → 75.68% → 76.52% → 77.16% as
-the suite grew from 149 to 617 tests.
+The measured score is **77.16% over 7,720 mutants** at commit `6d92265`, on a
+developer machine. It has moved 48.11% → 60.6% → 63.31% → 74.05% → 74.73% →
+75.68% → 76.52% → 77.16% as the suite grew from 149 to 617 tests.
+
+**That number is a property of the measurement as much as of the code, and the
+figure the guard fires against is lower.** The same commit measured on the
+hosted runner reads **73.32%**. This is not drift and not incremental mode: the
+one CI run that completed at v0.1.2 read 72.34% against 74.73% recorded here for
+the same commit, before incremental existed.
+
+`lifecycle.ts` is the clearest case, because it contains nothing platform can
+touch - it is vocabulary tables. One file, one commit, one machine:
+
+| how it was measured | score |
+| --- | --- |
+| `perTest`, concurrency 8, whole project | 77.13 |
+| `perTest`, concurrency 8, this file alone | 68.99 |
+| `coverageAnalysis: all`, concurrency 8 | 73.26 |
+| `perTest`, concurrency 4 | 60.47 |
+| hosted runner: Linux, concurrency 4, `perTest` | 64.34 |
+
+A sixteen-point range on identical source. Concurrency cannot change which
+mutants a test kills, so what is moving is `perTest` attribution - which tests
+Stryker believes cover which mutants - and it moves with worker count, with how
+many files are mutated, and with the machine.
+
+`perTest` stays, because `coverageAnalysis: all` runs the whole suite per mutant
+and the hosted run already takes 80 minutes of its 90-minute cap. The cost is
+paid in honesty instead: **the hosted figure is the one that governs**, because
+that is where the build actually fails, and the developer figure is a fast local
+proxy that reads a few points high.
+
+This also corrects the headroom. Against 73.32% with 305 timeouts - four percent
+of the corpus, and a timeout is a timing measurement - a bad run reads 69.3%.
+`break: 70` has about three points of real margin, not seven, which is the
+argument for leaving it exactly where it is.
 
 **Read "no coverage" before reading the score.** The v0.2.0 modules landed at
 74.61% and 83.08%, and the number worth acting on was neither: it was that 42 of
