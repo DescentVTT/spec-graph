@@ -64,6 +64,14 @@ export interface IdentityInput {
   readonly declaredAliases: readonly string[];
   /** The document H1, if any. */
   readonly heading: string | null;
+  /**
+   * Register the file path and stem as aliases. Default true.
+   *
+   * A specification that is a *region* of a file must not claim the file's
+   * path: the file already answers to it, and two nodes answering to one path
+   * would make every link to that file ambiguous.
+   */
+  readonly includePathAliases?: boolean | undefined;
 }
 
 /**
@@ -141,9 +149,11 @@ export function identify(input: IdentityInput): DocumentIdentity {
   }
 
   add(id);
-  add(stem);
-  add(input.path);
-  add(stripExtension(input.path));
+  if (input.includePathAliases !== false) {
+    add(stem);
+    add(input.path);
+    add(stripExtension(input.path));
+  }
   add(input.declaredId);
   for (const alias of input.declaredAliases) add(alias);
   if (input.heading) add(headingId(input.heading));

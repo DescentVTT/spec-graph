@@ -72,7 +72,9 @@ export {
 } from './report.js';
 export type { ColorEnvironment, GraphExportOptions, GraphFormat, Painter, ReporterOptions } from './report.js';
 
-export { extractDocument, classifyReference, sectionPathAt } from './extract.js';
+export { extractDocument, extractSpecifications, classifyReference, sectionPathAt } from './extract.js';
+export { findSpecificationRegions, readRegionStatus, regionAt } from './sections.js';
+export type { RegionStatus, SpecificationRegion } from './sections.js';
 export type { Classification, ExtractedDocument, ExtractInput, ReferenceCandidate } from './extract.js';
 
 export { resolveCorpus, documentOf } from './resolve.js';

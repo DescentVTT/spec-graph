@@ -125,6 +125,29 @@ export interface Link {
   readonly line: number;
 }
 
+export interface TableCell {
+  /** Cell text as written, trimmed. */
+  readonly text: string;
+  /** Offset of the trimmed text, so a finding can point at the cell itself. */
+  readonly start: number;
+  readonly end: number;
+}
+
+export interface TableRow {
+  readonly cells: readonly TableCell[];
+  readonly start: number;
+  readonly end: number;
+  readonly line: number;
+}
+
+export interface Table {
+  readonly start: number;
+  readonly end: number;
+  /** Header cells, trimmed. A table without a header row is not a table. */
+  readonly headers: readonly TableCell[];
+  readonly rows: readonly TableRow[];
+}
+
 export interface ScannedDocument {
   readonly text: string;
   readonly index: LineIndex;
@@ -136,6 +159,7 @@ export interface ScannedDocument {
   readonly listItems: readonly ListItem[];
   readonly comments: readonly HtmlComment[];
   readonly links: readonly Link[];
+  readonly tables: readonly Table[];
   /** Code and comments blanked out, offsets and line breaks preserved. */
   readonly masked: string;
   /** True when the offset falls inside code, a comment, or front matter. */
@@ -169,6 +193,7 @@ export function scanMarkdown(source: string): ScannedDocument {
   const headings = scanHeadings(lines);
   const listItems = scanListItems(lines, text, masked);
   const links = scanLinks(masked, text, index);
+  const tables = scanTables(lines, text, masked);
 
   return {
     text,
@@ -180,6 +205,7 @@ export function scanMarkdown(source: string): ScannedDocument {
     listItems,
     comments,
     links,
+    tables,
     masked,
     isMasked: (offset) => containsOffset(sortedMask, offset),
   };
@@ -504,6 +530,88 @@ function findItemEnd(lines: readonly ScannedLine[], startIndex: number, indent: 
   }
 
   return end;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Tables                                                                     */
+/* -------------------------------------------------------------------------- */
+
+/** `| :--- | ---: | :-: |` - the row that makes the line above it a header. */
+const TABLE_DELIMITER = /^\|?(?:\s*:?-+:?\s*\|)+\s*:?-*:?\s*\|?$/;
+
+/**
+ * Finds pipe tables, with an offset for every cell.
+ *
+ * Cell offsets are the point: a register kept as a table needs findings that
+ * name the cell declaring the relation, not the row and not the file.
+ *
+ * Splitting happens on the masked copy so a pipe inside inline code cannot
+ * invent a column, while the text comes from the original.
+ */
+function scanTables(lines: readonly ScannedLine[], text: string, masked: string): Table[] {
+  const out: Table[] = [];
+
+  for (let i = 0; i < lines.length - 1; i += 1) {
+    const header = lines[i] as ScannedLine;
+    const delimiter = lines[i + 1] as ScannedLine;
+    if (header.code || header.blank || delimiter.code) continue;
+    if (!header.content.includes('|')) continue;
+    if (!TABLE_DELIMITER.test(delimiter.content.trim())) continue;
+
+    const headers = splitRow(header, text, masked);
+    if (headers.length === 0) continue;
+
+    const rows: TableRow[] = [];
+    let end = delimiter.end;
+    for (let j = i + 2; j < lines.length; j += 1) {
+      const line = lines[j] as ScannedLine;
+      if (line.blank || line.code || !line.content.includes('|')) break;
+      const cells = splitRow(line, text, masked);
+      if (cells.length === 0) break;
+      rows.push({ cells, start: line.contentStart, end: line.end, line: line.line });
+      end = line.end;
+    }
+
+    out.push({ start: header.contentStart, end, headers, rows });
+    i += rows.length + 1;
+  }
+
+  return out;
+}
+
+/** Splits one row into cells, keeping each cell's offset in the source. */
+function splitRow(line: ScannedLine, text: string, masked: string): TableCell[] {
+  const from = line.contentStart;
+  const to = line.end;
+  const bounds: number[] = [];
+  for (let i = from; i < to; i += 1) {
+    if (masked[i] !== '|') continue;
+    // A pipe escaped with a backslash is content, not a column edge.
+    if (i > from && text[i - 1] === '\\') continue;
+    bounds.push(i);
+  }
+  if (bounds.length === 0) return [];
+
+  const cells: TableCell[] = [];
+  // A leading pipe opens the first cell; without one the row starts at `from`.
+  let cursor = (bounds[0] as number) === from ? from + 1 : from;
+  for (const bound of bounds) {
+    if (bound < cursor) continue;
+    cells.push(makeCell(text, cursor, bound));
+    cursor = bound + 1;
+  }
+  // Trailing content after the last pipe is a final cell unless the row ended
+  // with a border pipe.
+  if (cursor < to && text.slice(cursor, to).trim().length > 0) cells.push(makeCell(text, cursor, to));
+
+  return cells;
+}
+
+function makeCell(text: string, start: number, end: number): TableCell {
+  const raw = text.slice(start, end);
+  const leading = raw.length - raw.trimStart().length;
+  const trimmed = raw.trim();
+  return { text: trimmed, start: start + leading, end: start + leading + trimmed.length };
 }
 
 /* -------------------------------------------------------------------------- */

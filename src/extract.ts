@@ -19,6 +19,7 @@ import { attr, attrList, directiveFor, parseDirectives, type Directive } from '.
 import { identify, isExternal, normaliseRef, type DocumentIdentity, ID_KEYS } from './identity.js';
 import { isStatusHeading, phaseFromPath, phaseOf, STATUS_KEYS, supersessionTargetsIn } from './lifecycle.js';
 import { scanMarkdown, slugify, type Link, type ListItem, type ScannedDocument } from './markdown.js';
+import { findSpecificationRegions, regionAt, type SpecificationRegion } from './sections.js';
 import { resolveItemState } from './state.js';
 import { refOf, type LineIndex } from './source.js';
 import type {
@@ -74,6 +75,13 @@ export interface ExtractedDocument {
   readonly anchors: ReadonlySet<string>;
   readonly identity: DocumentIdentity;
   readonly scanned: ScannedDocument;
+  /**
+   * Specifications declared inside this file, each a document in its own right.
+   *
+   * Empty for the ordinary one-file-per-decision layout, which is why nothing
+   * downstream had to change to support registers.
+   */
+  readonly subSpecifications: readonly ExtractedDocument[];
 }
 
 /* -------------------------------------------------------------------------- */
@@ -384,7 +392,20 @@ export interface ExtractInput {
   readonly text: string;
 }
 
-/** Reads one document into graph fragments. Returns `null` when it opts out. */
+/**
+ * Reads one file into graph fragments, one entry per specification in it.
+ *
+ * A file yields at least itself. It yields more when it is a register: a
+ * heading that carries an identifier *and* declares a status is a specification
+ * in its own right, with its own lifecycle, its own obligations and its own
+ * relations. See ADR-0009.
+ */
+export function extractSpecifications(input: ExtractInput): ExtractedDocument[] {
+  const first = extractDocument(input);
+  return first === null ? [] : [first, ...(first.subSpecifications as ExtractedDocument[])];
+}
+
+/** Reads a file's own specification. Returns `null` when it opts out. */
 export function extractDocument(input: ExtractInput): ExtractedDocument | null {
   const scanned = scanMarkdown(input.text);
   const directives = parseDirectives(scanned.comments);
@@ -408,24 +429,43 @@ export function extractDocument(input: ExtractInput): ExtractedDocument | null {
   const byKey = new Map<string, YamlEntry>();
   for (const entry of entries) byKey.set(entry.key, entry);
 
-  const nodeDirective = directives.find((d) => d.name === 'spec-node') ?? null;
   const h1 = scanned.headings.find((h) => h.level === 1) ?? null;
+  const frontMatterId = firstValue(byKey, ID_KEYS) ?? null;
 
-  const declaredId =
-    (nodeDirective ? attr(nodeDirective, 'id')?.value : null) ??
-    firstValue(byKey, ID_KEYS) ??
-    null;
+  const identityOf = (declaredId: string | null, directive: Directive | null): DocumentIdentity =>
+    identify({
+      path: input.path,
+      declaredId,
+      declaredAliases: [
+        ...(directive ? attrList(directive, 'aliases') : []),
+        ...valuesOf(byKey.get('aliases')),
+        ...valuesOf(byKey.get('alias')),
+      ],
+      heading: h1?.text ?? null,
+    });
 
-  const identity = identify({
-    path: input.path,
-    declaredId,
-    declaredAliases: [
-      ...(nodeDirective ? attrList(nodeDirective, 'aliases') : []),
-      ...valuesOf(byKey.get('aliases')),
-      ...valuesOf(byKey.get('alias')),
-    ],
-    heading: h1?.text ?? null,
-  });
+  // A `@spec-node` written inside a register's section belongs to that section,
+  // not to the file. Finding the file's own therefore needs the regions, and
+  // finding the regions needs the file's identity - so the identity is settled
+  // provisionally first, then again once the file's own directive is known.
+  const provisional = identityOf(frontMatterId, null);
+  const provisionalRegions = findSpecificationRegions(scanned, directives, provisional.id);
+  const nodeDirective =
+    directives.find(
+      (directive) =>
+        directive.name === 'spec-node' &&
+        !provisionalRegions.some(
+          (region) =>
+            (region.heading !== null || region.row !== null) &&
+            directive.start >= region.start &&
+            directive.end <= region.end,
+        ),
+    ) ?? null;
+
+  const declaredId = (nodeDirective ? attr(nodeDirective, 'id')?.value : null) ?? frontMatterId;
+  const identity = declaredId === frontMatterId && nodeDirective === null
+    ? provisional
+    : identityOf(declaredId, nodeDirective);
 
   const status = readStatus(scanned, byKey, nodeDirective, index, file);
   const pathPhase = phaseFromPath(input.path);
@@ -450,21 +490,169 @@ export function extractDocument(input: ExtractInput): ExtractedDocument | null {
     frontMatter: toRecord(entries),
   };
 
-  const items = extractItems({ scanned, directives, documentId: identity.id, file, index });
-  const references = extractReferences({
+  // A register's sections are specifications too. The file is always the first
+  // region, so a one-decision file behaves exactly as it did before.
+  const regions =
+    identity.id === provisional.id ? provisionalRegions : findSpecificationRegions(scanned, directives, identity.id);
+  // Every region but the first: a heading section, or a row of a register kept
+  // as a table.
+  const subSpecifications = regions
+    .filter((region) => region.heading !== null || region.row !== null)
+    .map((region) => buildRegion({ region, input, scanned, directives, index, file, pathPhase }));
+
+  const ownerAt = (offset: number): string => {
+    const region = regionAt(regions, offset);
+    if (region === null) return identity.id;
+    const owner = subSpecifications.find((spec) => spec.region === region);
+    return owner?.document.id ?? identity.id;
+  };
+
+  const allItems = extractItems({ scanned, directives, ownerAt, file, index });
+  const documentAt = (offset: number): DocumentNode => {
+    const id = ownerAt(offset);
+    if (id === identity.id) return document;
+    return subSpecifications.find((spec) => spec.document.id === id)?.document ?? document;
+  };
+
+  const allReferences = extractReferences({
     scanned,
     directives,
     document,
-    items,
+    documentAt,
+    items: allItems,
     byKey,
     status,
+    claimed: regions.flatMap((region) => [...region.claimed]),
     file,
     index,
   });
 
+  // Hand each region the items and references that fall inside it.
+  const ownItems = allItems.filter((item) => item.document === identity.id);
+  const ownReferences = allReferences.filter((reference) => belongsTo(reference, identity.id, allItems));
   const anchors = new Set<string>(scanned.headings.map((h) => h.slug));
 
-  return { document, items, references, problems, anchors, identity, scanned };
+  const filled = subSpecifications.map((spec) => ({
+    ...spec.extracted,
+    items: allItems.filter((item) => item.document === spec.document.id),
+    references: [
+      // Column-declared relations first: they are typed by the header rather
+      // than guessed from prose.
+      ...spec.extracted.references,
+      ...allReferences.filter((reference) => belongsTo(reference, spec.document.id, allItems)),
+    ],
+  }));
+
+  return {
+    document,
+    items: ownItems,
+    references: ownReferences,
+    problems,
+    anchors,
+    identity,
+    scanned,
+    subSpecifications: filled,
+  };
+}
+
+/** True when a reference was written on a document or on one of its items. */
+function belongsTo(reference: ReferenceCandidate, documentId: string, items: readonly ItemNode[]): boolean {
+  if (reference.from === documentId) return true;
+  const owner = items.find((item) => item.id === reference.from);
+  return owner?.document === documentId;
+}
+
+interface RegionInput {
+  readonly region: SpecificationRegion;
+  readonly input: ExtractInput;
+  readonly scanned: ScannedDocument;
+  readonly directives: readonly Directive[];
+  readonly index: LineIndex;
+  readonly file: string;
+  readonly pathPhase: Phase;
+}
+
+interface BuiltRegion {
+  readonly region: SpecificationRegion;
+  readonly document: DocumentNode;
+  readonly extracted: ExtractedDocument;
+}
+
+/**
+ * Turns one region into a specification.
+ *
+ * It produces exactly the `DocumentNode` a whole file produces, which is the
+ * reason every rule, query and reporter works on registers without knowing they
+ * exist. The only deliberate differences: the node is anchored at its heading
+ * rather than at line one, it carries no front matter of its own, and it does
+ * not claim the file's path as an alias - the file already does, and two nodes
+ * answering to one path would make every link to that file ambiguous.
+ */
+function buildRegion(context: RegionInput): BuiltRegion {
+  const { region, input, scanned, index, file, pathPhase } = context;
+  const at = (start: number, end: number): SourceRef => refOf(file, index, start, end);
+
+  const identity = identify({
+    path: input.path,
+    declaredId: region.declaredId,
+    declaredAliases: region.directive ? attrList(region.directive, 'aliases') : [],
+    heading: region.title,
+    includePathAliases: false,
+  });
+
+  const declaredStatus = region.directive ? attr(region.directive, 'status') : null;
+  const rawStatus = declaredStatus?.value ?? region.status?.text ?? null;
+  const statusAt = declaredStatus
+    ? at(declaredStatus.start, declaredStatus.end)
+    : region.status
+      ? at(region.status.start, region.status.end)
+      : null;
+  const declaredPhase = phaseOf(rawStatus);
+
+  const document: DocumentNode = {
+    id: identity.id,
+    kind: 'document',
+    title: (region.directive ? attr(region.directive, 'title')?.value : null) ?? region.title ?? identity.id,
+    // Anchored at its heading, or at the row when the register is a table.
+    at: at(region.start, Math.min(region.end, region.heading?.end ?? region.row?.end ?? region.end)),
+    path: input.path,
+    aliases: identity.aliases,
+    phase: declaredPhase !== 'unknown' ? declaredPhase : pathPhase,
+    rawStatus,
+    statusAt,
+    frontMatter: {},
+  };
+
+  const anchors = new Set<string>(
+    scanned.headings.filter((h) => h.start >= region.start && h.start < region.end).map((h) => h.slug),
+  );
+
+  // Relations a table declares by column, typed by the header the author wrote.
+  const references: ReferenceCandidate[] = region.relations.map((relation) => ({
+    kind: relation.kind,
+    from: document.id,
+    target: relation.target,
+    origin: 'front-matter' as const,
+    declaredAt: at(relation.start, relation.end),
+    raw: `${relation.column}: ${relation.target}`,
+    inverted: relation.inverted,
+    opportunistic: false,
+  }));
+
+  return {
+    region,
+    document,
+    extracted: {
+      document,
+      items: [],
+      references,
+      problems: [],
+      anchors,
+      identity,
+      scanned,
+      subSpecifications: [],
+    },
+  };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -558,13 +746,14 @@ function statusSectionBody(
 interface ItemContext {
   readonly scanned: ScannedDocument;
   readonly directives: readonly Directive[];
-  readonly documentId: string;
+  /** The specification that owns an offset, which in a register is a section. */
+  readonly ownerAt: (offset: number) => string;
   readonly file: string;
   readonly index: LineIndex;
 }
 
 function extractItems(context: ItemContext): ItemNode[] {
-  const { scanned, directives, documentId, file, index } = context;
+  const { scanned, directives, ownerAt, file, index } = context;
   const out: ItemNode[] = [];
   const ordinals = new Map<string, number>();
 
@@ -575,9 +764,13 @@ function extractItems(context: ItemContext): ItemNode[] {
 
     if (!isObligation(item, inObligationSection, directive)) continue;
 
+    const documentId = ownerAt(item.start);
     const slug = section.length > 0 ? slugify(section[section.length - 1] as string) : 'item';
-    const ordinal = (ordinals.get(slug) ?? 0) + 1;
-    ordinals.set(slug, ordinal);
+    // Ordinals count within a specification, so two decisions in one register
+    // each get their own `#open-questions.1` rather than sharing a sequence.
+    const key = `${documentId}#${slug}`;
+    const ordinal = (ordinals.get(key) ?? 0) + 1;
+    ordinals.set(key, ordinal);
 
     const declaredId = directive ? attr(directive, 'id')?.value : null;
     const id = `${documentId}#${declaredId ?? `${slug}.${ordinal}`}`;
@@ -682,15 +875,24 @@ interface ReferenceContext {
   readonly scanned: ScannedDocument;
   readonly directives: readonly Directive[];
   readonly document: DocumentNode;
+  /** The specification that owns an offset, for a reference outside any item. */
+  readonly documentAt: (offset: number) => DocumentNode;
   readonly items: readonly ItemNode[];
   readonly byKey: ReadonlyMap<string, YamlEntry>;
   readonly status: StatusReading;
+  /** Cell ranges already typed by a table column header. */
+  readonly claimed: readonly { start: number; end: number }[];
   readonly file: string;
   readonly index: LineIndex;
 }
 
+/** True when an offset falls in a cell a column header already accounted for. */
+function isClaimed(claimed: readonly { start: number; end: number }[], offset: number): boolean {
+  return claimed.some((range) => offset >= range.start && offset < range.end);
+}
+
 function extractReferences(context: ReferenceContext): ReferenceCandidate[] {
-  const { scanned, directives, document, items, byKey, status, file, index } = context;
+  const { scanned, directives, document, documentAt, items, byKey, status, claimed, file, index } = context;
   const out: ReferenceCandidate[] = [];
   const at = (start: number, end: number): SourceRef => refOf(file, index, start, end);
 
@@ -740,7 +942,7 @@ function extractReferences(context: ReferenceContext): ReferenceCandidate[] {
     const to = attr(directive, 'to');
     const from = attr(directive, 'from');
     if (!kind) continue;
-    const owner = ownerOf(items, directive.start) ?? document.id;
+    const owner = ownerOf(items, directive.start) ?? documentAt(directive.start).id;
     if (to) {
       out.push({
         kind,
@@ -767,15 +969,18 @@ function extractReferences(context: ReferenceContext): ReferenceCandidate[] {
     }
   }
 
-  // Prose links.
+  // Prose links. A cell whose meaning a column header already gave is skipped,
+  // so `| ADR-0002 | ... | [ADR-0001](0001.md) |` yields one typed edge rather
+  // than a typed edge and a neutral citation beside it.
   const linked = new Set<string>();
   for (const link of scanned.links) {
     if (link.form === 'definition') continue;
+    if (isClaimed(claimed, link.start)) continue;
     const target = cleanTarget(link.target);
     if (target.length === 0) continue;
     if (isExternal(target)) continue;
 
-    const owner = ownerOf(items, link.start) ?? document.id;
+    const owner = ownerOf(items, link.start) ?? documentAt(link.start).id;
     const section = sectionPathAt(scanned, link.start);
     const classified = classifyReference(scanned.masked, link.start, link.end, section);
 
@@ -797,7 +1002,8 @@ function extractReferences(context: ReferenceContext): ReferenceCandidate[] {
   for (const bare of findBareReferences(scanned)) {
     const key = normaliseRef(bare.text);
     if (linked.has(key)) continue;
-    const owner = ownerOf(items, bare.start) ?? document.id;
+    if (isClaimed(claimed, bare.start)) continue;
+    const owner = ownerOf(items, bare.start) ?? documentAt(bare.start).id;
     const section = sectionPathAt(scanned, bare.start);
     const classified = classifyReference(scanned.masked, bare.start, bare.end, section);
     out.push({

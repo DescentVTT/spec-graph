@@ -10,7 +10,7 @@
 import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 
-import { extractDocument, type ExtractedDocument } from './extract.js';
+import { extractSpecifications, type ExtractedDocument } from './extract.js';
 import { createReferenceFilter, walkFiles, type WalkedFile } from './glob.js';
 import { buildGraph, type SpecGraph } from './graph.js';
 import { toPosix } from './paths.js';
@@ -119,8 +119,7 @@ interface Analysed {
 export function analyseSources(sources: readonly Source[], options: AnalyseSourcesOptions = {}): Analysed {
   const extracted: ExtractedDocument[] = [];
   for (const source of sources) {
-    const document = extractDocument({ path: source.path, text: source.text });
-    if (document) extracted.push(document);
+    extracted.push(...extractSpecifications({ path: source.path, text: source.text }));
   }
 
   const corpus = resolveCorpus(extracted, {
