@@ -462,3 +462,142 @@ describe('a link in a typed relation column', () => {
     expect(graph.out('ADR-0002', ['depends-on']).map((edge) => edge.to)).toEqual(['ADR-0001', 'ADR-0003']);
   });
 });
+
+/* -------------------------------------------------------------------------- */
+/* Column vocabulary                                                          */
+/* -------------------------------------------------------------------------- */
+
+describe('the relation column vocabulary', () => {
+  // A column header is a typed declaration, and getting its direction wrong is
+  // a silent, load-bearing bug: `Superseded by` pointing the wrong way makes a
+  // retired decision look like the survivor. Each phrase is asserted for both
+  // the kind it means and the way it points.
+  const edge = (header: string): { kind: string; from: string; to: string } | undefined => {
+    const { graph } = analyse({
+      'docs/register.md': [
+        '# Register',
+        '',
+        `| ID | Status | ${header} |`,
+        '| :- | :----- | :----- |',
+        '| ADR-0001 | accepted | - |',
+        '| ADR-0002 | accepted | ADR-0001 |',
+      ].join('\n'),
+    });
+    const [found] = graph.edges
+      .filter((candidate) => candidate.kind !== 'contains')
+      .map((candidate) => ({ kind: candidate.kind, from: candidate.from, to: candidate.to }));
+    return found;
+  };
+
+  const FORWARD: readonly (readonly [string, string])[] = [
+    ['Depends on', 'depends-on'],
+    ['Depends-on', 'depends-on'],
+    ['Dependencies', 'depends-on'],
+    ['Requires', 'depends-on'],
+    ['Supersedes', 'supersedes'],
+    ['Replaces', 'supersedes'],
+    ['Blocked by', 'blocked-by'],
+    ['Blocked on', 'blocked-by'],
+    ['Amends', 'amends'],
+    ['Extends', 'amends'],
+    ['Assumes', 'assumes'],
+    ['Delegates to', 'delegates-to'],
+    ['Delegated to', 'delegates-to'],
+    ['Tracked in', 'delegates-to'],
+    ['Related', 'relates-to'],
+    ['Related to', 'relates-to'],
+    ['See also', 'relates-to'],
+    ['References', 'references'],
+  ];
+
+  const INVERTED: readonly (readonly [string, string])[] = [
+    ['Superseded by', 'supersedes'],
+    ['Replaced by', 'supersedes'],
+    ['Blocks', 'blocked-by'],
+  ];
+
+  it.each(FORWARD)('reads "%s" as %s from the row that declares it', (header, kind) => {
+    expect(edge(header)).toEqual({ kind, from: 'ADR-0002', to: 'ADR-0001' });
+  });
+
+  it.each(INVERTED)('reads "%s" as %s pointing back at the row', (header, kind) => {
+    expect(edge(header)).toEqual({ kind, from: 'ADR-0001', to: 'ADR-0002' });
+  });
+
+  it('reads a header however it was capitalised or spaced', () => {
+    expect(edge('DEPENDS  ON')).toEqual({ kind: 'depends-on', from: 'ADR-0002', to: 'ADR-0001' });
+  });
+
+  it('leaves a header it does not know as prose', () => {
+    // Not a relation column, so the identifier in the cell is scanned as an
+    // ordinary citation rather than typed - and stays a citation.
+    expect(edge('Owner')?.kind).toBe('references');
+  });
+});
+
+describe('a column header is matched whole', () => {
+  const table = (headers: string, row: string): Record<string, string> => ({
+    'docs/register.md': ['# Register', '', `| ${headers} |`, `| ${headers.replace(/[^|]+/g, ' :- ')} |`, `| ${row} |`].join('\n'),
+  });
+
+  it('does not read "Grid" as an identifier column', () => {
+    // Anchored at both ends: without the leading anchor, any header *ending*
+    // in "id" becomes the column every row is identified by.
+    expect(ids(table('Grid | Status | Depends on', 'ADR-0010 | accepted | -'))).toEqual(['register']);
+  });
+
+  it('does not read "Status notes" as a status column', () => {
+    // A notes column would give every row a lifecycle it never declared.
+    expect(ids(table('ID | Status notes', 'ADR-0020 | fine'))).toEqual(['register']);
+  });
+
+  it('does not read "Name of thing" as a title column', () => {
+    const { graph } = analyse(table('ID | Status | Name of thing', 'ADR-0030 | accepted | Whatever'));
+    expect(graph.document('ADR-0030')?.title).toBe('ADR-0030');
+  });
+});
+
+describe('a section does not borrow another section\'s status', () => {
+  it('stops at the next heading of the same level', () => {
+    // The region ends at the next heading of the same level *or above*. Ending
+    // it only at a shallower heading would let a section without a status of
+    // its own take the next section's, and become a specification it never
+    // declared itself to be.
+    expect(
+      ids({
+        'docs/register.md': [
+          '# Register',
+          '',
+          '## ADR-0001: No status of its own',
+          '',
+          'Some prose.',
+          '',
+          '## ADR-0002: Has one',
+          '',
+          '**Status:** accepted',
+        ].join('\n'),
+      }),
+    ).toEqual(['ADR-0002', 'register']);
+  });
+
+  it('gives a nested section its own prose', () => {
+    const { graph } = analyse({
+      'docs/register.md': [
+        '# Register',
+        '',
+        '## ADR-0001: Outer',
+        '',
+        '**Status:** accepted',
+        '',
+        '### ADR-0002: Inner',
+        '',
+        '**Status:** accepted',
+        '',
+        'This depends on ADR-0003.',
+      ].join('\n'),
+      'docs/adr/0003-third.md': '# ADR-0003: Third\n\n## Status\n\naccepted\n',
+    });
+    expect(graph.out('ADR-0002', ['depends-on']).map((relation) => relation.to)).toEqual(['ADR-0003']);
+    expect(graph.out('ADR-0001', ['depends-on'])).toEqual([]);
+  });
+});
