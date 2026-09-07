@@ -294,7 +294,10 @@ export function formatGraph(graph: SpecGraph, format: GraphFormat, options: Grap
   const lifted = skipItems
     ? dedupeEdges(
         graph.edges
-          .filter((edge) => edge.kind !== 'contains')
+          // Containment of an *item* is what hiding items makes redundant.
+          // Containment of a specification by the register that holds it is
+          // structure between documents, and is what this view exists to show.
+          .filter((edge) => edge.kind !== 'contains' || visible.has(edge.to))
           .map((edge) => {
             const from = graph.owningDocument(edge.from)?.id ?? edge.from;
             const to = graph.owningDocument(edge.to)?.id ?? edge.to;

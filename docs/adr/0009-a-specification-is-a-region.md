@@ -54,7 +54,15 @@ register nobody wrote. Relations are typed by the column header the author
 wrote - `Depends on`, `Superseded by` - rather than guessed from prose, and a
 finding points at the declaring cell.
 
-Three details that keep the model honest:
+**A register contains what is written inside it.** The file and its regions are
+related by `contains` - the same edge a document already had to its obligations -
+so `document[id=register] -contains-> document` answers "what does this register
+hold", and the grouping survives into `--documents-only`, where containment of an
+*item* is redundant but containment of a *decision* is the structure being asked
+for. The edge is structural: it carries no obligation and is not load-bearing, so
+a retired register does not indict the decisions still in force inside it.
+
+Three further details keep the model honest:
 
 - **A region does not claim the file's path.** The file already answers to it,
   and two nodes answering to one path would make every link to that file

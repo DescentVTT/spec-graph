@@ -82,6 +82,14 @@ export interface ExtractedDocument {
    * downstream had to change to support registers.
    */
   readonly subSpecifications: readonly ExtractedDocument[];
+  /**
+   * The file-level specification this one is a region of, if any.
+   *
+   * Recorded so the register's structure is a relation in the graph rather than
+   * an accident of which offsets fall inside which: "what decisions does this
+   * register hold" is a question worth being able to ask.
+   */
+  readonly containerId: string | null;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -498,7 +506,7 @@ export function extractDocument(input: ExtractInput): ExtractedDocument | null {
   // as a table.
   const subSpecifications = regions
     .filter((region) => region.heading !== null || region.row !== null)
-    .map((region) => buildRegion({ region, input, scanned, directives, index, file, pathPhase }));
+    .map((region) => buildRegion({ region, containerId: identity.id, input, scanned, directives, index, file, pathPhase }));
 
   const ownerAt = (offset: number): string => {
     const region = regionAt(regions, offset);
@@ -552,6 +560,7 @@ export function extractDocument(input: ExtractInput): ExtractedDocument | null {
     identity,
     scanned,
     subSpecifications: filled,
+    containerId: null,
   };
 }
 
@@ -564,6 +573,7 @@ function belongsTo(reference: ReferenceCandidate, documentId: string, items: rea
 
 interface RegionInput {
   readonly region: SpecificationRegion;
+  readonly containerId: string;
   readonly input: ExtractInput;
   readonly scanned: ScannedDocument;
   readonly directives: readonly Directive[];
@@ -651,6 +661,7 @@ function buildRegion(context: RegionInput): BuiltRegion {
       identity,
       scanned,
       subSpecifications: [],
+      containerId: context.containerId,
     },
   };
 }

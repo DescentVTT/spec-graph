@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { scanMarkdown } from '../src/markdown.js';
+import { formatGraph } from '../src/report.js';
 import { analyseSources, type Source } from '../src/runner.js';
 import type { RuleId } from '../src/types.js';
 
@@ -344,5 +345,70 @@ describe('table scanning', () => {
   it('handles rows without border pipes', () => {
     const doc = scanMarkdown(['a | b', ':- | :-', 'c | d'].join('\n'));
     expect(doc.tables[0]?.rows[0]?.cells.map((c) => c.text)).toEqual(['c', 'd']);
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/* Containment                                                                */
+/* -------------------------------------------------------------------------- */
+
+describe('a register contains the specifications written inside it', () => {
+  const files = { 'docs/register.md': REGISTER };
+
+  it('relates the file to each specification it holds', () => {
+    const { graph } = analyse(files);
+    const held = graph
+      .out('register', ['contains'])
+      .map((edge) => edge.to)
+      .filter((id) => graph.document(id) !== undefined)
+      .sort();
+    expect(held).toEqual(['ADR-0001', 'ADR-0002', 'ADR-0003']);
+  });
+
+  it('is absent from an ordinary one-specification-per-file corpus', () => {
+    const { graph } = analyse({
+      'docs/adr/0001-a.md': '# ADR-0001: A\n\n## Status\n\naccepted\n',
+      'docs/adr/0002-b.md': '# ADR-0002: B\n\n## Status\n\naccepted\n',
+    });
+    const between = graph.edges.filter(
+      (edge) => edge.kind === 'contains' && graph.document(edge.to) !== undefined,
+    );
+    expect(between).toEqual([]);
+  });
+
+  it('carries no obligation, so a retired register does not indict what it holds', () => {
+    const { graph, diagnostics } = analyse({
+      'docs/old.md': [
+        '---',
+        'status: retired',
+        '---',
+        '',
+        '# Superseded Register',
+        '',
+        '## ADR-0100: Still in force',
+        '',
+        '**Status:** accepted',
+      ].join('\n'),
+      'docs/live.md': '# ADR-0200: Live\n\n## Status\n\naccepted\n\nThis depends on ADR-0100.\n',
+    });
+
+    expect(graph.document('old')?.phase).toBe('retired');
+    expect(graph.document('ADR-0100')?.phase).toBe('active');
+    expect(diagnostics.map((d) => d.rule)).not.toContain('stale-premise');
+  });
+
+  it('survives --documents-only, where containment of an item does not', () => {
+    // Hiding items makes "this document holds this obligation" redundant. It
+    // does not make "this register holds this decision" redundant - that is
+    // structure between documents, and the whole point of the view.
+    const { graph } = analyse(files);
+    const exported = JSON.parse(formatGraph(graph, 'json', { documentsOnly: true })) as {
+      edges: { kind: string; from: string; to: string }[];
+    };
+    const contains = exported.edges.filter((edge) => edge.kind === 'contains');
+
+    expect(contains.map((edge) => edge.to).sort()).toEqual(['ADR-0001', 'ADR-0002', 'ADR-0003']);
+    expect(formatGraph(graph, 'json', {})).toContain('#open-questions.1');
+    expect(JSON.stringify(contains)).not.toContain('#open-questions');
   });
 });

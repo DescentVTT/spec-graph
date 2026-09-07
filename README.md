@@ -226,6 +226,10 @@ header you wrote:
 
 Findings point at the declaring cell, not at the file.
 
+The register itself stays in the graph as the thing that holds them, so
+`spec-graph query 'document[id=register] -contains-> document'` lists what is
+inside it.
+
 Both forms need **two** signals, and that is deliberate: `## Q3 2026 Roadmap`
 parses as family `Q`, number 3, and `## v1.2.0` in a changelog parses as family
 `v`, number 1. Neither declares a status, so neither is a specification. A table

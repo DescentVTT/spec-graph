@@ -113,6 +113,22 @@ export function resolveCorpus(
   const dangling: DanglingRef[] = [];
   const byKey = new Map<string, number>();
 
+  // Structural edges: a register contains the specifications written inside it.
+  for (const entry of extracted) {
+    if (entry.containerId === null) continue;
+    if (!nodes.has(entry.containerId) || !nodes.has(entry.document.id)) continue;
+    edges.push({
+      kind: 'contains',
+      from: entry.containerId,
+      to: entry.document.id,
+      origin: 'structural',
+      declaredAt: entry.document.at,
+      raw: entry.document.title,
+      declaredIn: [entry.document.at.file],
+      reflexive: false,
+    });
+  }
+
   // Structural edges: a document contains its items.
   for (const item of items) {
     edges.push({
