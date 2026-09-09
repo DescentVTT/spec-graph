@@ -427,7 +427,21 @@ A baseline that expires when somebody reformats a paragraph is worse than none,
 so the entry survives edits, reordering, and the file being renamed — because
 `ADR-0004` is the decision's name, not its location. Repeats are counted rather
 than told apart, which is the deliberate cost of a key with no position in it.
-See [ADR-0012](docs/adr/0012-a-baseline-is-a-ratchet.md).
+
+By default that line is a note and the build stays green: failing because
+somebody fixed something is a strange way to encourage them. But a note in CI
+is a line that scrolls past, and an exemption nobody strikes outlives the defect
+it was written for. A team that has decided its debt only moves one way turns on
+the other side of the ratchet:
+
+```bash
+spec-graph check --baseline .spec-graph-baseline.json --ratchet
+```
+
+Now an undeclared finding fails **and** a declared one that no longer occurs
+fails, each named, with `--record-baseline` as the fix — and the diff of that
+file is the record of what was paid off. See
+[ADR-0012](docs/adr/0012-a-baseline-is-a-ratchet.md).
 
 ## Configuration
 
@@ -442,6 +456,7 @@ command. spec-graph reads the first of `.spec-graph.json`,
   "ignoreFamilies": ["RFC"],
   "historyPatterns": ["**/JOURNAL_*.md"],
   "baseline": ".spec-graph-baseline.json",
+  "ratchet": true,
   "severities": { "self-reference": "off" },
   "strict": true
 }
@@ -494,6 +509,7 @@ spec-graph rules [--explain]         List the diagnostics.
 --history <glob>        Files that log decisions rather than making them
 --baseline <file>       Accept these findings; report only what is new
 --record-baseline <f>   Write today's findings as accepted debt, exit 0
+--ratchet               Also fail when a baseline entry no longer occurs
 --no-config             Ignore .spec-graph.json and the package.json key
 --format human|json     Report format
 --graph-format <fmt>    dot | mermaid | json

@@ -557,3 +557,95 @@ describe('the baseline', () => {
     }
   });
 });
+
+describe('the other side of the ratchet', () => {
+  const FILE = '.tmp-ratchet.json';
+  const path = `${LEGACY}/${FILE}`;
+
+  /**
+   * Records today's debt, then adds one entry for a defect nobody has.
+   *
+   * That is the shape the ratchet exists for: a file that is exactly right
+   * about the repository except for the one exemption somebody already paid
+   * off and forgot to strike.
+   */
+  async function withSlack(): Promise<void> {
+    const { readFile, writeFile } = await import('node:fs/promises');
+    await run('check', '--root', LEGACY, '--no-config', '--record-baseline', FILE);
+    const held = JSON.parse(await readFile(path, 'utf8')) as { version: number; findings: unknown[] };
+    held.findings.push({ rule: 'broken-reference', document: 'ADR-0001', subject: 'docs/never-existed.md', count: 1 });
+    await writeFile(path, JSON.stringify(held));
+  }
+
+  it('says so and passes by default', async () => {
+    const { rm } = await import('node:fs/promises');
+    await withSlack();
+    try {
+      const loose = await run('check', '--root', LEGACY, '--no-config', '--baseline', FILE);
+      expect(loose.out).toContain('no longer occurs');
+      // ADR-0012: failing a build because somebody fixed something is a strange
+      // way to encourage them. The default stays soft.
+      expect(loose.code).toBe(EXIT_OK);
+    } finally {
+      await rm(path, { force: true });
+    }
+  });
+
+  it('fails on the slack when asked to', async () => {
+    const { rm } = await import('node:fs/promises');
+    await withSlack();
+    try {
+      const tight = await run('check', '--root', LEGACY, '--no-config', '--baseline', FILE, '--ratchet');
+      expect(tight.code).toBe(EXIT_FAILED);
+      // Named, not counted: a number says the file has slack, and is not enough
+      // to strike it.
+      expect(tight.out).toContain('paid: broken-reference ADR-0001 "docs/never-existed.md"');
+      // The verdict has to agree with the exit code.
+      expect(tight.out).toContain('the baseline is looser than the repository');
+      expect(tight.out).not.toContain('the specification graph is consistent');
+    } finally {
+      await rm(path, { force: true });
+    }
+  });
+
+  it('says the same thing in JSON, and says only that', async () => {
+    const { rm } = await import('node:fs/promises');
+    await withSlack();
+    try {
+      const tight = await run(
+        'check', '--root', LEGACY, '--no-config', '--baseline', FILE, '--ratchet', '--format', 'json', '--verbose',
+      );
+      // The `paid:` lines are a human courtesy. On stdout beside JSON they are
+      // the difference between a report a bot can parse and one it cannot.
+      const report = JSON.parse(tight.out) as { ok: boolean; baseline: { stale: number; ratchet: boolean } };
+      expect(report.ok).toBe(false);
+      expect(report.baseline).toMatchObject({ stale: 1, ratchet: true });
+    } finally {
+      await rm(path, { force: true });
+    }
+  });
+
+  it('has nothing to fail on when the baseline is exact', async () => {
+    const { rm } = await import('node:fs/promises');
+    try {
+      await run('check', '--root', LEGACY, '--no-config', '--record-baseline', FILE);
+      const tight = await run('check', '--root', LEGACY, '--no-config', '--baseline', FILE, '--ratchet');
+      expect(tight.code).toBe(EXIT_OK);
+    } finally {
+      await rm(path, { force: true });
+    }
+  });
+
+  it('has nothing to fail on with no baseline at all', async () => {
+    // The flag is about a file. Without one there is no slack to find, and it
+    // must not turn into a second `--strict`.
+    const alone = await run('check', '--root', LEGACY, '--no-config', '--ratchet');
+    expect(alone.code).toBe(EXIT_FAILED);
+    expect(alone.out).toContain('the specification graph is inconsistent');
+  });
+
+  it('is a flag and a configuration key', () => {
+    expect(parseArgs(['check', '--ratchet'], '/repo').ratchet).toBe(true);
+    expect(parseArgs(['check'], '/repo').ratchet).toBe(false);
+  });
+});

@@ -34,9 +34,17 @@ export interface ReporterOptions {
    *
    * Reported as counts rather than as a list: the point of accepted debt is
    * that nobody has to read it every time. `stale` is the ratchet - debt that
-   * has been paid and can be struck from the file.
+   * has been paid and can be struck from the file - and `ratchet` says whether
+   * this run was asked to fail over it.
    */
-  readonly baseline?: { readonly source: string; readonly suppressed: number; readonly stale: number } | undefined;
+  readonly baseline?:
+    | {
+        readonly source: string;
+        readonly suppressed: number;
+        readonly stale: number;
+        readonly ratchet?: boolean | undefined;
+      }
+    | undefined;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -180,19 +188,23 @@ export function formatReport(result: AnalysisResult, options: ReporterOptions = 
   }
   lines.push(tally.join(` ${marks.separator} `));
 
+  // Under `--ratchet` a paid entry is a failure rather than a note, so it is
+  // painted and worded as one.
+  const ratcheted = ratchetFailed(baseline);
   if (baseline !== undefined && baseline.stale > 0) {
-    lines.push(
-      paint.dim(
-        `${baseline.stale} baseline ${plural(baseline.stale, 'entry', 'entries')} no longer ${
-          baseline.stale === 1 ? 'occurs' : 'occur'
-        } - tighten it: spec-graph check --record-baseline ${baseline.source}`,
-      ),
-    );
+    const text = `${baseline.stale} baseline ${plural(baseline.stale, 'entry', 'entries')} no longer ${
+      baseline.stale === 1 ? 'occurs' : 'occur'
+    } - tighten it: spec-graph check --record-baseline ${baseline.source}`;
+    lines.push(ratcheted ? `${paint.error(marks.error)} ${text}` : paint.dim(text));
   }
 
   lines.push(
-    result.ok
-      ? `${paint.hint(marks.hint === '>' ? 'ok' : '\u2714')} ${
+    ratcheted
+      ? `${paint.error(marks.error)} ${
+          result.ok ? 'the baseline is looser than the repository' : 'the specification graph is inconsistent'
+        }`
+      : result.ok
+        ? `${paint.hint(marks.hint === '>' ? 'ok' : '\u2714')} ${
           summary.errors + summary.warnings === 0
             ? 'the specification graph is consistent'
             : 'no errors - the specification graph holds'
@@ -254,6 +266,16 @@ function plural(count: number, word: string, plural?: string): string {
  * Deliberately flat and versioned: this is the contract a CI annotator or a
  * dashboard builds against, and it must be safe to add fields to it later.
  */
+/**
+ * True when a baseline was asked to ratchet and has slack left in it.
+ *
+ * Both reporters ask, because both have to agree with the exit code: a report
+ * that prints "ok" above a failing build is worse than no report.
+ */
+function ratchetFailed(baseline: ReporterOptions['baseline']): boolean {
+  return baseline !== undefined && baseline.ratchet === true && baseline.stale > 0;
+}
+
 export function formatJson(
   result: AnalysisResult,
   options: { escalated?: ReadonlySet<RuleId>; baseline?: ReporterOptions['baseline'] } = {},
@@ -262,7 +284,7 @@ export function formatJson(
   return `${JSON.stringify(
     {
       version: 1,
-      ok: result.ok,
+      ok: result.ok && !ratchetFailed(options.baseline),
       strict: escalated.size > 0,
       ...(options.baseline === undefined ? {} : { baseline: options.baseline }),
       summary: result.summary,

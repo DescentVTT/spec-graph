@@ -49,6 +49,15 @@ export interface CliOptions {
   readonly baseline: string | null;
   /** Where to write the current findings as accepted debt. */
   readonly recordBaseline: string | null;
+  /**
+   * Fail when the baseline allows something that no longer happens.
+   *
+   * The other side of the ratchet, and off by default for the reason ADR-0012
+   * gives: failing a build because somebody fixed something is a strange way to
+   * encourage them. A team that has decided its debt only goes one way asks for
+   * it explicitly, and then a dead exemption cannot outlive the defect.
+   */
+  readonly ratchet: boolean;
   /** Skip the repository configuration file entirely. */
   readonly noConfig: boolean;
   readonly format: 'human' | 'json';
@@ -108,6 +117,8 @@ OPTIONS
                           only what is new since. Missing file = accept nothing.
   --record-baseline <f>   Write today's findings to this file as accepted debt,
                           and exit 0 without judging them.
+  --ratchet               Also fail when a baseline entry no longer occurs, so
+                          a paid-off exemption cannot outlive the defect.
   --no-config             Ignore .spec-graph.json and the package.json key.
   --format human|json     Report format (default: human)
   --graph-format <fmt>    dot, mermaid or json (default: dot)
@@ -215,6 +226,7 @@ export function parseArgs(argv: readonly string[], cwd: string): CliOptions {
   let maxWarnings = -1;
   let strict = false;
   let baseline: string | null = null;
+  let ratchet = false;
   let recordBaseline: string | null = null;
   let selector: string | null = null;
   let help = false;
@@ -266,6 +278,9 @@ export function parseArgs(argv: readonly string[], cwd: string): CliOptions {
         break;
       case '--strict':
         strict = true;
+        break;
+      case '--ratchet':
+        ratchet = true;
         break;
       case '--explain':
         verbose = true;
@@ -368,6 +383,7 @@ export function parseArgs(argv: readonly string[], cwd: string): CliOptions {
     ignoreFamilies,
     historyPatterns,
     baseline,
+    ratchet,
     recordBaseline,
     noConfig,
     format,
@@ -540,20 +556,26 @@ export async function main(io: CliIO = {}): Promise<number> {
       }
 
       const source = options.baseline ?? file.baseline ?? null;
+      const ratchet = options.ratchet || file.ratchet === true;
       let reported = result;
-      let note: { source: string; suppressed: number; stale: number } | undefined;
+      let note: { source: string; suppressed: number; stale: number; ratchet: boolean } | undefined;
       if (source !== null) {
         const held = await readBaseline(underRoot(options.root, source), source);
         for (const problem of held.problems) err(`spec-graph: ${problem}\n`);
         const outcome = applyBaseline(result.graph, result.diagnostics, held.baseline);
         reported = withDiagnostics(result, outcome.kept);
-        note = { source, suppressed: outcome.suppressed, stale: outcome.stale.length };
-        if (options.verbose) {
+        note = { source, suppressed: outcome.suppressed, stale: outcome.stale.length, ratchet };
+        // Listed rather than counted when the run turns on them: a number is
+        // enough to know the file has slack, and not enough to strike it. Never
+        // in JSON, where the entries are already in the report and a stray line
+        // on stdout is the difference between parsing and not.
+        if (options.format !== 'json' && (options.verbose || (ratchet && outcome.stale.length > 0))) {
           for (const entry of outcome.stale) {
             out(`  paid: ${entry.rule} ${entry.document}${entry.subject === '' ? '' : ` "${entry.subject}"`}\n`);
           }
         }
       }
+      const looseBaseline = note !== undefined && note.ratchet && note.stale > 0;
 
       const baselineNote = note === undefined ? {} : { baseline: note };
       out(
@@ -561,7 +583,7 @@ export async function main(io: CliIO = {}): Promise<number> {
           ? formatJson(reported, { escalated, ...baselineNote })
           : `${formatReport(reported, { color, ascii, verbose: options.verbose, max: options.max, escalated, ...baselineNote })}\n`,
       );
-      if (!reported.ok) return EXIT_FAILED;
+      if (!reported.ok || looseBaseline) return EXIT_FAILED;
       if (options.maxWarnings >= 0 && reported.summary.warnings > options.maxWarnings) return EXIT_FAILED;
       return EXIT_OK;
     }

@@ -83,6 +83,39 @@ strike it:
 Reported, not failed. Failing a build because somebody fixed something is a
 strange way to encourage them.
 
+### The other side of it, for teams that asked
+
+*Amended 2026-09-10.* The paragraph above is the right default and it is not the
+whole answer, because it assumes somebody reads the line. In CI nobody does: a
+note on a green build is a line that scrolls past, and the exemption outlives the
+defect it was written for. A file that only ever gets shorter is the whole claim
+this ADR makes, and nothing was enforcing the "shorter".
+
+So the sharp edge exists, and it is opt-in:
+
+```bash
+spec-graph check --baseline .spec-graph-baseline.json --ratchet
+```
+
+With it, a declared finding that no longer occurs fails the build, named, with
+`--record-baseline` as the fix. Off by default for the reason above; on for a
+team that has decided its debt only moves one way. This is the same shape as
+`--strict` ([ADR-0006](0006-false-positives-cost-more.md) sets the quiet
+default, a flag lets a repository that wants sharpness have it), and it is why
+the sharpness belongs behind a flag rather than in the rule.
+
+Two things fall out of the decision and are worth stating:
+
+**The verdict follows the exit code.** A ratcheted failure over an otherwise
+clean graph reports `the baseline is looser than the repository`, and the JSON
+`ok` is `false`. A report that prints "ok" above a failing build is worse than
+no report at all.
+
+**The stale entries are named in the human report and counted in JSON.** The
+fix for either is `--record-baseline`, and the diff of that file is a better
+list than anything the reporter could print - it is the record of what was paid
+off, in review, next to the change that paid it.
+
 ### Details that are not details
 
 **Recording is not checking.** `--record-baseline` writes down what is wrong
@@ -126,15 +159,23 @@ finding. Rejected: it puts fifty markers into fifty documents to solve a problem
 that belongs to the repository's adoption date, and there is no way to see the
 whole debt at once or to watch it shrink.
 
-**Failing when the baseline is stale.** A true ratchet, and too sharp. The build
-would break for the person who fixed something, on a commit that improved the
-repository, and they would learn to stop.
+**Failing when the baseline is stale, by default.** A true ratchet, and too
+sharp to impose. The build would break for the person who fixed something, on a
+commit that improved the repository, and they would learn to stop. Available as
+`--ratchet` since 0.3.0 for teams that want it; still not the default, and for
+the same reason.
 
 ## Consequences
 
 A legacy repository can adopt spec-graph in one commit with CI green, and every
 specification written afterwards is checked in full. The debt is one file, in
-review, that only ever gets shorter.
+review, that only ever gets shorter - and under `--ratchet`, provably so.
+
+`--ratchet` has a cost worth knowing before turning it on: it fails on anything
+that makes an entry stop firing, and deleting a document is one of those. That
+is the point rather than a flaw, but it means the flag belongs to a repository
+that checks its whole corpus on every run, not to one whose patterns vary
+between invocations.
 
 The cost is that a finding suppressed by fingerprint can hide a genuinely
 different instance of the same rule between the same two documents. That is the

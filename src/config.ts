@@ -53,6 +53,8 @@ export interface SpecGraphConfig {
   readonly historyPatterns?: readonly string[] | undefined;
   /** Path to the accepted-debt baseline, relative to the root. See ADR-0012. */
   readonly baseline?: string | undefined;
+  /** Fail when a baseline entry no longer occurs. See ADR-0012. */
+  readonly ratchet?: boolean | undefined;
   readonly severities?: Partial<Record<RuleId, Severity>> | undefined;
   readonly strict?: boolean | undefined;
   readonly maxRelated?: number | undefined;
@@ -147,6 +149,11 @@ function readFields(raw: Record<string, unknown>, source: string): LoadedConfig 
     else config.strict = raw['strict'];
   }
 
+  if (raw['ratchet'] !== undefined) {
+    if (typeof raw['ratchet'] !== 'boolean') problems.push(`${source}: "ratchet" must be true or false`);
+    else config.ratchet = raw['ratchet'];
+  }
+
   if (raw['maxRelated'] !== undefined) {
     const value = raw['maxRelated'];
     if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) {
@@ -192,6 +199,7 @@ const KNOWN_KEYS: ReadonlySet<string> = new Set([
   'ignoreFamilies',
   'historyPatterns',
   'baseline',
+  'ratchet',
   'severities',
   'strict',
   'maxRelated',

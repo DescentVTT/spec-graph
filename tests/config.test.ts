@@ -38,6 +38,7 @@ describe('parsing a configuration', () => {
         ignoreFamilies: ['RFC'],
         severities: { 'self-reference': 'off' },
         strict: true,
+        ratchet: true,
         maxRelated: 3,
       }),
       'test',
@@ -51,6 +52,7 @@ describe('parsing a configuration', () => {
       ignoreFamilies: ['RFC'],
       severities: { 'self-reference': 'off' },
       strict: true,
+      ratchet: true,
       maxRelated: 3,
     });
   });
@@ -141,6 +143,7 @@ describe('finding a configuration', () => {
     expect(loadConfig(ROOT).config.strict).toBe(true);
 
     expect(parseConfig(mark + '{"strict":true}', 'x.json').problems).toEqual([]);
+    expect(parseConfig('{"ratchet":"yes"}', 'x.json').problems).toEqual(['x.json: "ratchet" must be true or false']);
   });
 
   it('falls back to the package.json key', async () => {
