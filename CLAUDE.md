@@ -40,11 +40,13 @@ Two thresholds are regression guards, set below the last measurement. They move
 accommodate a regression:
 
 - **Mutation score >= 70** (`break` in `stryker.config.mjs`). Two numbers, and
-  the difference matters: **73.32% on the hosted runner**, 77.16% over 7,720
-  mutants on a developer machine. The hosted one governs - it is where the build
-  fails. `perTest` attribution moves with worker count, with how many files are
-  mutated, and with the platform, by up to sixteen points on a single file; see
-  ADR-0007. The guard stays at 70 because ~300 mutants are detected by timeout,
+  the difference matters: **73.32% on the hosted runner** (last measured at
+  v0.2.0), 79.69% over 8,126 mutants on a developer machine. The hosted one
+  governs - it is where the build fails. `perTest` attribution moves with worker
+  count, with how many files are mutated, and with the platform, by up to
+  sixteen points on a single file - and two runs of *identical source* on one
+  machine moved nine untouched files by more than a point each, in both
+  directions. See ADR-0007. The guard stays at 70 because ~300 mutants are detected by timeout,
   and against the hosted figure that is only three points of margin.
 - **Coverage floors** in `vitest.config.ts`. Branches sits lowest on purpose;
   the remainder is defensive fallbacks and platform paths of which only one can

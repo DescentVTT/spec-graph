@@ -97,6 +97,14 @@ test strategy rests on everything between the edges being a pure function of
 text. Reasoning in
 [ADR-0015](docs/adr/0015-feedback-goes-where-the-tools-already-look.md).
 
+### Measured
+
+684 tests, and a mutation score of **79.69% over 8,126 mutants** - up from
+77.16% over 7,720. The guard stays at `break: 70`, because the same source
+measured twice on the same machine, with only test cases added between the runs,
+moved nine untouched files by more than a point each in both directions. See
+[ADR-0007](docs/adr/0007-mutation-testing.md).
+
 ## 0.2.3
 
 ### Fixed

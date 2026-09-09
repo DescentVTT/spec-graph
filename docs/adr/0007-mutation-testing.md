@@ -43,9 +43,9 @@ moves up as the measurement does: 60 against 63.31%, then 70 against 74.05%.
 
 ## Consequences
 
-The measured score is **77.16% over 7,720 mutants** at commit `6d92265`, on a
-developer machine. It has moved 48.11% → 60.6% → 63.31% → 74.05% → 74.73% →
-75.68% → 76.52% → 77.16% as the suite grew from 149 to 617 tests.
+The measured score is **79.69% over 8,126 mutants** at 0.3.0, on a developer
+machine. It has moved 48.11% → 60.6% → 63.31% → 74.05% → 74.73% → 75.68% →
+76.52% → 77.16% → 79.69% as the suite grew from 149 to 684 tests.
 
 **That number is a property of the measurement as much as of the code, and the
 figure the guard fires against is lower.** The same commit measured on the
@@ -68,6 +68,31 @@ A sixteen-point range on identical source. Concurrency cannot change which
 mutants a test kills, so what is moving is `perTest` attribution - which tests
 Stryker believes cover which mutants - and it moves with worker count, with how
 many files are mutated, and with the machine.
+
+0.3.0 measured it again, and cleanly. Two full runs, same machine, same
+settings, same 8,126 mutants - **nothing in `src/` changed between them**, only
+six test cases added. The total moved 80.00% → 79.69%, and underneath that
+nearly-still number:
+
+| file | run 1 | run 2 | move |
+| --- | ---: | ---: | ---: |
+| `rules.ts` | 81.32 | 76.56 | **-4.76** |
+| `paths.ts` | 94.59 | 90.54 | **-4.05** |
+| `report.ts` | 76.46 | 74.32 | -2.14 |
+| `markdown.ts` | 80.39 | 82.34 | +1.95 |
+| `runner.ts` | 91.77 | 94.30 | +2.53 |
+| `lifecycle.ts` | 75.58 | 78.68 | **+3.10** |
+
+Nine files moved a point or more, in both directions, and not one of them was
+touched. `paths.ts` is sixty lines of string handling that no added test goes
+near, and it lost four points. `markdown.ts`, the only file the new tests
+actually target, gained two - which is the one movement that means anything.
+
+This is the reason the practice in `CLAUDE.md` is worded the way it is. **A
+per-file drop is a question, not an answer**, and the way to answer it costs
+seconds: change the line by hand and see whether the suite goes red. All nine
+mutants the 0.3.0 work was chasing were confirmed killed that way, while the
+score they belong to went *down* by a third of a point.
 
 `perTest` stays, because `coverageAnalysis: all` runs the whole suite per mutant
 and the hosted run already takes 80 minutes of its 90-minute cap. The cost is
