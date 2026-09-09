@@ -172,3 +172,19 @@ describe('the exemption is stated once, so every rule inherits it', () => {
     expect(rules(files, asHistory('docs/journal/JOURNAL_2024.md'))).not.toContain('circular-delegation');
   });
 });
+
+describe('a record still answers for its citations', () => {
+  it('is reported for a front-matter key that declares no relation', () => {
+    // ADR-0011 keeps a record's obligations and lifecycle out of the report,
+    // not its references - and a key that declares nothing is a citation that
+    // did not happen.
+    const found = analyse(
+      {
+        'docs/adr/0001-a.md': '---\nid: ADR-0001\nstatus: accepted\n---\n\n# ADR-0001: A\n',
+        'JOURNAL_2026.md': '---\nid: JOURNAL-1\nsupercedes-by: ADR-0001\n---\n\n# Journal\n',
+      },
+      asHistory('JOURNAL_2026.md'),
+    ).diagnostics;
+    expect(found.map((d) => d.rule)).toEqual(['unknown-relation-key']);
+  });
+});

@@ -165,6 +165,10 @@ const REFERENCE_RULES: ReadonlySet<RuleId> = new Set<RuleId>([
   'broken-reference',
   'reference-outside-corpus',
   'ambiguous-reference',
+  // A key that declares no relation is a citation that did not happen, which a
+  // journal answers for as squarely as a link that goes nowhere. ADR-0011 keeps
+  // a record's obligations out of the report, not its references.
+  'unknown-relation-key',
 ]);
 
 /**
@@ -322,6 +326,10 @@ function misreadKeys(corpus: ResolvedCorpus, emit: Emit): void {
       message: `"${misread.key}" declares no relation`,
       at: misread.at,
       nodes: [misread.from],
+      // The key, so two misspellings in one document are two findings rather
+      // than one with a count of two - `nodes` names the document and nothing
+      // else here names which key.
+      target: misread.key,
       related: [],
       hint: `spell it ${misread.suggestion}, or move it out of front matter if it is not a relation`,
     }));

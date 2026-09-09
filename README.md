@@ -640,6 +640,9 @@ Twelve ADRs, which `spec-graph` validates on every CI run:
 - [ADR-0010 — Configuration belongs to the repository](docs/adr/0010-configuration-belongs-to-the-repository.md)
 - [ADR-0011 — A historical record is not a specification](docs/adr/0011-a-record-is-not-a-specification.md)
 - [ADR-0012 — A baseline is a ratchet, keyed on identity](docs/adr/0012-a-baseline-is-a-ratchet.md)
+- [ADR-0013 — When the scanner is unsure, it hands back prose](docs/adr/0013-the-scanner-hands-back-prose.md)
+- [ADR-0014 — A relation is spelled in both directions](docs/adr/0014-a-relation-is-spelled-both-ways.md)
+- [ADR-0015 — Feedback goes where the tools already look](docs/adr/0015-feedback-goes-where-the-tools-already-look.md)
 
 **Zero runtime dependencies.** Node 22+, native ESM, TypeScript strict with
 `noUncheckedIndexedAccess` and `exactOptionalPropertyTypes`. The Markdown

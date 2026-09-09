@@ -317,4 +317,11 @@ describe('front-matter keys that read as relations', () => {
   it('says nothing about a key it understood', () => {
     expect(check('depends-on: ADR-0001').diagnostics).toEqual([]);
   });
+
+  it('names the key, so two misspellings in one document are two findings', () => {
+    // The fingerprint a baseline and a SARIF consumer both key on. Without the
+    // key in it, both of these collapse into one entry with a count of two.
+    const found = check(['supercedes-by: ADR-0001', 'require-by: ADR-0001'].join('\n')).diagnostics;
+    expect(found.map((d) => d.target)).toEqual(['supercedes-by', 'require-by']);
+  });
 });
