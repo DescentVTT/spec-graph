@@ -323,7 +323,35 @@ interface Lookup {
   readonly near: readonly string[];
 }
 
+/**
+ * The same path with its percent-escapes read.
+ *
+ * `[Design](docs/my%20design.md)` is what a renderer, a documentation site and
+ * GitHub's own "copy link" all produce for a file with a space in its name, and
+ * it names a real file. Returns `null` when there was nothing to decode or when
+ * the escapes are malformed - `100%` in a path is not an escape sequence, and
+ * `decodeURIComponent` throws on it.
+ */
+function percentDecoded(target: string): string | null {
+  if (!target.includes('%')) return null;
+  try {
+    const decoded = decodeURIComponent(target);
+    return decoded === target ? null : decoded;
+  } catch {
+    return null;
+  }
+}
+
 function lookup(target: string, entry: ExtractedDocument, index: Index): Lookup {
+  const found = lookupExact(target, entry, index);
+  if (found.ids.length > 0) return found;
+  // Tried second and never first, so a repository holding a file whose name
+  // genuinely contains a percent escape keeps resolving by its written spelling.
+  const decoded = percentDecoded(target);
+  return decoded === null ? found : lookupExact(decoded, entry, index);
+}
+
+function lookupExact(target: string, entry: ExtractedDocument, index: Index): Lookup {
   if (looksLikePath(target)) {
     const resolved = resolveFrom(entry.document.path, target).toLowerCase();
     // Naming the file exactly is never ambiguous, whatever else is spelled the

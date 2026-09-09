@@ -558,6 +558,64 @@ describe('the baseline', () => {
   });
 });
 
+describe('SARIF', () => {
+  it('reports the findings in the shape a code-scanning uploader expects', async () => {
+    const sarif = await run('check', '--root', LEGACY, '--no-config', '--format', 'sarif');
+    expect(sarif.code).toBe(EXIT_FAILED);
+    const report = JSON.parse(sarif.out) as {
+      version: string;
+      runs: {
+        tool: { driver: { name: string; rules: { id: string }[] } };
+        results: {
+          ruleId: string;
+          level: string;
+          locations: { physicalLocation: { artifactLocation: { uri: string }; region: { startLine: number } } }[];
+          partialFingerprints: { specGraphIdentity: string };
+        }[];
+      }[];
+    };
+    expect(report.version).toBe('2.1.0');
+    const [only] = report.runs;
+    expect(only?.tool.driver.name).toBe('spec-graph');
+    expect(only?.results.length).toBeGreaterThan(0);
+
+    const first = only?.results[0];
+    expect(['error', 'warning', 'note']).toContain(first?.level);
+    // Repository-relative and POSIX, which is what an uploader resolves against.
+    expect(first?.locations[0]?.physicalLocation.artifactLocation.uri).not.toContain(String.fromCharCode(92));
+    expect(first?.locations[0]?.physicalLocation.region.startLine).toBeGreaterThan(0);
+
+    // The driver describes this run, not the tool: only the rules that fired.
+    const fired = new Set(only?.results.map((result) => result.ruleId));
+    expect(only?.tool.driver.rules.map((rule) => rule.id).sort()).toEqual([...fired].sort());
+  });
+
+  it('fingerprints a finding the way a baseline does, so neither drifts on an edit', async () => {
+    const before = await run('check', '--root', LEGACY, '--no-config', '--format', 'sarif');
+    const prints = (text: string) =>
+      (JSON.parse(text) as { runs: { results: { partialFingerprints: { specGraphIdentity: string } }[] }[] }).runs[0]
+        ?.results.map((result) => result.partialFingerprints.specGraphIdentity);
+    // No line number in it, by construction: that is the whole point of the
+    // identity ADR-0012 keys on, and it is what lets a consumer follow one
+    // finding across commits.
+    for (const print of prints(before.out) ?? []) expect(print).not.toMatch(/:\d+/);
+    expect(prints(before.out)?.[0]).toMatch(/^[a-z-]+\//);
+  });
+
+  it('is byte-identical between runs', async () => {
+    const first = await run('check', '--root', LEGACY, '--no-config', '--format', 'sarif');
+    const second = await run('check', '--root', LEGACY, '--no-config', '--format', 'sarif');
+    // No timestamp, no absolute path, no run id. A file that differs when
+    // nothing did is a file nobody can diff.
+    expect(first.out).toBe(second.out);
+  });
+
+  it('belongs to check, and says so rather than falling back', () => {
+    expect(() => parseArgs(['graph', '--format', 'sarif'], '/repo')).toThrow(UsageError);
+    expect(() => parseArgs(['check', '--format', 'sarif'], '/repo')).not.toThrow();
+  });
+});
+
 describe('the other side of the ratchet', () => {
   const FILE = '.tmp-ratchet.json';
   const path = `${LEGACY}/${FILE}`;

@@ -11,10 +11,12 @@
  * terminal cannot render them.
  */
 
+import { fingerprintOf } from './baseline.js';
 import type { SpecGraph } from './graph.js';
 import { formatRef } from './source.js';
+import { DEFAULT_SEVERITIES, RULE_DESCRIPTIONS, RULE_IDS } from './rules.js';
 import type { AnalysisResult } from './runner.js';
-import type { Diagnostic, Edge, RuleId, Severity, SpecNode } from './types.js';
+import type { Diagnostic, Edge, RuleId, Severity, SourceRef, SpecNode } from './types.js';
 
 export interface ReporterOptions {
   readonly color?: boolean | undefined;
@@ -274,6 +276,122 @@ function plural(count: number, word: string, plural?: string): string {
  */
 function ratchetFailed(baseline: ReporterOptions['baseline']): boolean {
   return baseline !== undefined && baseline.ratchet === true && baseline.stale > 0;
+}
+
+/* -------------------------------------------------------------------------- */
+/* SARIF                                                                      */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The static-analysis interchange format, for the tools that already read it.
+ *
+ * The reason to emit it is not the format, it is what consumes the format:
+ * GitHub code scanning turns a SARIF upload into annotations on the diff, and
+ * an editor turns it into the problems pane, neither of which needs a line of
+ * spec-graph-specific integration.
+ *
+ * One field earns the whole exercise. `partialFingerprints` is how a consumer
+ * tracks a finding across commits without keying on a line number, and
+ * spec-graph already has exactly that identifier for exactly that reason - the
+ * `rule/document/subject` triple a baseline is keyed on (ADR-0012). The two
+ * problems turned out to be the same problem, so the answer is the same answer.
+ *
+ * Deterministic and timestamp-free, like every other output here. Nothing about
+ * a run that has the same findings should produce a different file.
+ */
+export function formatSarif(
+  result: AnalysisResult,
+  graph: SpecGraph,
+  options: { version?: string | undefined; escalated?: ReadonlySet<RuleId> | undefined } = {},
+): string {
+  const escalated = options.escalated ?? EMPTY_RULES;
+  const fired = RULE_IDS.filter((id) => result.diagnostics.some((diagnostic) => diagnostic.rule === id));
+  return `${JSON.stringify(
+    {
+      $schema: 'https://json.schemastore.org/sarif-2.1.0.json',
+      version: '2.1.0',
+      runs: [
+        {
+          tool: {
+            driver: {
+              name: 'spec-graph',
+              informationUri: 'https://github.com/DescentVTT/spec-graph',
+              ...(options.version === undefined ? {} : { version: options.version, semanticVersion: options.version }),
+              // Only the rules that fired. A driver listing all of them
+              // describes the tool; this file describes the run.
+              rules: fired.map((id) => ({
+                id,
+                shortDescription: { text: RULE_DESCRIPTIONS[id] },
+                defaultConfiguration: { level: sarifLevel(DEFAULT_SEVERITIES[id]) },
+              })),
+            },
+          },
+          results: result.diagnostics.map((diagnostic) => {
+            const print = fingerprintOf(graph, diagnostic);
+            return {
+              ruleId: diagnostic.rule,
+              level: sarifLevel(diagnostic.severity),
+              message: { text: `${diagnostic.message}. ${diagnostic.hint}` },
+              locations: [sarifLocation(diagnostic.at)],
+              ...(diagnostic.related.length === 0
+                ? {}
+                : {
+                    relatedLocations: diagnostic.related.map((entry) => ({
+                      ...sarifLocation(entry.at),
+                      message: { text: entry.note },
+                    })),
+                  }),
+              partialFingerprints: {
+                specGraphIdentity: `${diagnostic.rule}/${print.document}/${print.subject}`,
+              },
+              properties: {
+                nodes: diagnostic.nodes,
+                target: diagnostic.target,
+                // A finding that is only an error because of a flag says so
+                // here too, so a reviewer reading an annotation is not misled.
+                escalated: escalated.has(diagnostic.rule),
+              },
+            };
+          }),
+        },
+      ],
+    },
+    null,
+    2,
+  )}\n`;
+}
+
+function sarifLevel(severity: Severity): string {
+  switch (severity) {
+    case 'error':
+      return 'error';
+    case 'warn':
+      return 'warning';
+    case 'info':
+      return 'note';
+    default:
+      return 'none';
+  }
+}
+
+function sarifLocation(at: SourceRef): {
+  physicalLocation: {
+    artifactLocation: { uri: string };
+    region: { startLine: number; startColumn: number; endLine: number; endColumn: number };
+  };
+} {
+  return {
+    physicalLocation: {
+      // Already repository-relative and POSIX, which is what SARIF asks for.
+      artifactLocation: { uri: at.file },
+      region: {
+        startLine: at.span.start.line,
+        startColumn: at.span.start.column,
+        endLine: at.span.end.line,
+        endColumn: at.span.end.column,
+      },
+    },
+  };
 }
 
 export function formatJson(

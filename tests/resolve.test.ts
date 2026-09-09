@@ -309,3 +309,34 @@ describe('a path spelling is matched against paths, not basenames', () => {
     expect(edgesOf(edges, 'references').map((edge) => edge.to)).toEqual(['ADR-0001']);
   });
 });
+
+describe('percent-escaped destinations', () => {
+  const A = '---\nid: ADR-0001\nstatus: accepted\n---\n\n# ADR-0001: Target\n';
+  const citing = (id: string, target: string) =>
+    `---\nid: ${id}\nstatus: accepted\n---\n\n# ${id}\n\nDepends on [d](${target}).\n`;
+
+  it('reads the escapes when the written spelling names nothing', () => {
+    // What a renderer, a docs site and GitHub's "copy link" all produce for a
+    // file with a space in its name.
+    const { edges, dangling } = resolve({ 'my design.md': A, 'B.md': citing('ADR-0002', 'my%20design.md') });
+    expect(dangling).toEqual([]);
+    expect(edgesOf(edges, 'depends-on').map((e) => e.to)).toEqual(['ADR-0001']);
+  });
+
+  it('prefers the spelling as written', () => {
+    // A file whose name really does contain a percent escape keeps winning,
+    // which is why the decode is a fallback and not a normalisation.
+    const { edges, dangling } = resolve({
+      'a%20b.md': A,
+      'a b.md': '---\nid: ADR-0003\nstatus: accepted\n---\n\n# ADR-0003\n',
+      'C.md': citing('ADR-0002', 'a%20b.md'),
+    });
+    expect(dangling).toEqual([]);
+    expect(edgesOf(edges, 'depends-on').map((e) => e.to)).toEqual(['ADR-0001']);
+  });
+
+  it('leaves a stray percent alone rather than throwing', () => {
+    const { dangling } = resolve({ 'B.md': citing('ADR-0002', 'docs/100%-uptime.md') });
+    expect(dangling.map((d) => d.target)).toEqual(['docs/100%-uptime.md']);
+  });
+});

@@ -443,6 +443,39 @@ fails, each named, with `--record-baseline` as the fix — and the diff of that
 file is the record of what was paid off. See
 [ADR-0012](docs/adr/0012-a-baseline-is-a-ratchet.md).
 
+## In CI
+
+The exit code is the contract: `0` clean, `1` findings, `2` the tool could not
+run. That is all most pipelines need.
+
+For annotations on the diff rather than a line in a log, emit SARIF and hand it
+to the uploader that already exists:
+
+```yaml
+- run: npx spec-graph --format sarif > spec-graph.sarif
+  continue-on-error: true
+- uses: github/codeql-action/upload-sarif@v3
+  with:
+    sarif_file: spec-graph.sarif
+```
+
+Findings land as comments on the changed lines, and they persist across commits
+without drifting, because the `partialFingerprints` spec-graph writes are the
+same identity a baseline is keyed on — the rule, the specification, and the
+citation, with no line number in it (ADR-0012).
+
+`--format json` is the other machine-readable output, and the one to parse if
+you are building something of your own: it carries the baseline note, the
+summary and the per-file detail that SARIF has nowhere to put.
+
+**There is no `--watch`.** A full run on this repository takes 60 ms, so the
+loop that would justify a resident process is one line of shell, and it belongs
+to whatever the developer already uses rather than to this tool:
+
+```bash
+npx spec-graph --format json | jq -r '.summary'
+```
+
 ## Configuration
 
 Anything you repeat on every run belongs to the repository rather than to the
@@ -511,7 +544,7 @@ spec-graph rules [--explain]         List the diagnostics.
 --record-baseline <f>   Write today's findings as accepted debt, exit 0
 --ratchet               Also fail when a baseline entry no longer occurs
 --no-config             Ignore .spec-graph.json and the package.json key
---format human|json     Report format
+--format <fmt>          human | json | sarif
 --graph-format <fmt>    dot | mermaid | json
 --documents-only        Hide items; their relations lift onto their documents
 --rule <id>=<severity>  error | warn | info | off (repeatable)

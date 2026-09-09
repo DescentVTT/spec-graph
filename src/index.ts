@@ -88,6 +88,7 @@ export {
   formatGraph,
   formatJson,
   formatReport,
+  formatSarif,
   shouldUseAscii,
   shouldUseColor,
 } from './report.js';

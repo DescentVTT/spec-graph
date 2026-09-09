@@ -13,7 +13,15 @@ import { applyBaseline, EMPTY_BASELINE, formatBaseline, parseBaseline, type Base
 import { loadConfig, type SpecGraphConfig } from './config.js';
 import { underRoot } from './glob.js';
 import { analyse, DEFAULT_PATTERNS, withDiagnostics, type AnalyseOptions } from './runner.js';
-import { formatGraph, formatJson, formatReport, shouldUseAscii, shouldUseColor, type GraphFormat } from './report.js';
+import {
+  formatGraph,
+  formatJson,
+  formatReport,
+  formatSarif,
+  shouldUseAscii,
+  shouldUseColor,
+  type GraphFormat,
+} from './report.js';
 import { DEFAULT_SEVERITIES, resolveStrict, RULE_DESCRIPTIONS, RULE_IDS, RULE_QUERIES } from './rules.js';
 import { formatRef } from './source.js';
 import { execute, parseQuery, QueryError, renderMatch, type Match } from './select.js';
@@ -60,7 +68,7 @@ export interface CliOptions {
   readonly ratchet: boolean;
   /** Skip the repository configuration file entirely. */
   readonly noConfig: boolean;
-  readonly format: 'human' | 'json';
+  readonly format: 'human' | 'json' | 'sarif';
   readonly graphFormat: GraphFormat;
   readonly severities: Partial<Record<RuleId, Severity>>;
   readonly color: boolean | null;
@@ -120,7 +128,9 @@ OPTIONS
   --ratchet               Also fail when a baseline entry no longer occurs, so
                           a paid-off exemption cannot outlive the defect.
   --no-config             Ignore .spec-graph.json and the package.json key.
-  --format human|json     Report format (default: human)
+  --format <fmt>          human, json, or sarif - the interchange format
+                          GitHub code scanning and editors already read
+                          (default: human)
   --graph-format <fmt>    dot, mermaid or json (default: dot)
   --documents-only        Leave items out of the exported graph
   --rule <id>=<severity>  Override one rule: error, warn, info or off. Repeatable.
@@ -216,7 +226,7 @@ export function parseArgs(argv: readonly string[], cwd: string): CliOptions {
   let noConfig = false;
   const severities: Partial<Record<RuleId, Severity>> = {};
   let root = cwd;
-  let format: 'human' | 'json' = 'human';
+  let format: 'human' | 'json' | 'sarif' = 'human';
   let graphFormat: GraphFormat = 'dot';
   let color: boolean | null = null;
   let ascii: boolean | null = null;
@@ -322,8 +332,8 @@ export function parseArgs(argv: readonly string[], cwd: string): CliOptions {
         break;
       case '--format': {
         const value = next(arg, i);
-        if (value !== 'human' && value !== 'json') {
-          throw new UsageError(`--format must be human or json, got "${value}"`);
+        if (value !== 'human' && value !== 'json' && value !== 'sarif') {
+          throw new UsageError(`--format must be human, json or sarif, got "${value}"`);
         }
         format = value;
         i += 1;
@@ -367,6 +377,13 @@ export function parseArgs(argv: readonly string[], cwd: string): CliOptions {
       default:
         throw new UsageError(`unknown option "${arg}"\n  run "spec-graph --help" to see the available options`);
     }
+  }
+
+  // SARIF is a report about findings, and only `check` produces those. Falling
+  // back to JSON would hand a pipeline something its uploader rejects with a
+  // message about a schema rather than about the command that was run.
+  if (format === 'sarif' && command !== 'check' && !help && !version) {
+    throw new UsageError(`--format sarif reports findings, so it belongs to check, not to ${command}`);
   }
 
   if (command === 'query' && selector === null && !help && !version) {
@@ -524,7 +541,7 @@ export async function main(io: CliIO = {}): Promise<number> {
     case 'query': {
       try {
         const matches = execute(result.graph, parseQuery(options.selector as string));
-        out(renderMatches(matches, options.format, result.graph.nodes.size));
+        out(renderMatches(matches, options.format === 'json' ? 'json' : 'human', result.graph.nodes.size));
         return matches.length > 0 ? EXIT_OK : EXIT_FAILED;
       } catch (error) {
         if (error instanceof QueryError) {
@@ -569,7 +586,7 @@ export async function main(io: CliIO = {}): Promise<number> {
         // enough to know the file has slack, and not enough to strike it. Never
         // in JSON, where the entries are already in the report and a stray line
         // on stdout is the difference between parsing and not.
-        if (options.format !== 'json' && (options.verbose || (ratchet && outcome.stale.length > 0))) {
+        if (options.format === 'human' && (options.verbose || (ratchet && outcome.stale.length > 0))) {
           for (const entry of outcome.stale) {
             out(`  paid: ${entry.rule} ${entry.document}${entry.subject === '' ? '' : ` "${entry.subject}"`}\n`);
           }
@@ -579,9 +596,11 @@ export async function main(io: CliIO = {}): Promise<number> {
 
       const baselineNote = note === undefined ? {} : { baseline: note };
       out(
-        options.format === 'json'
-          ? formatJson(reported, { escalated, ...baselineNote })
-          : `${formatReport(reported, { color, ascii, verbose: options.verbose, max: options.max, escalated, ...baselineNote })}\n`,
+        options.format === 'sarif'
+          ? formatSarif(reported, reported.graph, { version: await readVersion(), escalated })
+          : options.format === 'json'
+            ? formatJson(reported, { escalated, ...baselineNote })
+            : `${formatReport(reported, { color, ascii, verbose: options.verbose, max: options.max, escalated, ...baselineNote })}\n`,
       );
       if (!reported.ok || looseBaseline) return EXIT_FAILED;
       if (options.maxWarnings >= 0 && reported.summary.warnings > options.maxWarnings) return EXIT_FAILED;
