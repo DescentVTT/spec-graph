@@ -39,7 +39,15 @@ citing document's family, because a repository holding both `adr/0007` and
 reporting nothing.
 
 **Two candidates is worse than none.** A reference matching several documents is
-reported as ambiguous rather than bound to whichever was indexed first.
+reported as ambiguous rather than bound to whichever was indexed first. This
+holds for paths as well as for names, and the distinction that makes it workable
+is exact against inexact. A file's literal path has one owner and is never
+ambiguous. The spellings that address a file without naming it - the extension
+dropped, a directory standing for its README - can belong to more than one:
+`docs/A` is both `docs/A.md` and `docs/A/README.md`, and only the author knows
+which was meant. Through 0.2.2 those spellings shared an index that held one id
+per key, so a second claimant did not make the link ambiguous, it overwrote the
+first.
 
 Link constructs are blanked before prose is scanned for bare identifiers, so a
 citation written as `[ADR-7](https://example.com/adr-7)` yields one reference

@@ -230,3 +230,62 @@ describe('documentOf', () => {
     expect(documentOf('ADR-0007')).toBe('ADR-0007');
   });
 });
+
+describe('a path spelled inexactly', () => {
+  // `docs/A` is two things at once: `docs/A.md` with its extension dropped, and
+  // `docs/A/README.md` standing for its directory. The index that answered such
+  // spellings kept a single id per key, so a collision was an overwrite and the
+  // link went to whichever file happened to be indexed last, silently.
+  const DOC = ['# ADR-0001: The doc', '', '## Status', '', 'accepted'].join('\n');
+  const INDEX = ['# ADR-0002: The folder index', '', '## Status', '', 'accepted'].join('\n');
+  const cite = (link: string): string => ['# B', '', `See ${link}.`].join('\n');
+
+  const both = (link: string) => resolve({ 'docs/A.md': DOC, 'docs/A/README.md': INDEX, 'B.md': cite(link) });
+
+  it('is reported as ambiguous when two files answer to it', () => {
+    const { dangling } = both('[x](docs/A)');
+    expect(dangling).toHaveLength(1);
+    expect(dangling[0]?.reason).toBe('ambiguous');
+    expect([...(dangling[0]?.candidates ?? [])].sort()).toEqual(['ADR-0001', 'ADR-0002']);
+  });
+
+  it('never makes naming the file exactly ambiguous', () => {
+    // The literal path has one owner by construction, whatever else is spelled
+    // the same way, so an exact link must not be dragged into the ambiguity.
+    expect(edgesOf(both('[y](docs/A.md)').edges, 'references').map((edge) => edge.to)).toEqual(['ADR-0001']);
+    expect(edgesOf(both('[z](docs/A/README.md)').edges, 'references').map((edge) => edge.to)).toEqual(['ADR-0002']);
+  });
+
+  it('still resolves silently when only one file answers to it', () => {
+    // The id comes from the directory here, not from the H1: that is what makes
+    // `docs/adr/0007` the natural way to write the link in the first place.
+    const parent = resolve({ 'docs/adr/0007/README.md': DOC, 'B.md': cite('[a](docs/adr/0007)') });
+    expect(parent.dangling).toEqual([]);
+    expect(edgesOf(parent.edges, 'references').map((edge) => edge.to)).toEqual(['ADR-0007']);
+
+    const stem = resolve({ 'docs/A.md': DOC, 'B.md': cite('[b](docs/A)') });
+    expect(stem.dangling).toEqual([]);
+    expect(edgesOf(stem.edges, 'references').map((edge) => edge.to)).toEqual(['ADR-0001']);
+  });
+
+  it('is ambiguous when one directory holds both a README and an index', () => {
+    const { dangling } = resolve({
+      'docs/A/README.md': DOC,
+      'docs/A/index.md': INDEX,
+      'B.md': cite('[c](docs/A)'),
+    });
+    expect(dangling[0]?.reason).toBe('ambiguous');
+  });
+
+  it('says nothing about an ambiguity nobody wrote down', () => {
+    // Prose is inferred, not declared. An identifier picked out of a sentence
+    // that turns out to name two files is not a mistake the author made, and
+    // reporting it is the false positive ADR-0006 exists to prevent.
+    const { dangling } = resolve({
+      'docs/A.md': DOC,
+      'docs/A/README.md': INDEX,
+      'B.md': ['# B', '', 'This depends on docs/A for its ordering.'].join('\n'),
+    });
+    expect(dangling).toEqual([]);
+  });
+});

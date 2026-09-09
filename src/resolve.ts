@@ -72,7 +72,14 @@ export interface ResolvedCorpus {
 interface Index {
   readonly byId: Map<string, string>;
   readonly byAlias: Map<string, Set<string>>;
+  /** The literal path of a file. Unique: no two files share one. */
   readonly byPath: Map<string, string>;
+  /**
+   * Spellings that address a file without naming it exactly - the extension
+   * dropped, a directory standing for its README. Several files can answer to
+   * one of those, so this is a set, exactly as `byAlias` is.
+   */
+  readonly byPathAlias: Map<string, Set<string>>;
   readonly byFamilyNumber: Map<string, Set<string>>;
   readonly families: Set<string>;
   readonly anchors: Map<string, ReadonlySet<string>>;
@@ -181,6 +188,7 @@ function buildIndex(extracted: readonly ExtractedDocument[]): Index {
     byId: new Map(),
     byAlias: new Map(),
     byPath: new Map(),
+    byPathAlias: new Map(),
     byFamilyNumber: new Map(),
     families: new Set(),
     anchors: new Map(),
@@ -210,7 +218,12 @@ function buildIndex(extracted: readonly ExtractedDocument[]): Index {
     // ADR-0009 said a region does not claim the file's path; this is the index
     // where that had to be true.
     if (entry.containerId === null) {
-      for (const path of pathKeys(entry.document.path)) index.byPath.set(path, id);
+      index.byPath.set(entry.document.path.toLowerCase(), id);
+      for (const spelling of pathAliases(entry.document.path)) {
+        const set = index.byPathAlias.get(spelling) ?? new Set<string>();
+        set.add(id);
+        index.byPathAlias.set(spelling, set);
+      }
     }
 
     if (entry.identity.family !== null && entry.identity.number !== null) {
@@ -227,9 +240,9 @@ function buildIndex(extracted: readonly ExtractedDocument[]): Index {
   return index;
 }
 
-/** Every spelling of a path that a link might use. */
-function pathKeys(path: string): string[] {
-  const keys = new Set<string>([path.toLowerCase()]);
+/** Every spelling of a path that addresses a file without naming it exactly. */
+function pathAliases(path: string): string[] {
+  const keys = new Set<string>();
   const extension = extnamePosix(path);
   if (extension.length > 0) keys.add(path.slice(0, path.length - extension.length).toLowerCase());
   // `docs/adr/0007/README.md` is also addressed as `docs/adr/0007`.
@@ -238,6 +251,10 @@ function pathKeys(path: string): string[] {
     const parent = path.slice(0, path.length - base.length - 1);
     if (parent.length > 0) keys.add(parent.toLowerCase());
   }
+  // A file never addresses itself inexactly. Leaving this in would let a
+  // contrived name - `docs/a.md.md`, whose stem is another file's whole path -
+  // make an exact link look ambiguous.
+  keys.delete(path.toLowerCase());
   return [...keys];
 }
 
@@ -306,8 +323,17 @@ interface Lookup {
 function lookup(target: string, entry: ExtractedDocument, index: Index): Lookup {
   if (looksLikePath(target)) {
     const resolved = resolveFrom(entry.document.path, target).toLowerCase();
+    // Naming the file exactly is never ambiguous, whatever else is spelled the
+    // same way.
     const byPath = index.byPath.get(resolved);
     if (byPath) return { ids: [byPath], near: [] };
+    // An inexact spelling can belong to more than one file: `docs/A` is both
+    // `docs/A.md` with its extension dropped and `docs/A/README.md` standing
+    // for its directory. Handing back every claimant makes that an
+    // ambiguous-reference the author can settle, rather than a silent pick of
+    // whichever happened to be indexed last.
+    const spelled = index.byPathAlias.get(resolved);
+    if (spelled && spelled.size > 0) return { ids: [...spelled], near: [] };
     // A path may still be spelled as an identifier in a nested folder layout.
     const stem = basenamePosix(resolved);
     const byStem = index.byAlias.get(normaliseRef(stem.replace(/\.[^.]+$/, '')));

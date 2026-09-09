@@ -3,6 +3,32 @@
 Notable changes, newest first. Versions follow [semver](https://semver.org):
 a patch fixes behaviour without asking anything of a repository that upgrades.
 
+## 0.2.3
+
+### Fixed
+
+**A path spelled without naming a file exactly could resolve to the wrong file.**
+`docs/A` is two things at once - `docs/A.md` with its extension dropped, and
+`docs/A/README.md` standing for its directory - and the index answering such
+spellings held one id per key. A second claimant therefore did not make the link
+ambiguous; it overwrote the first, and the link went to whichever file was
+indexed last.
+
+[ADR-0004](docs/adr/0004-reference-resolution.md) has always said two candidates
+is worse than none, and a reference matching several documents is reported as
+ambiguous rather than bound to whichever was indexed first. That now holds for
+paths too.
+
+Naming a file exactly is never ambiguous, whatever else is spelled the same way,
+and a spelling only one file answers to still resolves in silence - so
+`docs/adr/0007` addressing `docs/adr/0007/README.md` is unchanged.
+
+**This can surface a new warning on upgrade**, in the one situation where it is
+earned: a deliberate link written as a path that genuinely names two files. It
+is a warning rather than an error, it lists both candidates, and prose that
+happens to mention such a path stays silent, because an ambiguity nobody wrote
+down is not a mistake anybody made.
+
 ## 0.2.2
 
 ### Fixed
