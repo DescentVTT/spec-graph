@@ -267,6 +267,38 @@ still a relation in the graph no matter what you exclude — not even
 `--ignore-ref "*"` can delete one. See
 [ADR-0008](docs/adr/0008-wiki-links-carry-no-path.md).
 
+#### A gap that is deliberate
+
+Real filing histories have holes: an ADR number reserved and then withdrawn, a
+document that was folded into another before it was ever committed. Something
+still cites it, and the citation is not a mistake.
+
+There are two mechanisms and the difference is what you are declaring.
+
+**The target is never going to exist** — `ADR-0006` was withdrawn before filing.
+That is a fact about the repository, so declare it once in
+`.spec-graph.json`:
+
+```json
+{ "ignoreReferences": ["ADR-0006"] }
+```
+
+Every citation of it stays quiet, wherever it is written, forever. A glob is
+available and rarely what you want here: `ADR-0006` names one target exactly.
+
+**This particular citation is accepted for now** — it should resolve, one day it
+will, and until then the build should not stop. That is debt, not a fact, and it
+belongs in the baseline, keyed to the one document and the one target:
+
+```json
+{ "rule": "broken-reference", "document": "ADR-0004", "subject": "docs/plans/x.md", "count": 1 }
+```
+
+The same citation from a different document is still reported, and `--ratchet`
+makes the entry disappear the day it is paid. Reach for the first when the
+absence is permanent, the second when it is temporary — and if you cannot say
+which, it is the second.
+
 ### Relations
 
 Relations are read from front matter, from link context, and from explicit
