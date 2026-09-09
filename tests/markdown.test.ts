@@ -120,6 +120,31 @@ describe('code masking', () => {
     }
   });
 
+  it('opens a raw-text block only at the start of a line', () => {
+    // The case that must not match. A sentence mentioning the tag would
+    // otherwise swallow every citation below it, to the end of the document.
+    const md = ['Use the <script> tag to embed [one](one.md).', '', '[two](two.md)'].join('\n');
+    expect(targets(md)).toEqual(['one.md', 'two.md']);
+  });
+
+  it('opens one that is indented, as the spec allows', () => {
+    const md = ['   <pre>', '[fake](fake.md)', '   </pre>', '', '[real](real.md)'].join('\n');
+    expect(targets(md)).toEqual(['real.md']);
+  });
+
+  it('opens one whose tag ends the line', () => {
+    const md = ['<script', 'type="module">', '[fake](fake.md)', '</script>', '[real](real.md)'].join('\n');
+    expect(targets(md)).toEqual(['real.md']);
+  });
+
+  it('does not let a raw-text tag inside a fence escape it', () => {
+    // Already masked as code either way. What matters is the unclosed one: read
+    // as an opening tag it would run to the end of the document, taking every
+    // citation after the fence with it.
+    const md = ['```html', '<script>', '```', '', '[real](real.md)'].join('\n');
+    expect(targets(md)).toEqual(['real.md']);
+  });
+
   it('leaves HTML whose content is Markdown alone', () => {
     // A decision written inside a collapsed section is still a decision, and
     // `<div>` wrappers are how a repository centres a diagram.
@@ -283,6 +308,13 @@ describe('links', () => {
     // `[design][one]` renders literally when nothing defines `one`, so reading it
     // as a citation invents a reference - and then reports it as broken.
     expect(targets('See [design][one] and [alone].')).toEqual([]);
+  });
+
+  it('reads a collapsed reference through the label it repeats', () => {
+    // `[label][]` has an empty reference, so the label is both the text and
+    // the key. Reading the empty half as the key resolves nothing.
+    const md = ['[adr3][] and [x][adr3]', '', '[adr3]: ../adr/0003.md'].join('\n');
+    expect(targets(md)).toEqual(['../adr/0003.md', '../adr/0003.md', '../adr/0003.md']);
   });
 
   it('takes the first definition of a repeated label, as CommonMark does', () => {

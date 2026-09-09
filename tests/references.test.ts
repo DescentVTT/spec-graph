@@ -314,8 +314,19 @@ describe('front-matter keys that read as relations', () => {
     expect(check('description: ADR-0001 explains why\nauthors: ADR-0001').diagnostics).toEqual([]);
   });
 
-  it('says nothing about a key it understood', () => {
+  it('says nothing about a key it understood, near-miss or not', () => {
+    // `supersedes` is one edit from `supercedes`, which is also a key. A known
+    // key must be settled before the near-miss gate is reached, or the
+    // vocabulary reports itself.
+    // `supersedes` also retires the target, which is a finding of its own -
+    // what matters here is that the key itself is never questioned.
+    expect(check('supersedes: ADR-0001').diagnostics.map((d) => d.rule)).not.toContain('unknown-relation-key');
     expect(check('depends-on: ADR-0001').diagnostics).toEqual([]);
+  });
+
+  it('needs only one value to be a citation, not all of them', () => {
+    const found = check("supercedes-by: [draft, ADR-0001]").diagnostics;
+    expect(found.map((d) => d.rule)).toEqual(['unknown-relation-key']);
   });
 
   it('names the key, so two misspellings in one document are two findings', () => {

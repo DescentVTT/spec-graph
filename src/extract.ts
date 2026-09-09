@@ -269,6 +269,10 @@ function misreadRelationKeys(
  * four ways, and which one a repository uses is decided by whatever wrote the
  * front matter first. Dropping every separator collapses them - the YAML reader
  * has already lower-cased the key, which is what makes camel case fold too.
+ *
+ * Which case this folds to is arbitrary and no test pins it: both sides of every
+ * comparison come through here, so upper would work exactly as well. Asserting
+ * on it would be asserting on the implementation.
  */
 export function foldRelationKey(key: string): string {
   return key.replace(/[^a-z0-9]/gi, '').toLowerCase();

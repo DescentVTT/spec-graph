@@ -382,6 +382,18 @@ describe('near-miss keys', () => {
     expect(withinOneEdit('dependson', 'depnedson')).toBe(true);
   });
 
+  it('needs the two differences to be an actual swap', () => {
+    // Two substitutions are two edits however adjacent they are, and a swap of
+    // characters that are not adjacent is not a slip of the finger.
+    expect(withinOneEdit('abcd', 'axyd')).toBe(false);
+    expect(withinOneEdit('abcd', 'dbca')).toBe(false);
+    expect(withinOneEdit('abcde', 'bacdx')).toBe(false);
+    // In a swap both characters move. One landing where the other's neighbour
+    // was is two substitutions that happen to share a letter.
+    expect(withinOneEdit('ab', 'bc')).toBe(false);
+    expect(withinOneEdit('ab', 'za')).toBe(false);
+  });
+
   it('stops at one', () => {
     expect(withinOneEdit('dependson', 'dependson')).toBe(false);
     expect(withinOneEdit('categories', 'dependencies')).toBe(false);
@@ -399,10 +411,17 @@ describe('a declared id that is not a name', () => {
     // backslash. A document whose id is punctuation collides with every other
     // one that made the same mistake and names itself in findings nobody can act
     // on, so the declaration loses to the file name.
+    // The path must carry no number of its own, or the declaration never had a
+    // chance to win and the test passes for the wrong reason.
     for (const junk of ['\\', '-', '---', '  ']) {
-      expect(identify({ path: 'docs/adr/0007-sharding.md', declaredId: junk, declaredAliases: [], heading: null }).id)
-        .toBe('ADR-0007');
+      expect(
+        identify({ path: 'docs/sharding.md', declaredId: junk, declaredAliases: [], heading: null }).id,
+        junk,
+      ).toBe('sharding');
     }
+    // And a real declaration still beats the file name.
+    expect(identify({ path: 'docs/sharding.md', declaredId: 'ADR-7', declaredAliases: [], heading: null }).id)
+      .toBe('ADR-7');
   });
 
   it('keeps a declaration in any script', () => {
