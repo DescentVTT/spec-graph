@@ -186,6 +186,7 @@ export type {
   EdgeOrigin,
   EdgeTraits,
   ItemNode,
+  MisreadKey,
   NodeKind,
   Openness,
   ParseProblem,

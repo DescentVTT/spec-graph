@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { attr, attrList, directiveFor, parseDirectives } from '../src/directives.js';
+import { foldRelationKey, RELATION_KEYS, withinOneEdit } from '../src/extract.js';
 import {
   familyFromPath,
   identify,
@@ -23,6 +24,7 @@ import {
 } from '../src/lifecycle.js';
 import { scanMarkdown } from '../src/markdown.js';
 import { basenamePosix, dirnamePosix, joinPosix, normalisePosix, resolveFrom, toPosix } from '../src/paths.js';
+import type { EdgeKind } from '../src/types.js';
 import { parseFrontMatter, toRecord, valuesOf } from '../src/yaml.js';
 
 /* -------------------------------------------------------------------------- */
@@ -333,5 +335,78 @@ describe('posix paths', () => {
     expect(dirnamePosix('0007.md')).toBe('');
     expect(basenamePosix('docs/adr/0007.md')).toBe('0007.md');
     expect(joinPosix('docs', 'adr', '0007.md')).toBe('docs/adr/0007.md');
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+
+describe('relation vocabulary', () => {
+  const fold = (key: string) => foldRelationKey(key);
+
+  it('folds separators and case to one key', () => {
+    const one = fold('depends-on');
+    expect([fold('depends_on'), fold('dependsOn'), fold('Depends On'), fold('DEPENDS-ON')]).toEqual([
+      one,
+      one,
+      one,
+      one,
+    ]);
+  });
+
+  it('keeps distinct relations distinct once folded', () => {
+    const folded = Object.keys(RELATION_KEYS).map(fold);
+    expect(new Set(folded).size).toBe(folded.length);
+  });
+
+  it('spells every directional relation in both directions', () => {
+    // The invariant the mandate for this release was written about. A kind
+    // spelled only one way silently drops the edges written the other way.
+    const directions = new Map<EdgeKind, Set<boolean>>();
+    for (const relation of Object.values(RELATION_KEYS)) {
+      const seen = directions.get(relation.kind) ?? new Set<boolean>();
+      seen.add(relation.inverted);
+      directions.set(relation.kind, seen);
+    }
+    const oneWay = [...directions].filter(([, seen]) => seen.size < 2).map(([kind]) => kind);
+    // `relates-to` is symmetric: there is no other direction to spell.
+    // `contains` is structural and never written by hand, so it is not here.
+    expect(oneWay).toEqual(['relates-to']);
+  });
+});
+
+describe('near-miss keys', () => {
+  it('counts a substitution, an insertion, a deletion and a swap as one edit', () => {
+    expect(withinOneEdit('supercedesby', 'supercededby')).toBe(true);
+    expect(withinOneEdit('dependson', 'dependsonn')).toBe(true);
+    expect(withinOneEdit('dependson', 'depndson')).toBe(true);
+    expect(withinOneEdit('dependson', 'depnedson')).toBe(true);
+  });
+
+  it('stops at one', () => {
+    expect(withinOneEdit('dependson', 'dependson')).toBe(false);
+    expect(withinOneEdit('categories', 'dependencies')).toBe(false);
+    expect(withinOneEdit('tags', 'refs')).toBe(false);
+    expect(withinOneEdit('dependson', 'dependsoff')).toBe(false);
+    expect(withinOneEdit('abc', 'abcde')).toBe(false);
+    // Two swaps are two edits, however adjacent each of them is.
+    expect(withinOneEdit('abcd', 'badc')).toBe(false);
+  });
+});
+
+describe('a declared id that is not a name', () => {
+  it('is discarded rather than honoured', () => {
+    // `id=\"ADR-9\"` inside a JavaScript string parses its bare value as a lone
+    // backslash. A document whose id is punctuation collides with every other
+    // one that made the same mistake and names itself in findings nobody can act
+    // on, so the declaration loses to the file name.
+    for (const junk of ['\\', '-', '---', '  ']) {
+      expect(identify({ path: 'docs/adr/0007-sharding.md', declaredId: junk, declaredAliases: [], heading: null }).id)
+        .toBe('ADR-0007');
+    }
+  });
+
+  it('keeps a declaration in any script', () => {
+    expect(identify({ path: 'docs/決策.md', declaredId: '決策-7', declaredAliases: [], heading: null }).id)
+      .toBe('決策-7');
   });
 });

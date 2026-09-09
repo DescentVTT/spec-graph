@@ -16,7 +16,16 @@
  */
 
 import { attr, attrList, directiveFor, parseDirectives, type Directive } from './directives.js';
-import { identify, isExternal, normaliseRef, type DocumentIdentity, ID_KEYS } from './identity.js';
+import {
+  identify,
+  isDocumentTarget,
+  isExternal,
+  looksLikePath,
+  normaliseRef,
+  parsePrefixedRef,
+  type DocumentIdentity,
+  ID_KEYS,
+} from './identity.js';
 import { isStatusHeading, phaseFromPath, phaseOf, STATUS_KEYS, supersessionTargetsIn } from './lifecycle.js';
 import { scanMarkdown, slugify, type Link, type ListItem, type ScannedDocument } from './markdown.js';
 import { findSpecificationRegions, regionAt, type SpecificationRegion } from './sections.js';
@@ -27,6 +36,7 @@ import type {
   EdgeKind,
   EdgeOrigin,
   ItemNode,
+  MisreadKey,
   ParseProblem,
   Phase,
   SourceRef,
@@ -71,6 +81,13 @@ export interface ExtractedDocument {
   readonly items: readonly ItemNode[];
   readonly references: readonly ReferenceCandidate[];
   readonly problems: readonly ParseProblem[];
+  /**
+   * Front-matter keys that read as relations and declared none.
+   *
+   * Kept apart from `problems` because a problem is about the text and this is
+   * about the graph: the edge the author wrote down is not in it.
+   */
+  readonly misreadKeys: readonly MisreadKey[];
   /** Heading slugs, for resolving `#anchor` references into this document. */
   readonly anchors: ReadonlySet<string>;
   readonly identity: DocumentIdentity;
@@ -96,34 +113,174 @@ export interface ExtractedDocument {
 /* Vocabulary                                                                 */
 /* -------------------------------------------------------------------------- */
 
-/** Front-matter keys that declare a relation, and what they mean. */
-const RELATION_KEYS: Readonly<Record<string, { kind: EdgeKind; inverted: boolean }>> = {
+/**
+ * Front-matter keys that declare a relation, and what they mean.
+ *
+ * Every directional kind is spelled in **both** directions. A register that
+ * records `depends-on` but not `depended-on-by` is not a smaller vocabulary, it
+ * is a trap: the author writes the inverse, the key means nothing, and the edge
+ * they declared is missing from a graph that reports itself as consistent. Which
+ * half of a pair a repository writes is a filing convention, and a filing
+ * convention is not something a linter gets to have an opinion about.
+ *
+ * `relates-to` is the exception, and it is not one: the relation is symmetric,
+ * so it has no other direction to spell. `contains` is structural and never
+ * written by hand. `tests/parsing.test.ts` holds both facts to the fire.
+ */
+export const RELATION_KEYS: Readonly<Record<string, { kind: EdgeKind; inverted: boolean }>> = {
   supersedes: { kind: 'supersedes', inverted: false },
   supercedes: { kind: 'supersedes', inverted: false },
   replaces: { kind: 'supersedes', inverted: false },
   obsoletes: { kind: 'supersedes', inverted: false },
+  deprecates: { kind: 'supersedes', inverted: false },
   'superseded-by': { kind: 'supersedes', inverted: true },
   'superceded-by': { kind: 'supersedes', inverted: true },
   'replaced-by': { kind: 'supersedes', inverted: true },
   'obsoleted-by': { kind: 'supersedes', inverted: true },
+  'deprecated-by': { kind: 'supersedes', inverted: true },
+  'rolled-into': { kind: 'supersedes', inverted: true },
   amends: { kind: 'amends', inverted: false },
   extends: { kind: 'amends', inverted: false },
+  refines: { kind: 'amends', inverted: false },
+  clarifies: { kind: 'amends', inverted: false },
+  revises: { kind: 'amends', inverted: false },
   'amended-by': { kind: 'amends', inverted: true },
+  'extended-by': { kind: 'amends', inverted: true },
+  'refined-by': { kind: 'amends', inverted: true },
+  'clarified-by': { kind: 'amends', inverted: true },
+  'revised-by': { kind: 'amends', inverted: true },
   'depends-on': { kind: 'depends-on', inverted: false },
+  'dependent-on': { kind: 'depends-on', inverted: false },
   dependencies: { kind: 'depends-on', inverted: false },
   requires: { kind: 'depends-on', inverted: false },
+  'builds-on': { kind: 'depends-on', inverted: false },
+  'relies-on': { kind: 'depends-on', inverted: false },
+  'depended-on-by': { kind: 'depends-on', inverted: true },
+  'required-by': { kind: 'depends-on', inverted: true },
+  dependents: { kind: 'depends-on', inverted: true },
   assumes: { kind: 'assumes', inverted: false },
+  'assumed-by': { kind: 'assumes', inverted: true },
   'blocked-by': { kind: 'blocked-by', inverted: false },
+  'blocked-on': { kind: 'blocked-by', inverted: false },
+  'waiting-on': { kind: 'blocked-by', inverted: false },
+  'waiting-for': { kind: 'blocked-by', inverted: false },
+  'gated-on': { kind: 'blocked-by', inverted: false },
+  'gated-by': { kind: 'blocked-by', inverted: false },
   blocks: { kind: 'blocked-by', inverted: true },
   'delegates-to': { kind: 'delegates-to', inverted: false },
   'delegated-to': { kind: 'delegates-to', inverted: false },
+  'deferred-to': { kind: 'delegates-to', inverted: false },
   'tracked-in': { kind: 'delegates-to', inverted: false },
+  'tracked-by': { kind: 'delegates-to', inverted: false },
+  'continued-in': { kind: 'delegates-to', inverted: false },
+  'delegated-from': { kind: 'delegates-to', inverted: true },
   related: { kind: 'relates-to', inverted: false },
   'relates-to': { kind: 'relates-to', inverted: false },
+  'related-to': { kind: 'relates-to', inverted: false },
   'see-also': { kind: 'relates-to', inverted: false },
   references: { kind: 'references', inverted: false },
+  reference: { kind: 'references', inverted: false },
   refs: { kind: 'references', inverted: false },
+  'referenced-by': { kind: 'references', inverted: true },
 };
+
+/**
+ * True when two folded keys are one edit apart.
+ *
+ * One edit, not two, and a transposition counts as one: `supercedesby` for
+ * `supercededby` is a slip of the finger, `categories` for `dependencies` is a
+ * different word. Written out rather than as a distance matrix because the
+ * answer is a yes or a no and the bound is one - the general algorithm would be
+ * more code, not less.
+ */
+export function withinOneEdit(a: string, b: string): boolean {
+  if (a === b) return false;
+  if (a.length === b.length) {
+    let first = -1;
+    for (let i = 0; i < a.length; i += 1) {
+      if (a[i] === b[i]) continue;
+      if (first === -1) {
+        first = i;
+        continue;
+      }
+      // A second difference is allowed only if the two are a swapped pair, and
+      // only if there is no third.
+      return first === i - 1 && a[first] === b[i] && a[i] === b[first] && a.slice(i + 1) === b.slice(i + 1);
+    }
+    return true;
+  }
+  const [short, long] = a.length < b.length ? [a, b] : [b, a];
+  if (long.length - short.length !== 1) return false;
+  for (let i = 0; i < short.length; i += 1) {
+    if (short[i] === long[i]) continue;
+    return short.slice(i) === long.slice(i + 1);
+  }
+  return true;
+}
+
+/**
+ * True when a front-matter value is shaped like a citation.
+ *
+ * The second half of the gate on {@link misreadRelationKeys}, and the half that
+ * does the work. `sidebar_position: 4` and `ref: main` are a hair away from a
+ * relation key by spelling alone; neither carries anything that could name a
+ * document, and reporting them would make the rule an irritation rather than a
+ * catch (ADR-0006).
+ */
+function looksLikeCitation(value: string): boolean {
+  const trimmed = value.trim();
+  if (trimmed.length === 0) return false;
+  if (parsePrefixedRef(trimmed) !== null) return true;
+  return looksLikePath(trimmed) && isDocumentTarget(trimmed) && !isExternal(trimmed);
+}
+
+/**
+ * Front-matter keys that read as relations and declare none.
+ *
+ * Front matter is an open vocabulary and most of what lives there is nobody
+ * else's business, so the bar is deliberately high: the key has to be one edit
+ * from a relation key *and* carry something that could name a document. Both
+ * conditions together are what separates `dependson: ADR-0001`, which is an edge
+ * the author believes exists, from `description: ...`, which is a title.
+ */
+function misreadRelationKeys(
+  byKey: ReadonlyMap<string, YamlEntry>,
+  from: string,
+  at: (start: number, end: number) => SourceRef,
+): MisreadKey[] {
+  const out: MisreadKey[] = [];
+  for (const [key, entry] of byKey) {
+    const folded = foldRelationKey(key);
+    if (folded.length === 0 || RELATION_INDEX.has(folded)) continue;
+    if (!valuesOf(entry).some(looksLikeCitation)) continue;
+    const near = [...RELATION_INDEX.values()]
+      .filter((relation) => withinOneEdit(folded, foldRelationKey(relation.canonical)))
+      .map((relation) => relation.canonical);
+    if (near.length === 0) continue;
+    out.push({ key, suggestion: near.join(', '), from, at: at(entry.start, entry.end) });
+  }
+  return out;
+}
+
+/**
+ * Folds a front-matter key to its lookup form.
+ *
+ * `depends-on`, `depends_on`, `dependsOn` and `Depends On` are one key written
+ * four ways, and which one a repository uses is decided by whatever wrote the
+ * front matter first. Dropping every separator collapses them - the YAML reader
+ * has already lower-cased the key, which is what makes camel case fold too.
+ */
+export function foldRelationKey(key: string): string {
+  return key.replace(/[^a-z0-9]/gi, '').toLowerCase();
+}
+
+/** The vocabulary above, indexed by folded key. */
+const RELATION_INDEX: ReadonlyMap<string, { kind: EdgeKind; inverted: boolean; canonical: string }> = new Map(
+  Object.entries(RELATION_KEYS).map(([canonical, relation]) => [
+    foldRelationKey(canonical),
+    { ...relation, canonical },
+  ]),
+);
 
 /**
  * Phrases that give a link its meaning, longest-matching-nearest wins.
@@ -561,6 +718,7 @@ export function extractDocument(input: ExtractInput): ExtractedDocument | null {
   // Hand each region the items and references that fall inside it.
   const ownItems = allItems.filter((item) => item.document === identity.id);
   const ownReferences = allReferences.filter((reference) => belongsTo(reference, identity.id, allItems));
+  const misreadKeys = misreadRelationKeys(byKey, identity.id, at);
   const anchors = new Set<string>(scanned.headings.map((h) => h.slug));
 
   const filled = subSpecifications.map((spec) => ({
@@ -579,6 +737,7 @@ export function extractDocument(input: ExtractInput): ExtractedDocument | null {
     items: ownItems,
     references: ownReferences,
     problems,
+    misreadKeys,
     anchors,
     identity,
     scanned,
@@ -685,6 +844,8 @@ function buildRegion(context: RegionInput): BuiltRegion {
       items: [],
       references,
       problems: [],
+      // A region has no front matter of its own to misread.
+      misreadKeys: [],
       anchors,
       identity,
       scanned,
@@ -935,10 +1096,12 @@ function extractReferences(context: ReferenceContext): ReferenceCandidate[] {
   const out: ReferenceCandidate[] = [];
   const at = (start: number, end: number): SourceRef => refOf(file, index, start, end);
 
-  // Front matter.
-  for (const [key, relation] of Object.entries(RELATION_KEYS)) {
-    const entry = byKey.get(key) ?? byKey.get(key.replace(/-/g, '_'));
-    if (!entry) continue;
+  // Front matter, walked in the order it was written rather than in the order
+  // the vocabulary happens to be listed: a key the table does not know still has
+  // to be looked at, and only the document knows which those are.
+  for (const [key, entry] of byKey) {
+    const relation = RELATION_INDEX.get(foldRelationKey(key));
+    if (!relation) continue;
     for (const value of valuesOf(entry)) {
       const target = cleanTarget(value);
       if (target.length === 0) continue;
@@ -1315,7 +1478,7 @@ function renderLink(link: Link): string {
       return `<${link.target}>`;
     case 'reference':
     case 'shortcut':
-      return `[${link.text}][${link.target}]`;
+      return `[${link.text}][${link.label ?? ''}]`;
     default:
       return `[${link.text}](${link.target})`;
   }

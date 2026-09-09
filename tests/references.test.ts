@@ -242,3 +242,79 @@ describe('one written citation is one reference', () => {
     expect(analyse(files).diagnostics.filter((d) => d.rule === 'broken-reference')).toHaveLength(2);
   });
 });
+
+describe('reference-style links', () => {
+  const files = (body: string) => ({
+    'A.md': '---\nid: ADR-0001\nstatus: accepted\n---\n\n# ADR-0001: Target\n',
+    'B.md': `---\nid: ADR-0002\nstatus: accepted\n---\n\n# ADR-0002: Citing\n\n${body}\n`,
+  });
+  const edges = (body: string) =>
+    analyse(files(body)).graph.edges.filter((e) => e.kind !== 'contains').map((e) => `${e.from} -${e.kind}-> ${e.to}`);
+
+  it('reads a reference link through to what the label stands for', () => {
+    // The label is not the destination. Before this, the citation was read as
+    // "one", which resolved to nothing: a broken reference *and* a missing edge.
+    expect(edges('This depends on [ADR-0001][one].\n\n[one]: A.md')).toEqual(['ADR-0002 -depends-on-> ADR-0001']);
+    expect(rules(files('This depends on [ADR-0001][one].\n\n[one]: A.md'))).toEqual([]);
+  });
+
+  it('reads a shortcut link the same way', () => {
+    expect(edges('This depends on [target].\n\n[target]: A.md')).toEqual(['ADR-0002 -depends-on-> ADR-0001']);
+  });
+
+  it('leaves a label nothing defines as prose', () => {
+    // `[design][one]` renders literally when nothing defines `one`. Reading it
+    // as a citation would invent a reference and then report it broken.
+    expect(edges('See [design][one] and [alone].')).toEqual([]);
+    expect(rules(files('See [design][one] and [alone].'))).toEqual([]);
+  });
+
+  it('reports a broken one at the definition, which is the line that fixes it', () => {
+    const found = analyse(files('This depends on [gone][x].\n\n[x]: nowhere.md')).diagnostics;
+    expect(found.map((d) => d.rule)).toEqual(['broken-reference']);
+    expect(found[0]?.target).toBe('nowhere.md');
+    expect(found[0]?.at.span.start.line).toBe(10);
+  });
+});
+
+describe('front-matter keys that read as relations', () => {
+  const check = (frontMatter: string) =>
+    analyse({
+      'A.md': '---\nid: ADR-0001\nstatus: accepted\n---\n\n# ADR-0001: Target\n',
+      'B.md': `---\nid: ADR-0002\nstatus: accepted\n${frontMatter}\n---\n\n# ADR-0002: Citing\n`,
+    });
+  const kinds = (frontMatter: string) =>
+    check(frontMatter)
+      .graph.edges.filter((e) => e.kind !== 'contains')
+      .map((e) => `${e.from} -${e.kind}-> ${e.to}`);
+
+  it('reads an inverse relation key', () => {
+    expect(kinds('depended-on-by: ADR-0001')).toEqual(['ADR-0001 -depends-on-> ADR-0002']);
+  });
+
+  it('reads the same key however it is punctuated', () => {
+    for (const spelling of ['depends-on', 'depends_on', 'dependsOn', 'DependsOn', 'DEPENDS_ON']) {
+      expect(kinds(`${spelling}: ADR-0001`), spelling).toEqual(['ADR-0002 -depends-on-> ADR-0001']);
+    }
+  });
+
+  it('reports a key one edit from a relation that carries a citation', () => {
+    const found = check('supercedes-by: ADR-0001').diagnostics;
+    expect(found.map((d) => d.rule)).toEqual(['unknown-relation-key']);
+    expect(found[0]?.hint).toContain('superceded-by');
+  });
+
+  it('stays quiet when the value could not be a citation', () => {
+    // `sidebar_position` is a hair from nothing, but `deprecated` is one edit
+    // from `deprecates` - and a boolean is not a document.
+    expect(check('deprecated: true\nsidebar_position: 4\nref: main').diagnostics).toEqual([]);
+  });
+
+  it('stays quiet about a key that is nothing like a relation', () => {
+    expect(check('description: ADR-0001 explains why\nauthors: ADR-0001').diagnostics).toEqual([]);
+  });
+
+  it('says nothing about a key it understood', () => {
+    expect(check('depends-on: ADR-0001').diagnostics).toEqual([]);
+  });
+});

@@ -114,13 +114,27 @@ export type LinkForm = 'inline' | 'reference' | 'shortcut' | 'autolink' | 'wiki'
 export interface Link {
   /** Visible label. Empty for autolinks and definitions. */
   readonly text: string;
-  /** Destination as written: a path, a URL, or a reference label. */
+  /** Destination as written: a path or a URL. */
   readonly target: string;
   /** Offset of the whole construct. */
   readonly start: number;
   readonly end: number;
-  /** Offset of `target` inside the source, for precise diagnostics. */
+  /**
+   * Offset of `target` inside the source, for precise diagnostics.
+   *
+   * For a reference link this is inside the definition, not inside the use:
+   * `[design][one]` has no destination of its own, and the line a human edits
+   * to fix it is the one that says what `one` points at.
+   */
   readonly targetStart: number;
+  /**
+   * The reference label, for the two forms written with one.
+   *
+   * `null` everywhere else. Kept because `target` is the destination the label
+   * stands for, and a report quoting `[design][docs/gone.md]` would be quoting
+   * something the author never wrote.
+   */
+  readonly label: string | null;
   readonly form: LinkForm;
   readonly line: number;
 }
@@ -177,7 +191,10 @@ export function scanMarkdown(source: string): ScannedDocument {
   const bodyStart = frontMatter ? frontMatter.bodyStart : 0;
 
   const lines = scanLines(text, index, bodyStart);
-  const codeRanges = collectCodeRanges(lines, bodyStart);
+  // Raw-text HTML joins the code ranges rather than sitting beside them: what
+  // both have in common is that their content is not Markdown, and every reader
+  // downstream - comments, links, tables - already asks that one question.
+  const codeRanges = mergeRanges([...collectCodeRanges(lines, bodyStart), ...collectRawTextHtml(lines, bodyStart)]);
   const comments = scanComments(text, index, bodyStart, codeRanges);
 
   const inlineCode = scanInlineCode(text, bodyStart, codeRanges, comments);
@@ -359,6 +376,46 @@ function scanLines(text: string, index: LineIndex, bodyStart: number): ScannedLi
   }
 
   return out;
+}
+
+/**
+ * `<script>`, `<style>`, `<pre>` and `<textarea>` blocks.
+ *
+ * These four are the only HTML elements whose content is not Markdown - the
+ * CommonMark spec calls them out by name for exactly that reason - and the
+ * distinction is load-bearing here rather than pedantic. A page explaining how
+ * to annotate a document puts `<!-- @spec-node id="..." -->` inside a script
+ * sample or a `<pre>` block, and reading that as a directive lets a worked
+ * example rename the document it appears in.
+ *
+ * `<div>` and `<details>` are deliberately not on the list. Their content *is*
+ * Markdown, and a decision written inside a collapsed `<details>` section is
+ * still a decision.
+ */
+const RAW_TEXT_OPEN = /^<(script|pre|style|textarea)(?:[\s>]|$)/i;
+const RAW_TEXT_CLOSE = /<\/(?:script|pre|style|textarea)>/i;
+
+function collectRawTextHtml(lines: readonly ScannedLine[], bodyStart: number): Range[] {
+  const ranges: Range[] = [];
+  let open: { start: number; end: number } | null = null;
+  for (const line of lines) {
+    if (line.code) continue;
+    if (open === null) {
+      if (!RAW_TEXT_OPEN.test(line.content.trimStart())) continue;
+      open = { start: Math.max(line.start, bodyStart), end: line.end };
+    } else {
+      open.end = line.end;
+    }
+    // The close tag ends the block on the line that carries it, whichever of
+    // the four it names. An unclosed block runs to the end of the document,
+    // which is what a browser does with it too.
+    if (RAW_TEXT_CLOSE.test(line.content)) {
+      ranges.push(open);
+      open = null;
+    }
+  }
+  if (open) ranges.push(open);
+  return ranges;
 }
 
 function collectCodeRanges(lines: readonly ScannedLine[], bodyStart: number): Range[] {
@@ -768,26 +825,33 @@ const MAX_LINK_SPAN = 4096;
 
 function scanLinks(masked: string, text: string, index: LineIndex): Link[] {
   const out: Link[] = [];
-  const definitions = new Set<string>();
+  const definitions = new Map<string, { target: string; targetStart: number }>();
   const definitionRanges: Range[] = [];
 
-  // Pass 1: reference definitions, which also make shortcut links resolvable.
+  // Pass 1: reference definitions. These are the destination table the other
+  // two written-with-a-label forms are read through, which is why the whole
+  // document is swept for them before a single use is looked at: a definition
+  // is conventionally written at the foot of the file, long after the links
+  // that use it.
   for (let line = 1; line <= index.lineCount; line += 1) {
     const start = index.lineStart(line);
     const content = masked.slice(start, index.lineEnd(line));
     const match = DEFINITION.exec(content);
     if (!match) continue;
     const label = (match[1] as string).trim().toLowerCase();
-    definitions.add(label);
     const rawTarget = match[2] as string;
     const targetStart = start + content.indexOf(rawTarget, (match[1] as string).length);
+    const target = unwrapAngle(rawTarget);
+    // First definition wins, as in CommonMark.
+    if (!definitions.has(label)) definitions.set(label, { target, targetStart });
     definitionRanges.push({ start, end: start + (match[0] as string).length });
     out.push({
       text: (match[1] as string).trim(),
-      target: unwrapAngle(rawTarget),
+      target,
       start,
       end: start + (match[0] as string).length,
       targetStart,
+      label: (match[1] as string).trim(),
       form: 'definition',
       line,
     });
@@ -803,6 +867,7 @@ function scanLinks(masked: string, text: string, index: LineIndex): Link[] {
       start,
       end: start + (m[0] as string).length,
       targetStart: start + 1,
+      label: null,
       form: 'autolink',
       line: index.positionAt(start).line,
     });
@@ -835,6 +900,7 @@ function scanLinks(masked: string, text: string, index: LineIndex): Link[] {
             start: i,
             end: close + 2,
             targetStart: i + 2,
+            label: null,
             form: 'wiki',
             line: index.positionAt(i).line,
           });
@@ -862,6 +928,7 @@ function scanLinks(masked: string, text: string, index: LineIndex): Link[] {
             start: isImage ? i - 1 : i,
             end: dest.close + 1,
             targetStart: dest.start,
+            label: null,
             form: 'inline',
             line: index.positionAt(i).line,
           });
@@ -873,14 +940,20 @@ function scanLinks(masked: string, text: string, index: LineIndex): Link[] {
       const refEnd = matchBracket(masked, labelEnd + 1);
       if (refEnd !== -1) {
         const ref = text.slice(labelEnd + 2, refEnd).trim();
-        const resolved = ref.length > 0 ? ref : label.trim();
-        if (!isImage) {
+        const written = ref.length > 0 ? ref : label.trim();
+        const defined = definitions.get(written.toLowerCase());
+        // A label with no definition is not a link. Every renderer prints
+        // `[design][one]` verbatim when nothing says what `one` is, so reading
+        // it as a citation invents a reference the author never made - and
+        // then reports it as broken.
+        if (!isImage && defined) {
           out.push({
             text: label.trim(),
-            target: resolved,
-            start: isImage ? i - 1 : i,
+            target: defined.target,
+            start: i,
             end: refEnd + 1,
-            targetStart: ref.length > 0 ? labelEnd + 2 : i + 1,
+            targetStart: defined.targetStart,
+            label: written,
             form: 'reference',
             line: index.positionAt(i).line,
           });
@@ -888,18 +961,23 @@ function scanLinks(masked: string, text: string, index: LineIndex): Link[] {
         i = refEnd + 1;
         continue;
       }
-    } else if (!isImage && definitions.has(label.trim().toLowerCase())) {
-      out.push({
-        text: label.trim(),
-        target: label.trim(),
-        start: i,
-        end: labelEnd + 1,
-        targetStart: i + 1,
-        form: 'shortcut',
-        line: index.positionAt(i).line,
-      });
-      i = labelEnd + 1;
-      continue;
+    } else if (!isImage) {
+      const written = label.trim();
+      const defined = definitions.get(written.toLowerCase());
+      if (defined) {
+        out.push({
+          text: written,
+          target: defined.target,
+          start: i,
+          end: labelEnd + 1,
+          targetStart: defined.targetStart,
+          label: written,
+          form: 'shortcut',
+          line: index.positionAt(i).line,
+        });
+        i = labelEnd + 1;
+        continue;
+      }
     }
 
     i = labelEnd + 1;

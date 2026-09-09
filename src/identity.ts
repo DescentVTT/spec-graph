@@ -74,6 +74,9 @@ export interface IdentityInput {
   readonly includePathAliases?: boolean | undefined;
 }
 
+/** An id has to be a name. Punctuation alone is what a bad parse leaves behind. */
+const HAS_LETTER_OR_DIGIT = /[\p{L}\p{N}]/u;
+
 /**
  * Derives a document's canonical id and every alias that should reach it.
  *
@@ -82,6 +85,13 @@ export interface IdentityInput {
  * a reference written in any of those forms still resolves.
  */
 export function identify(input: IdentityInput): DocumentIdentity {
+  // A declaration carrying no letter or digit is discarded rather than honoured.
+  // `<!-- @spec-node id=\"ADR-9\" -->`, written inside a JavaScript string in a
+  // worked example, parses its bare value as a lone backslash - and a document
+  // whose id is `\` collides with every other one that made the same mistake,
+  // exports as invalid Mermaid, and names itself in findings a reader cannot act
+  // on. There is nothing to gain by taking such a value seriously.
+  const declaredId = input.declaredId !== null && HAS_LETTER_OR_DIGIT.test(input.declaredId) ? input.declaredId : null;
   const stem = fileStem(input.path);
   const directoryFamily = familyFromPath(input.path);
   const aliases = new Set<string>();
@@ -119,7 +129,7 @@ export function identify(input: IdentityInput): DocumentIdentity {
     candidates.push({ family: null, number: null, label: cleaned });
   };
 
-  consider(input.declaredId, true);
+  consider(declaredId, true);
   // `0007-sharding-the-write-path.md` and `kep-1234-foo.md` both start with the
   // identifier; take the leading token rather than the whole stem.
   consider(leadingToken(stem), true);
@@ -132,13 +142,13 @@ export function identify(input: IdentityInput): DocumentIdentity {
   // Witnesses to the local zero-padding convention, most authoritative first.
   // The spelling that actually produced the number comes first: an id read from
   // the H1 of `sharding.md` must still render as ADR-0007, not ADR-7.
-  const witnesses = [numbered?.label, input.declaredId, stem];
+  const witnesses = [numbered?.label, declaredId, stem];
 
   let id: string;
   if (number !== null && family !== null) {
     id = `${family}-${padNumber(number, witnesses)}`;
-  } else if (input.declaredId) {
-    id = input.declaredId.trim();
+  } else if (declaredId) {
+    id = declaredId.trim();
   } else if (number !== null) {
     // Numbered but with no family to prefix - a Rust RFC in `text/0001-foo.md`,
     // say. The file stem is a far better identity than a bare "1": it is what
@@ -154,7 +164,7 @@ export function identify(input: IdentityInput): DocumentIdentity {
     add(input.path);
     add(stripExtension(input.path));
   }
-  add(input.declaredId);
+  add(declaredId);
   for (const alias of input.declaredAliases) add(alias);
   if (input.heading) add(headingId(input.heading));
 

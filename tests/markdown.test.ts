@@ -113,6 +113,35 @@ describe('code masking', () => {
     expect(targets(md)).toEqual(['yes.md']);
   });
 
+  it('masks the four HTML elements whose content is not Markdown', () => {
+    for (const tag of ['script', 'style', 'pre', 'textarea']) {
+      const md = [`<${tag}>`, '[fake](fake.md)', `</${tag}>`, '', '[real](real.md)'].join('\n');
+      expect(targets(md), tag).toEqual(['real.md']);
+    }
+  });
+
+  it('leaves HTML whose content is Markdown alone', () => {
+    // A decision written inside a collapsed section is still a decision, and
+    // `<div>` wrappers are how a repository centres a diagram.
+    const md = ['<details><summary>Why</summary>', '', '[real](real.md)', '', '</details>'].join('\n');
+    expect(targets(md)).toEqual(['real.md']);
+  });
+
+  it('closes a raw-text block on the line that carries its end tag', () => {
+    const md = ['<pre>[fake](fake.md)</pre>', '', '[real](real.md)'].join('\n');
+    expect(targets(md)).toEqual(['real.md']);
+  });
+
+  it('does not mistake a tag that merely starts the same way', () => {
+    const md = ['<presentation-note>', '', '[real](real.md)', '', '</presentation-note>'].join('\n');
+    expect(targets(md)).toEqual(['real.md']);
+  });
+
+  it('runs an unclosed raw-text block to the end, as a browser does', () => {
+    const md = ['<script>', '[fake](fake.md)', '', '[also-fake](also.md)'].join('\n');
+    expect(targets(md)).toEqual([]);
+  });
+
   it('masks an indented code block outside a list', () => {
     const md = ['Prose.', '', '    [fake](fake.md)', '', '[real](real.md)'].join('\n');
     expect(targets(md)).toEqual(['real.md']);
@@ -226,16 +255,40 @@ describe('links', () => {
     expect(targets('[a](<my file.md>)')).toEqual(['my file.md']);
   });
 
-  it('reads reference links and their definitions', () => {
+  it('reads reference links through to the destination the label stands for', () => {
     const md = ['See [ADR-3][adr3] and [adr3].', '', '[adr3]: ../adr/0003.md'].join('\n');
     const links = scanMarkdown(md).links;
     // Document order. The definition line yields a definition and nothing else:
     // its own label must not be harvested a second time as a shortcut link.
     expect(links.map((l) => [l.form, l.target])).toEqual([
-      ['reference', 'adr3'],
-      ['shortcut', 'adr3'],
+      ['reference', '../adr/0003.md'],
+      ['shortcut', '../adr/0003.md'],
       ['definition', '../adr/0003.md'],
     ]);
+    // The label survives beside the destination, because a report has to be able
+    // to quote what was written.
+    expect(links.map((l) => l.label)).toEqual(['adr3', 'adr3', 'adr3']);
+  });
+
+  it('points a reference link at the definition, which is where the fix goes', () => {
+    const md = ['See [ADR-3][adr3].', '', '[adr3]: ../adr/0003.md'].join('\n');
+    const [reference] = scanMarkdown(md).links;
+    // The construct is on line 1 and its destination is on line 3. Both are
+    // recorded: the citation is where it was read, the target where it is edited.
+    expect(reference?.line).toBe(1);
+    expect(md.slice(reference?.targetStart ?? 0)).toBe('../adr/0003.md');
+  });
+
+  it('leaves a bracket pair with no definition as prose', () => {
+    // `[design][one]` renders literally when nothing defines `one`, so reading it
+    // as a citation invents a reference - and then reports it as broken.
+    expect(targets('See [design][one] and [alone].')).toEqual([]);
+  });
+
+  it('takes the first definition of a repeated label, as CommonMark does', () => {
+    const md = ['[a][x]', '', '[x]: first.md', '[x]: second.md'].join('\n');
+    const [use] = scanMarkdown(md).links;
+    expect(use?.target).toBe('first.md');
   });
 
   it('reads wiki links and drops the display half', () => {
@@ -286,6 +339,20 @@ describe('html comments', () => {
 
   it('ignores comments inside code fences', () => {
     const md = ['```', '<!-- @spec-node id="fake" -->', '```', '<!-- @spec-node id="real" -->'].join('\n');
+    const comments = scanMarkdown(md).comments;
+    expect(comments).toHaveLength(1);
+    expect(comments[0]?.inner).toContain('real');
+  });
+
+  it('ignores comments inside raw-text HTML', () => {
+    // The `<!--` here opens a JavaScript string, not a comment. A page teaching
+    // people how to annotate a document is exactly where such a sample lives.
+    const md = [
+      '<script>',
+      'const s = "<!-- @spec-node id=\\"FAKE\\" -->";',
+      '</script>',
+      '<!-- @spec-node id="real" -->',
+    ].join('\n');
     const comments = scanMarkdown(md).comments;
     expect(comments).toHaveLength(1);
     expect(comments[0]?.inner).toContain('real');

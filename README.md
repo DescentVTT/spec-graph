@@ -78,6 +78,7 @@ npx @descent-vtt/spec-graph "docs/**/*.md"
 | `ambiguous-reference` | warn | A citation matching more than one document |
 | `unreciprocated-supersession` | warn | A retired document that never says what replaced it |
 | `state-conflict` | warn | An item whose two state signals disagree about whether work remains |
+| `unknown-relation-key` | warn | A front-matter key one edit from a relation, carrying what looks like a citation |
 | `self-reference` | info | A document delegating to, or depending on, itself |
 
 Override any of them:

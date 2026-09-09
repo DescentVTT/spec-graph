@@ -29,7 +29,7 @@ import {
   splitAnchor,
 } from './identity.js';
 import { basenamePosix, extnamePosix, resolveFrom } from './paths.js';
-import type { DanglingRef, DocumentNode, Edge, ItemNode, ParseProblem, SpecNode } from './types.js';
+import type { DanglingRef, DocumentNode, Edge, ItemNode, MisreadKey, ParseProblem, SpecNode } from './types.js';
 
 export interface ResolveOptions {
   /**
@@ -67,6 +67,7 @@ export interface ResolvedCorpus {
   readonly edges: readonly Edge[];
   readonly dangling: readonly DanglingRef[];
   readonly problems: readonly ParseProblem[];
+  readonly misreadKeys: readonly MisreadKey[];
 }
 
 interface Index {
@@ -97,6 +98,7 @@ export function resolveCorpus(
   const documents: DocumentNode[] = [];
   const items: ItemNode[] = [];
   const problems: ParseProblem[] = [];
+  const misreadKeys: MisreadKey[] = [];
 
   for (const entry of extracted) {
     const existing = nodes.get(entry.document.id);
@@ -114,6 +116,7 @@ export function resolveCorpus(
       items.push(item);
     }
     problems.push(...entry.problems);
+    misreadKeys.push(...entry.misreadKeys);
   }
 
   const edges: Edge[] = [];
@@ -176,7 +179,7 @@ export function resolveCorpus(
     }
   }
 
-  return { nodes, documents, items, edges, dangling, problems };
+  return { nodes, documents, items, edges, dangling, problems, misreadKeys };
 }
 
 /* -------------------------------------------------------------------------- */

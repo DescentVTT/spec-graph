@@ -320,6 +320,26 @@ export interface DanglingRef {
   readonly candidates: readonly string[];
 }
 
+/**
+ * A front-matter key that reads as a relation and is not one.
+ *
+ * Front matter is an open vocabulary - `title`, `tags`, `sidebar_position` and
+ * whatever else the site generator wants all live there - so an unrecognised key
+ * is normally none of spec-graph's business. This is the exception: a key one
+ * character away from a relation, carrying something shaped like a citation, is
+ * a relation the author believes they declared. The edge does not exist, and
+ * nothing else would ever say so.
+ */
+export interface MisreadKey {
+  /** The key as written. */
+  readonly key: string;
+  /** The relation key it is a hair away from. */
+  readonly suggestion: string;
+  /** The document the key was written in. */
+  readonly from: string;
+  readonly at: SourceRef;
+}
+
 /* -------------------------------------------------------------------------- */
 /* Diagnostics                                                                */
 /* -------------------------------------------------------------------------- */
@@ -337,7 +357,8 @@ export type RuleId =
   | 'unreciprocated-supersession'
   | 'live-supersession'
   | 'state-conflict'
-  | 'self-reference';
+  | 'self-reference'
+  | 'unknown-relation-key';
 
 export interface RelatedLocation {
   readonly at: SourceRef;

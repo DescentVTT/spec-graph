@@ -54,6 +54,7 @@ export const DEFAULT_SEVERITIES: Readonly<Record<RuleId, Severity>> = Object.fre
   'unreciprocated-supersession': 'warn',
   'state-conflict': 'warn',
   'self-reference': 'info',
+  'unknown-relation-key': 'warn',
 });
 
 export const RULE_IDS = Object.keys(DEFAULT_SEVERITIES) as readonly RuleId[];
@@ -71,6 +72,7 @@ export const RULE_DESCRIPTIONS: Readonly<Record<RuleId, string>> = Object.freeze
   'unreciprocated-supersession': 'a retired document does not say what replaced it',
   'state-conflict': 'an item declares two states that disagree about whether work remains',
   'self-reference': 'a document delegates to or depends on itself',
+  'unknown-relation-key': 'a front-matter key reads as a relation but declares none',
 });
 
 /**
@@ -142,6 +144,7 @@ export function runRules(graph: SpecGraph, corpus: ResolvedCorpus, options: Rule
   orphanedObligations(graph, emit, maxRelated);
   supersessions(graph, emit);
   stateConflicts(graph, emit);
+  misreadKeys(corpus, emit);
   selfReferences(graph, emit);
 
   return sortDiagnostics(out);
@@ -304,6 +307,26 @@ function stalePremises(graph: SpecGraph, emit: Emit, claimed: ReadonlySet<string
 /* -------------------------------------------------------------------------- */
 /* Reference integrity                                                        */
 /* -------------------------------------------------------------------------- */
+
+/**
+ * Keys that read as relations and declared none.
+ *
+ * The only rule here that is about the text rather than about the graph, and it
+ * earns the place by what its absence costs: the finding is that an edge the
+ * author wrote down is *not* in the graph, and a missing edge is invisible in a
+ * report that says everything is consistent. Nothing else would ever mention it.
+ */
+function misreadKeys(corpus: ResolvedCorpus, emit: Emit): void {
+  for (const misread of corpus.misreadKeys) {
+    emit('unknown-relation-key', () => ({
+      message: `"${misread.key}" declares no relation`,
+      at: misread.at,
+      nodes: [misread.from],
+      related: [],
+      hint: `spell it ${misread.suggestion}, or move it out of front matter if it is not a relation`,
+    }));
+  }
+}
 
 function brokenReferences(corpus: ResolvedCorpus, emit: Emit): void {
   for (const ref of corpus.dangling) {
