@@ -289,3 +289,23 @@ describe('a path spelled inexactly', () => {
     expect(dangling).toEqual([]);
   });
 });
+
+describe('a path spelling is matched against paths, not basenames', () => {
+  it('does not confuse two files that share a name in different directories', () => {
+    // There is a looser fallback below this one, matching the last segment of a
+    // path against the alias table, for identifiers written in a nested folder
+    // layout. It cannot tell `docs/A.md` from `other/A.md`, and would call this
+    // ambiguous. Matching the spelling against whole paths first is what makes
+    // `docs/A` mean the file in `docs/` - and losing that index does not fail
+    // quietly, it invents an ambiguity and drops the edge.
+    const here = ['# ADR-0001: Here', '', '## Status', '', 'accepted'].join('\n');
+    const elsewhere = ['# ADR-0002: Elsewhere', '', '## Status', '', 'accepted'].join('\n');
+    const { edges, dangling } = resolve({
+      'docs/A.md': here,
+      'other/A.md': elsewhere,
+      'B.md': ['# B', '', 'See [x](docs/A).'].join('\n'),
+    });
+    expect(dangling).toEqual([]);
+    expect(edgesOf(edges, 'references').map((edge) => edge.to)).toEqual(['ADR-0001']);
+  });
+});
