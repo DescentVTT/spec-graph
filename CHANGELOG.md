@@ -55,7 +55,7 @@ See [ADR-0013](docs/adr/0013-the-scanner-hands-back-prose.md).
 `depended-on-by` was not, so a repository whose filing convention records
 dependents wrote the inverse spelling and got no edge, no warning, and a graph
 that reported itself as consistent. Every directional kind is spelled both ways
-now - twenty-six keys became fifty-one - and a test holds the invariant.
+now - twenty-five keys became fifty-six - and a test holds the invariant.
 `relates-to` is symmetric and exempt.
 
 Keys also fold on separators and case, so `depends-on`, `depends_on` and

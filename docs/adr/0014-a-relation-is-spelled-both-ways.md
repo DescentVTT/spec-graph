@@ -107,7 +107,7 @@ where the key is a hair from a relation *and* the value looks like a citation,
 which is a narrow enough gate that a repository seeing it almost certainly has
 the defect it names. `--rule unknown-relation-key=off` for the ones that do not.
 
-The vocabulary grew from twenty-six keys to fifty-one. That is the shape this
+The vocabulary grew from twenty-five keys to fifty-six. That is the shape this
 project prefers - [CLAUDE.md](../../CLAUDE.md) asks for a table entry rather than
 a code change - and the cost is that every added key is a word a repository can
 no longer use in front matter for something else.
