@@ -1,6 +1,6 @@
 {
   "name": "@descent-vtt/spec-graph",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Turn Markdown specs into a verifiable relational graph. Catches ghost handovers, stale premises and broken references in CI.",
   "keywords": [
     "adr",
@@ -33,6 +33,7 @@
     "./package.json": "./package.json"
   },
   "files": [
+    "CHANGELOG.md",
     "LICENSE",
     "README.md",
     "bin",

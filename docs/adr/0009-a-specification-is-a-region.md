@@ -66,7 +66,14 @@ Three further details keep the model honest:
 
 - **A region does not claim the file's path.** The file already answers to it,
   and two nodes answering to one path would make every link to that file
-  ambiguous.
+  ambiguous. This covers the path *index*, not only the alias table: the index
+  resolves a collision by keeping whichever entry was written last, so a region
+  in it does not make a link ambiguous, it makes it wrong. Shipped in 0.2.1
+  without that half, a link to a file holding a register bound to the register's
+  final row - silently, with no diagnostic, and with anchors then checked
+  against that row's span rather than the file's. A region keeps `path` on its
+  node, because a finding has to say which file it lives in and
+  `document[path=...]` has to find it; it is simply not reachable by that path.
 - **Obligations are numbered within their own specification**, so two decisions
   in one register each get `#open-questions.1` rather than sharing a sequence.
 - **Cells a column already typed are skipped by prose scanning**, so a link in a

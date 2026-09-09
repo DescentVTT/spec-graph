@@ -601,3 +601,99 @@ describe('a section does not borrow another section\'s status', () => {
     expect(graph.out('ADR-0001', ['depends-on'])).toEqual([]);
   });
 });
+
+/* -------------------------------------------------------------------------- */
+/* Paths                                                                      */
+/* -------------------------------------------------------------------------- */
+
+describe('a register does not answer to its file path', () => {
+  // ADR-0009 says a region does not claim the file's path, because two nodes
+  // answering to one path would make every link to that file ambiguous. That
+  // was true of the alias table and false of the path index, where a collision
+  // is resolved by keeping whichever was written last - so a link to a file
+  // holding a register bound to its final row, silently, and anchors were then
+  // checked against that row's span rather than the file's.
+  const TABLE_FORM = [
+    '---',
+    'status: active',
+    '---',
+    '# A doc',
+    '',
+    '## How to read this document',
+    '',
+    'text',
+    '',
+    '| ID | Requirement | Status |',
+    '| :--- | :--- | :--- |',
+    '| FR-1 | thing | Implemented |',
+    '| FR-2 | other | Specified |',
+  ].join('\n');
+
+  const HEADING_FORM = [
+    '---',
+    'status: active',
+    '---',
+    '# A doc',
+    '',
+    '## How to read this document',
+    '',
+    'text',
+    '',
+    '## FR-1 First',
+    '',
+    '**Status:** Implemented',
+    '',
+    '## FR-2 Second',
+    '',
+    '**Status:** Specified',
+  ].join('\n');
+
+  const cite = (link: string): string => ['# B', '', `This rests on ${link}.`].join('\n');
+
+  const targets = (register: string, link: string): string[] => {
+    const { graph } = analyse({ 'docs/A.md': register, 'B.md': cite(link) });
+    return graph.out('B').map((edge) => edge.to);
+  };
+
+  for (const [form, register] of [
+    ['a table', TABLE_FORM],
+    ['headings', HEADING_FORM],
+  ] as const) {
+    it(`resolves a path link into ${form} register to the file, not to its last row`, () => {
+      expect(targets(register, '[A](docs/A.md)')).toEqual(['A']);
+    });
+
+    it(`resolves an anchor into ${form} register against the whole file`, () => {
+      // The false positive this produced was the visible half of the bug. The
+      // link bound to a row, and a row's anchor set holds only what is inside
+      // its own span - nothing, for a table row.
+      const files = { 'docs/A.md': register, 'B.md': cite('[x](docs/A.md#how-to-read-this-document)') };
+      expect(rules(files)).toEqual([]);
+      expect(targets(register, '[x](docs/A.md#how-to-read-this-document)')).toEqual(['A']);
+    });
+  }
+
+  it('still reports an anchor that genuinely is not there', () => {
+    const files = { 'docs/A.md': TABLE_FORM, 'B.md': cite('[y](docs/A.md#no-such-heading)') };
+    expect(rules(files)).toEqual(['broken-reference']);
+  });
+
+  it('keeps the path on the region nodes, so a selector still finds them', () => {
+    // The path is dropped from the *index*, not from the node: a finding has to
+    // be able to say which file a region lives in.
+    const { graph } = analyse({ 'docs/A.md': TABLE_FORM });
+    const here = graph.documents.filter((node) => node.path === 'docs/A.md').map((node) => node.id);
+    expect(here.sort()).toEqual(['A', 'FR-1', 'FR-2']);
+  });
+
+  it('leaves README parent addressing alone', () => {
+    // `docs/adr/0007/README.md` is also addressed as `docs/adr/0007`, and that
+    // key is produced by the same loop the guard now wraps.
+    const files = {
+      'docs/adr/0007/README.md': ['# ADR-0007: Sharding', '', '## Status', '', 'accepted'].join('\n'),
+      'B.md': cite('[z](docs/adr/0007)'),
+    };
+    expect(rules(files)).toEqual([]);
+    expect(analyse(files).graph.out('B').map((edge) => edge.to)).toEqual(['ADR-0007']);
+  });
+});

@@ -200,7 +200,18 @@ function buildIndex(extracted: readonly ExtractedDocument[]): Index {
       index.byAlias.set(alias, set);
     }
 
-    for (const path of pathKeys(entry.document.path)) index.byPath.set(path, id);
+    // Only a file answers to its path. A region keeps the path on its node, so a
+    // finding can say where it lives and `document[path=...]` can select it, but
+    // it must not be reachable *by* that path: two nodes answering to one path
+    // makes every link to the file ambiguous, and this index resolves a
+    // collision by keeping whichever was written last. A link to a file holding
+    // a register bound to its final row, quietly and with no diagnostic, and
+    // anchors were then checked against that row's span rather than the file's.
+    // ADR-0009 said a region does not claim the file's path; this is the index
+    // where that had to be true.
+    if (entry.containerId === null) {
+      for (const path of pathKeys(entry.document.path)) index.byPath.set(path, id);
+    }
 
     if (entry.identity.family !== null && entry.identity.number !== null) {
       index.families.add(entry.identity.family);
