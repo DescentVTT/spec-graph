@@ -99,11 +99,12 @@ text. Reasoning in
 
 ### Measured
 
-684 tests, and a mutation score of **79.69% over 8,126 mutants** - up from
-77.16% over 7,720. The guard stays at `break: 70`, because the same source
-measured twice on the same machine, with only test cases added between the runs,
-moved nine untouched files by more than a point each in both directions. See
-[ADR-0007](docs/adr/0007-mutation-testing.md).
+684 tests, and a mutation score of **75.14% on the hosted runner** - the figure
+that governs, up from 73.32% at v0.2.0 - against 79.69% over 8,126 mutants on a
+developer machine. The guard stays at `break: 70`. See
+[ADR-0007](docs/adr/0007-mutation-testing.md), which 0.3.0 also amended: an
+incremental run read 3.18 points *high* against a full rebuild of the same
+commit, so the claim that incremental errs low was wrong.
 
 ## 0.2.3
 

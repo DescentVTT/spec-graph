@@ -104,14 +104,40 @@ proxy that reads a few points high.
 hosted run takes 80 minutes; an incremental one on a warm cache takes 36
 seconds. Measured against each other on the same source, they read 73.82% and
 73.34% - within half a point, with incremental reporting 35 more survivors than
-the rebuild. It errs low, which is the safe direction for something that fails a
-build: it can cost a false alarm, and it cannot hide a regression by reading
-high. The weekly rebuild is what keeps that half-point from accumulating.
+the rebuild.
 
-This also corrects the headroom. Against 73.32% with 305 timeouts - four percent
-of the corpus, and a timeout is a timing measurement - a bad run reads 69.3%.
-`break: 70` has about three points of real margin, not seven, which is the
-argument for leaving it exactly where it is.
+*Amended 2026-09-10.* This paragraph used to continue "it errs low, which is the
+safe direction for something that fails a build: it cannot hide a regression by
+reading high." **That was wrong, and 0.3.0 measured it wrong.** The tag and the
+branch push were the same commit, `84fa10d`, on the same hosted runner:
+
+| | score | killed | timeout | survived |
+| --- | ---: | ---: | ---: | ---: |
+| full rebuild | 75.14 | 5,792 | 314 | 1,800 |
+| incremental | 78.32 | 6,061 | 303 | 1,542 |
+
+Incremental read **3.18 points high** and 258 survivors short. The direction was
+never the property; the half-point was. What actually governs the size of the
+error is **how far the restored report is from the source being measured**: the
+earlier comparison restored a cache one commit old, this one restored from
+v0.2.3, nine commits and two thousand lines back, because the nine were pushed
+together. Incremental reuse is an inference about which mutants a change can
+reach, and the further back the inference starts, the more of it is wrong.
+
+So the honest statement is narrower. **Incremental is a fast signal, not a
+verdict**, and it can read high enough to hide a regression for as long as the
+cache stays stale. What keeps that bounded is not a direction it errs in - there
+isn't one - but the two places a full run is unconditional: the Monday rebuild
+and every tag. A regression can therefore sit on `main` behind a stale cache for
+up to a week, and that is the cost of a 36-second gate against an 80-minute one.
+
+This also corrects the headroom, in the useful direction for once. Against 73.32%
+with 305 timeouts - four percent of the corpus, and a timeout is a timing
+measurement - a bad run read 69.3%, which is *below* the guard. Against 0.3.0's
+75.14% with 314 timeouts of 8,126, the same worst case reads 71.28%. `break: 70`
+now clears it by a point and a quarter rather than failing it, which is the first
+time the guard has had real margin under the pessimistic reading - and still not
+enough margin to justify moving it.
 
 **Read "no coverage" before reading the score.** The v0.2.0 modules landed at
 74.61% and 83.08%, and the number worth acting on was neither: it was that 42 of

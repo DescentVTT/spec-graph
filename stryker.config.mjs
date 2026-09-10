@@ -51,15 +51,18 @@ export default {
   // is still far longer than any healthy mutant needs.
   timeoutMS: 15000,
   concurrency: 8,
-  // `break` is a regression guard, not an aspiration: it sits a few points below
-  // the measured score (77.16% over 7,720 mutants, commit 6d92265) so that
-  // losing ground fails the build while ordinary refactoring does not.
+  // `break` is a regression guard, not an aspiration: it sits below the score
+  // that actually governs - 75.14% on the hosted runner at 0.3.0, against 79.69%
+  // over 8,126 mutants on a developer machine - so that losing ground fails the
+  // build while ordinary refactoring does not.
   //
-  // It stays at 70 rather than tracking the +0.68 from the previous run. That
-  // move is inside the noise this project measured on itself: 296 of these
-  // mutants are detected by timing out, and whether one crosses the budget
-  // depends on machine load, so a run swings a point or two either way without
-  // the suite changing. A floor that chases noise fails builds for no reason.
+  // It stays at 70, and 0.3.0 measured three separate reasons why. Two full runs
+  // of identical source on one machine moved nine untouched files by more than a
+  // point each in both directions, up to 4.76. An incremental run of the same
+  // commit as the hosted rebuild read 3.18 points high. And 314 of these mutants
+  // are detected by timing out, which is a timing measurement: lose all of them
+  // on a loaded runner and 75.14 becomes 71.28. A floor that chased any of those
+  // numbers would fail builds for no reason.
   // See docs/adr/0007-mutation-testing.md.
   thresholds: { high: 85, low: 74, break: 70 },
 };
