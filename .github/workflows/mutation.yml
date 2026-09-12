@@ -43,11 +43,14 @@ jobs:
     # that only fits the fast case is the cap that produced fourteen cancelled
     # runs.
     #
-    # The full run measures 80 minutes today. The corpus grew a quarter in this
-    # project's first eight releases, and a cap fitting the present size is how
-    # the last one failed: it passed once, then never again. A ceiling costs
-    # nothing unless it is reached.
-    timeout-minutes: 120
+    # A ceiling costs nothing unless it is reached, and this one was nearly
+    # reached. The full run measured 80 minutes at 0.3.0 and 103 at 0.4.0, on a
+    # corpus that grew 6% - so what moved was the runner, not the work. The
+    # incremental run on the same commit took 110, because a broad change leaves
+    # it nothing to reuse. At 120 the margin was seventeen minutes, which is the
+    # position that produced fourteen consecutive cancelled runs the last time,
+    # and a cancelled run reports nothing after burning the full budget.
+    timeout-minutes: 180
 
     # Decided once. Writing the condition twice and negating it by hand is how
     # the comment above came to promise a full run on manual dispatch while the

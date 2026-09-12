@@ -147,7 +147,27 @@ verdict**, and it can read high enough to hide a regression for as long as the
 cache stays stale. What keeps that bounded is not a direction it errs in - there
 isn't one - but the two places a full run is unconditional: the Monday rebuild
 and every tag. A regression can therefore sit on `main` behind a stale cache for
-up to a week, and that is the cost of a 36-second gate against an 80-minute one.
+up to a week, and that is the cost of a fast gate against an 80-minute one.
+
+*Confirmed 2026-09-12.* The claim above says the direction is not a property, and
+0.4.0 is the first run to see the other one. The `main` push and the `v0.4.0` tag
+were the same commit, `6f398ee`, on the same hosted runner:
+
+| | score | mutants | killed | timeout | survived |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| full rebuild | 75.40 | 8,585 | 6,161 | 312 | 1,896 |
+| incremental | 74.11 | 8,585 | 6,044 | 318 | 2,007 |
+
+Incremental read **1.29 points low** this time, having read 3.18 points high at
+0.3.0. Two observations, opposite signs: the direction is not a property, and
+nobody should build a safety argument on one.
+
+Note the mutant count. The incremental run reported the whole corpus - 8,585,
+the same as the rebuild - because the change was broad enough that there was
+nothing left to reuse: a new module and eight touched files. An incremental run
+after a wide change is a full run with extra bookkeeping, and it billed like one,
+taking **110 minutes against the rebuild's 103**. The 36-second figure above is
+real and belongs to a narrow change; it is not what the gate costs on a release.
 
 This also corrects the headroom, in the useful direction for once. Against 73.32%
 with 305 timeouts - four percent of the corpus, and a timeout is a timing
@@ -156,6 +176,11 @@ measurement - a bad run read 69.3%, which is *below* the guard. Against 0.3.0's
 now clears it by a point and a quarter rather than failing it, which is the first
 time the guard has had real margin under the pessimistic reading - and still not
 enough margin to justify moving it.
+
+0.4.0's hosted figure is 75.40% with 312 timeouts of 8,585, so the same worst
+case reads 71.76% - half a point better again. Three releases of the guard
+holding while the pessimistic reading climbed from below it to a point and three
+quarters above it is an argument for leaving it exactly where it is.
 
 **Read "no coverage" before reading the score.** The v0.2.0 modules landed at
 74.61% and 83.08%, and the number worth acting on was neither: it was that 42 of

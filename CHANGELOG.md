@@ -132,7 +132,8 @@ tool is pointed at.
 | `npm run lint` | pass |
 | `npm test` | 754 passing, 20 files |
 | `npm run selfcheck` | pass, over 19 documents and 124 relations |
-| `npm run test:mutation` | **79.41%** over 8,585 mutants, 64m30s |
+| `npm run test:mutation` | 79.41% over 8,585 mutants, 64m30s |
+| hosted full run, which governs | **75.40%**, 102m48s |
 | `break` | unchanged at 70 |
 
 79.69% over 8,126 mutants at 0.3.0 against 79.41% over 8,585 here, on the same
@@ -146,8 +147,17 @@ module at 86.89%, a targeted re-measurement with `coverageAnalysis all` agreed a
 those survivors turned out to be tests nobody had written. The whole-corpus
 figure moved 0.38 points for it.
 
-The hosted number - the one that actually governs, because it is where the build
-fails - comes from CI on push, and 75.14% from 0.3.0 stands until it does.
+The hosted number is the one that actually governs, because it is where the build
+fails: **75.40%**, up from 75.14% at 0.3.0. Lose every timeout on a loaded runner
+and it reads 71.76%, which is the most margin `break: 70` has ever had.
+
+That run also caught the other half of a claim
+[ADR-0007](docs/adr/0007-mutation-testing.md) narrowed at 0.3.0. The `main` push
+and the `v0.4.0` tag were the same commit on the same runner, and the incremental
+read **1.29 points low** against the rebuild - having read 3.18 points *high* at
+0.3.0. Two observations, opposite signs. The direction is not a property, and the
+incremental run took 110 minutes to the rebuild's 103, because a change this wide
+leaves it nothing to reuse.
 
 ### Withdrawn
 
