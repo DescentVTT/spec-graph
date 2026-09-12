@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { analyseSources, type Source } from '../src/runner.js';
 import { query } from '../src/select.js';
-import type { RuleId } from '../src/types.js';
+import type { AnyRuleId } from '../src/types.js';
 
 /**
  * End-to-end checks against the shapes real open-source repositories use.
@@ -14,7 +14,7 @@ import type { RuleId } from '../src/types.js';
  * all - no findings that are not really there.
  */
 
-const rules = (sources: Source[]): RuleId[] => analyseSources(sources).diagnostics.map((d) => d.rule);
+const rules = (sources: Source[]): AnyRuleId[] => analyseSources(sources).diagnostics.map((d) => d.rule);
 
 /* -------------------------------------------------------------------------- */
 /* MADR                                                                       */

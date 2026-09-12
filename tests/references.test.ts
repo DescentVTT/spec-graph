@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { createReferenceFilter } from '../src/glob.js';
 import { analyseSources, type Source } from '../src/runner.js';
-import type { RuleId } from '../src/types.js';
+import type { AnyRuleId } from '../src/types.js';
 
 /**
  * Concept wiki-links, and the filter that lets a repository declare them.
@@ -17,7 +17,7 @@ const analyse = (files: Record<string, string>, ignoreReferences: readonly strin
     { isIgnoredReference: createReferenceFilter(ignoreReferences) },
   );
 
-const rules = (files: Record<string, string>, ignore: readonly string[] = []): RuleId[] =>
+const rules = (files: Record<string, string>, ignore: readonly string[] = []): AnyRuleId[] =>
   analyse(files, ignore).diagnostics.map((d) => d.rule);
 
 /* -------------------------------------------------------------------------- */

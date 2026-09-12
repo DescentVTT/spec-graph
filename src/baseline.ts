@@ -16,14 +16,14 @@
 
 import type { SpecGraph } from './graph.js';
 import { RULE_IDS } from './rules.js';
-import type { Diagnostic, RuleId } from './types.js';
+import { isProjectRule, type AnyRuleId, type Diagnostic, type RuleId } from './types.js';
 
 /** The current file format. Bumped only for a change old files cannot survive. */
 export const BASELINE_VERSION = 1;
 
 /** One class of accepted finding, and how many of it there were. */
 export interface BaselineEntry {
-  readonly rule: RuleId;
+  readonly rule: AnyRuleId;
   /** The specification the finding is about, not the file it was found in. */
   readonly document: string;
   /** What within it: a citation target, or the document at the other end. */
@@ -68,7 +68,7 @@ export function fingerprintOf(graph: SpecGraph, diagnostic: Diagnostic): { docum
   return { document, subject: subject === document ? '' : subject };
 }
 
-function keyOf(rule: RuleId, document: string, subject: string): string {
+function keyOf(rule: AnyRuleId, document: string, subject: string): string {
   // Tab-joined: the three parts are ids and targets, and a tab is the one
   // character none of them can contain.
   return `${rule}\t${document}\t${subject}`;
@@ -160,7 +160,12 @@ function readEntry(row: unknown, where: string, problems: string[]): BaselineEnt
   }
   const fields = row as Record<string, unknown>;
   const rule = fields['rule'];
-  if (typeof rule !== 'string' || !RULE_IDS.includes(rule as RuleId)) {
+  // A project rule is accepted on its namespace alone, because the baseline is
+  // read before the configuration that defines it has any say - and an entry
+  // rejected here would silently un-accept debt a team had already signed off.
+  // A name nothing defines suppresses nothing and is reported as stale, which
+  // is the same answer by a route that keeps the file readable.
+  if (typeof rule !== 'string' || !(RULE_IDS.includes(rule as RuleId) || isProjectRule(rule as AnyRuleId))) {
     problems.push(`${where}: unknown rule ${JSON.stringify(rule)}`);
     return null;
   }
@@ -175,7 +180,7 @@ function readEntry(row: unknown, where: string, problems: string[]): BaselineEnt
     problems.push(`${where}: "count" must be a whole number of at least 1`);
     return null;
   }
-  return { rule: rule as RuleId, document, subject, count };
+  return { rule: rule as AnyRuleId, document, subject, count };
 }
 
 export interface BaselineOutcome {

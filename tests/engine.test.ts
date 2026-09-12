@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { analyseSources, type Source } from '../src/runner.js';
 import { query } from '../src/select.js';
-import type { Diagnostic, RuleId } from '../src/types.js';
+import type { AnyRuleId, Diagnostic } from '../src/types.js';
 
 /** Builds a corpus from `path -> text` pairs. */
 function corpus(files: Record<string, string>): Source[] {
@@ -13,8 +13,8 @@ function analyse(files: Record<string, string>) {
   return analyseSources(corpus(files));
 }
 
-const rules = (diagnostics: readonly Diagnostic[]): RuleId[] => diagnostics.map((d) => d.rule);
-const only = (diagnostics: readonly Diagnostic[], rule: RuleId): Diagnostic[] =>
+const rules = (diagnostics: readonly Diagnostic[]): AnyRuleId[] => diagnostics.map((d) => d.rule);
+const only = (diagnostics: readonly Diagnostic[], rule: AnyRuleId): Diagnostic[] =>
   diagnostics.filter((d) => d.rule === rule);
 
 /* -------------------------------------------------------------------------- */

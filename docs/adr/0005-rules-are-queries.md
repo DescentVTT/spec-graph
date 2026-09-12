@@ -54,16 +54,23 @@ document that links to itself is a formatting quirk, not a relationship.
 
 ## Open Questions
 
-- [ ] Should selectors support disjunction (`a, b` at the top level)? Every rule
-      so far is expressible as a union of separate queries, which is clearer.
-- [ ] Should users be able to register a named query as a project rule with its
-      own severity? The config file it wanted now exists
-      ([ADR-0010](0010-configuration-belongs-to-the-repository.md)), but a query
-      needs a severity and a message before it is a rule, and that is a larger
-      design than a place to put it.
+- [x] Should selectors support disjunction (`a, b` at the top level)?
+      **Resolved (2026-09-12):** no - the union goes one level up. A project
+      rule takes a list of complete selectors and reads it as a union
+      ([ADR-0016](0016-a-query-needs-a-sentence.md)). Disjunction inside the
+      grammar would have to interact with predicates, with steps and with the
+      transitive forms; a list of whole selectors interacts with nothing.
+- [x] Should users be able to register a named query as a project rule with its
+      own severity? **Resolved (2026-09-12):** yes, shipped. The sentence this
+      question was waiting for is
+      [ADR-0016](0016-a-query-needs-a-sentence.md): a message, a hint, a
+      severity, and a `project:` namespace that lets every existing surface
+      carry a user-defined rule without being taught what one is.
 
 ## See also
 
 - [ADR-0002](0002-lifecycle-lattice.md) defines the `phase` and `receptivity`
   attributes the selectors above rely on.
 - [ADR-0003](0003-item-state-signals.md) defines `openness` and `state`.
+- [ADR-0016](0016-a-query-needs-a-sentence.md) is what makes the claim above
+  true outside a command prompt.

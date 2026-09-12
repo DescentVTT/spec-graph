@@ -22,9 +22,11 @@
 
 import { OBLIGATION_EDGES, type SpecGraph } from './graph.js';
 import { dirnamePosix, resolveFrom } from './paths.js';
+import { renderTemplate, type ProjectRule } from './project-rules.js';
 import { execute, parseQuery, type QuerySpec } from './select.js';
 import type { ResolvedCorpus } from './resolve.js';
 import type {
+  AnyRuleId,
   DanglingRef,
   Diagnostic,
   DocumentNode,
@@ -89,16 +91,25 @@ export const RULE_DESCRIPTIONS: Readonly<Record<RuleId, string>> = Object.freeze
  * between all of it and none of it.
  */
 export function resolveStrict(
-  overrides: Partial<Record<RuleId, Severity>> = {},
+  overrides: Partial<Record<AnyRuleId, Severity>> = {},
   strict = false,
-): { severities: Partial<Record<RuleId, Severity>>; escalated: ReadonlySet<RuleId> } {
-  const severities: Partial<Record<RuleId, Severity>> = { ...overrides };
-  const escalated = new Set<RuleId>();
+  projectRules: readonly ProjectRule[] = [],
+): { severities: Partial<Record<AnyRuleId, Severity>>; escalated: ReadonlySet<AnyRuleId> } {
+  const severities: Partial<Record<AnyRuleId, Severity>> = { ...overrides };
+  const escalated = new Set<AnyRuleId>();
   if (!strict) return { severities, escalated };
 
-  for (const id of RULE_IDS) {
+  // A project rule is escalated on the same terms as a built-in, reading its
+  // declared severity as the default. Anything else would mean a team could
+  // adopt --strict and quietly keep their own conventions advisory.
+  const defaults: [AnyRuleId, Severity][] = [
+    ...RULE_IDS.map((id): [AnyRuleId, Severity] => [id, DEFAULT_SEVERITIES[id]]),
+    ...projectRules.map((rule): [AnyRuleId, Severity] => [rule.id, rule.severity]),
+  ];
+
+  for (const [id, level] of defaults) {
     if (overrides[id] !== undefined) continue;
-    if (DEFAULT_SEVERITIES[id] !== 'warn') continue;
+    if (level !== 'warn') continue;
     severities[id] = 'error';
     escalated.add(id);
   }
@@ -106,9 +117,11 @@ export function resolveStrict(
 }
 
 export interface RuleOptions {
-  readonly severities?: Partial<Record<RuleId, Severity>> | undefined;
+  readonly severities?: Partial<Record<AnyRuleId, Severity>> | undefined;
   /** Cap on related locations attached to one finding. */
   readonly maxRelated?: number | undefined;
+  /** Conventions the repository wrote for itself. See ADR-0016. */
+  readonly projectRules?: readonly ProjectRule[] | undefined;
 }
 
 const DEFAULT_MAX_RELATED = 8;
@@ -119,13 +132,19 @@ const DEFAULT_MAX_RELATED = 8;
 
 /** Runs every enabled rule and returns findings in report order. */
 export function runRules(graph: SpecGraph, corpus: ResolvedCorpus, options: RuleOptions = {}): Diagnostic[] {
-  const severities = { ...DEFAULT_SEVERITIES, ...(options.severities ?? {}) };
+  const projectRules = options.projectRules ?? [];
+  const severities: Partial<Record<AnyRuleId, Severity>> = { ...DEFAULT_SEVERITIES };
+  // A project rule's declared severity is its default, and sits in the same
+  // table the built-ins do - so `--rule`, `--strict` and `severities` reach it
+  // by exactly the machinery they already had.
+  for (const rule of projectRules) severities[rule.id] = rule.severity;
+  Object.assign(severities, options.severities ?? {});
   const maxRelated = options.maxRelated ?? DEFAULT_MAX_RELATED;
   const out: Diagnostic[] = [];
 
-  const emit = (rule: RuleId, build: () => Built): void => {
+  const emit = (rule: AnyRuleId, build: () => Built): void => {
     const severity = severities[rule];
-    if (severity === 'off') return;
+    if (severity === undefined || severity === 'off') return;
     const body = build();
     if (exempt(graph, rule, body.nodes)) return;
     // `target` ahead of the spread: a rule that names one overrides the default,
@@ -146,6 +165,7 @@ export function runRules(graph: SpecGraph, corpus: ResolvedCorpus, options: Rule
   stateConflicts(graph, emit);
   misreadKeys(corpus, emit);
   selfReferences(graph, emit);
+  projectFindings(graph, projectRules, emit);
 
   return sortDiagnostics(out);
 }
@@ -153,7 +173,7 @@ export function runRules(graph: SpecGraph, corpus: ResolvedCorpus, options: Rule
 /** What a rule returns: the finding, minus what `emit` knows better. */
 type Built = Omit<Diagnostic, 'rule' | 'severity' | 'target'> & { readonly target?: string };
 
-type Emit = (rule: RuleId, build: () => Built) => void;
+type Emit = (rule: AnyRuleId, build: () => Built) => void;
 
 /**
  * Rules about what a document cites, rather than about what it owes.
@@ -161,7 +181,7 @@ type Emit = (rule: RuleId, build: () => Built) => void;
  * These are the ones a historical record still answers for. A link that goes
  * nowhere is broken whoever wrote it and whenever they wrote it.
  */
-const REFERENCE_RULES: ReadonlySet<RuleId> = new Set<RuleId>([
+const REFERENCE_RULES: ReadonlySet<AnyRuleId> = new Set<AnyRuleId>([
   'broken-reference',
   'reference-outside-corpus',
   'ambiguous-reference',
@@ -185,7 +205,7 @@ const REFERENCE_RULES: ReadonlySet<RuleId> = new Set<RuleId>([
  * exemption is a property of what counts as a finding, not of any one rule, and
  * a rule added later inherits it without having to remember. See ADR-0011.
  */
-function exempt(graph: SpecGraph, rule: RuleId, nodes: readonly string[]): boolean {
+function exempt(graph: SpecGraph, rule: AnyRuleId, nodes: readonly string[]): boolean {
   if (REFERENCE_RULES.has(rule)) return false;
   const subject = nodes[0];
   if (subject === undefined) return false;
@@ -606,6 +626,49 @@ function selfReferences(graph: SpecGraph, emit: Emit): void {
         ? 'this obligation looks delegated but never left - point it at another document, or own it here'
         : 'a document cannot depend on itself - repoint or remove the reference',
     }));
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Project rules                                                              */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The conventions a repository wrote for itself.
+ *
+ * Run last, and through the same `emit` as everything else, which is the whole
+ * point: a project rule inherits the record exemption, the severity table,
+ * `--strict`, the related-location cap, the sort order and the baseline without
+ * any of them being taught about it. See ADR-0016.
+ */
+function projectFindings(graph: SpecGraph, rules: readonly ProjectRule[], emit: Emit): void {
+  for (const rule of rules) {
+    const seen = new Set<string>();
+    for (const spec of rule.queries) {
+      for (const match of execute(graph, spec)) {
+        const nodes = match.nodes.map((node) => node.id);
+        // Two selectors in one rule are a union, so a path both of them find is
+        // one finding. The alternative is a repository being told twice about a
+        // convention it broke once.
+        const key = nodes.join('>');
+        if (seen.has(key)) continue;
+        seen.add(key);
+
+        const head = match.nodes[0] as SpecNode;
+        emit(rule.id, () => ({
+          message: renderTemplate(rule.message, match, graph),
+          // The line that declares the relation, not the document it points at:
+          // that is where a human goes to change the answer. A rule with no
+          // steps has no relation, so it points at the node it selected.
+          at: match.edges[0]?.declaredAt ?? head.at,
+          nodes,
+          related: match.edges
+            .slice(1)
+            .map((edge) => related(edge.declaredAt, `${edge.from} ${EDGE_TRAITS[edge.kind].phrase} ${edge.to}`)),
+          hint: renderTemplate(rule.hint, match, graph),
+        }));
+      }
+    }
   }
 }
 

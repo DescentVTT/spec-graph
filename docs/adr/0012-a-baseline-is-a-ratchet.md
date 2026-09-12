@@ -187,8 +187,15 @@ alternative was a baseline that expires whenever somebody adds a paragraph.
 - [ ] Should `--baseline` warn when an entry names a document that no longer
       exists at all? It is reported as stale today, which is correct but says
       "paid" where "gone" would be more useful.
-- [ ] Named queries from [ADR-0005](0005-rules-are-queries.md) still have no
+- [x] Named queries from [ADR-0005](0005-rules-are-queries.md) still have no
       home, and a baseline of user-defined rules would need one first.
+      **Resolved (2026-09-12):** they have one
+      ([ADR-0016](0016-a-query-needs-a-sentence.md)), and the baseline needed no
+      change to hold them. A project rule id is a rule id. The one deliberate
+      decision is that an entry naming a rule the configuration no longer
+      defines is accepted and then reported as stale, rather than rejected: the
+      file is read before the configuration has any say, and rejecting it would
+      un-accept debt somebody signed off.
 
 ## See also
 

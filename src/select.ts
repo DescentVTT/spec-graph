@@ -252,6 +252,38 @@ class Parser {
 /* -------------------------------------------------------------------------- */
 
 /**
+ * Every attribute key a node can answer to, excluding the open `fm.` namespace.
+ *
+ * Selectors do not validate their keys - an unknown one simply matches nothing,
+ * which is the forgiving reading a query typed at a prompt wants. A message
+ * template is the opposite case: `{1.phse}` would render as an empty string in
+ * a diagnostic somebody has to act on, silently and forever. So the list is
+ * published here, next to the switch it mirrors, for the one caller that needs
+ * to be strict. See ADR-0016.
+ */
+export const SELECTOR_KEYS: readonly string[] = Object.freeze([
+  'alias',
+  'body',
+  'conflicted',
+  'disposition',
+  'document',
+  'evidence',
+  'file',
+  'id',
+  'kind',
+  'line',
+  'openness',
+  'path',
+  'phase',
+  'receptivity',
+  'section',
+  'state',
+  'status',
+  'text',
+  'title',
+]);
+
+/**
  * The values a predicate key sees on a node.
  *
  * Multi-valued keys (`alias`, `section`) match when *any* value matches, which

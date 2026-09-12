@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { receptivityOf } from '../src/lifecycle.js';
 import { analyseSources, createHistoryMatcher, type AnalyseSourcesOptions, type Source } from '../src/runner.js';
-import type { RuleId } from '../src/types.js';
+import type { AnyRuleId } from '../src/types.js';
 
 /**
  * Historical records: files that say what was decided, not what is decided.
@@ -21,7 +21,7 @@ const analyse = (files: Record<string, string>, options: AnalyseSourcesOptions =
 
 const asHistory = (...paths: string[]): AnalyseSourcesOptions => ({ isRecord: (path) => paths.includes(path) });
 
-const rules = (files: Record<string, string>, options: AnalyseSourcesOptions = {}): RuleId[] =>
+const rules = (files: Record<string, string>, options: AnalyseSourcesOptions = {}): AnyRuleId[] =>
   analyse(files, options).diagnostics.map((diagnostic) => diagnostic.rule);
 
 const RETIRED = ['# ADR-0002: Sharding', '', '## Status', '', 'retired'].join('\n');

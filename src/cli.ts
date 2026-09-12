@@ -22,10 +22,11 @@ import {
   shouldUseColor,
   type GraphFormat,
 } from './report.js';
+import type { ProjectRule } from './project-rules.js';
 import { DEFAULT_SEVERITIES, resolveStrict, RULE_DESCRIPTIONS, RULE_IDS, RULE_QUERIES } from './rules.js';
 import { formatRef } from './source.js';
 import { execute, parseQuery, QueryError, renderMatch, type Match } from './select.js';
-import type { RuleId, Severity, SpecNode } from './types.js';
+import { isProjectRule, type AnyRuleId, type RuleId, type Severity, type SpecNode } from './types.js';
 
 export const EXIT_OK = 0;
 export const EXIT_FAILED = 1;
@@ -70,7 +71,7 @@ export interface CliOptions {
   readonly noConfig: boolean;
   readonly format: 'human' | 'json' | 'sarif';
   readonly graphFormat: GraphFormat;
-  readonly severities: Partial<Record<RuleId, Severity>>;
+  readonly severities: Partial<Record<AnyRuleId, Severity>>;
   readonly color: boolean | null;
   readonly ascii: boolean | null;
   readonly verbose: boolean;
@@ -105,7 +106,7 @@ COMMANDS
   check     Validate the specification graph. The default.
   query     Run a selector and print the matching paths.
   graph     Export the graph for Graphviz, Mermaid, or another tool.
-  rules     List the built-in diagnostics.
+  rules     List the diagnostics that will run, built in and project.
 
 OPTIONS
   --root <dir>            Directory the patterns resolve against (default: cwd)
@@ -133,7 +134,9 @@ OPTIONS
                           (default: human)
   --graph-format <fmt>    dot, mermaid or json (default: dot)
   --documents-only        Leave items out of the exported graph
-  --rule <id>=<severity>  Override one rule: error, warn, info or off. Repeatable.
+  --rule <id>=<severity>  Override one rule: error, warn, info or off. A project
+                          rule is named in full: project:no-draft-dependency.
+                          Repeatable.
   --max <n>               Show at most n findings (0 = no limit)
   --max-warnings <n>      Fail when warnings exceed n (default: no limit)
   --strict                Raise every warning to an error. An explicit --rule
@@ -157,6 +160,8 @@ SELECTORS
                alias, document, state (or disposition), openness, section,
                text, body, evidence, conflicted, fm.<front-matter-key>
   Operators:   = != ^= $= *= ~=   and [attr] for "is present"
+               ~= is a JavaScript regular expression, run once per node; ^= $=
+               and *= cover most cases and cannot backtrack
   Relations:   -kind->  <-kind-   =kind=>  <=kind=   (= forms are transitive)
 
 EXIT CODES
@@ -182,6 +187,30 @@ CONFIGURATION
   A flag always wins over the file, and list flags add to it rather than
   replacing it.
 
+PROJECT RULES
+  A convention spec-graph never anticipated is a selector plus a sentence, and
+  belongs in the same file. Every rule declared here runs beside the built-ins
+  and is reported, baselined, escalated by --strict and silenced by --rule in
+  exactly the same way.
+
+    { "rules": {
+        "no-draft-dependency": {
+          "query": "document[phase=active] -depends-on-> document[phase=draft]",
+          "message": "{0} depends on {1}, which is still a draft",
+          "hint": "wait for {1} to be accepted, or drop it from {0.path}",
+          "severity": "error" } } }
+
+  query     One selector, or a list of them read as a union.
+  message   The headline. {0} is the first node on the path, {1} the next;
+            {1.phase} and {0.fm.owner} read any selector attribute.
+  hint      The next action. Optional, and templated the same way.
+  severity  error, warn, info or off. Defaults to warn - a rule a team has
+            just written has not yet earned the right to fail their build.
+
+  The id is the name with project: in front, which is why it can never collide
+  with a built-in. A selector that does not parse, or a {2} the query can never
+  reach, is reported when the file is read rather than found missing later.
+
 ADOPTING THIS ON AN OLD REPOSITORY
   Record what is already wrong, then report only what happens next:
 
@@ -200,6 +229,8 @@ EXAMPLES
   spec-graph graph --documents-only --graph-format mermaid > graph.mmd
   spec-graph check --history "**/JOURNAL_*.md"   # a log is not a specification
   spec-graph check --baseline .spec-graph-baseline.json
+  spec-graph rules --explain                # including this repository's own
+  spec-graph check --rule project:no-draft-dependency=off
 `;
 
 const SEVERITIES: readonly Severity[] = ['error', 'warn', 'info', 'off'];
@@ -224,7 +255,7 @@ export function parseArgs(argv: readonly string[], cwd: string): CliOptions {
   const ignoreFamilies: string[] = [];
   const historyPatterns: string[] = [];
   let noConfig = false;
-  const severities: Partial<Record<RuleId, Severity>> = {};
+  const severities: Partial<Record<AnyRuleId, Severity>> = {};
   let root = cwd;
   let format: 'human' | 'json' | 'sarif' = 'human';
   let graphFormat: GraphFormat = 'dot';
@@ -352,9 +383,13 @@ export function parseArgs(argv: readonly string[], cwd: string): CliOptions {
         const value = next(arg, i);
         const equals = value.indexOf('=');
         if (equals === -1) throw new UsageError(`--rule expects <id>=<severity>, got "${value}"`);
-        const id = value.slice(0, equals) as RuleId;
+        const id = value.slice(0, equals) as AnyRuleId;
         const level = value.slice(equals + 1) as Severity;
-        if (!RULE_IDS.includes(id)) {
+        // A project rule is taken on its namespace here and checked for real
+        // once the configuration defining it has been read: arguments are
+        // parsed before any file is opened, and a flag has to be usable on that
+        // first pass whatever the repository turns out to declare.
+        if (!RULE_IDS.includes(id as RuleId) && !isProjectRule(id)) {
           throw new UsageError(`unknown rule "${id}"\n  known rules: ${RULE_IDS.join(', ')}`);
         }
         if (!SEVERITIES.includes(level)) {
@@ -484,23 +519,42 @@ export async function main(io: CliIO = {}): Promise<number> {
   const color = options.color ?? shouldUseColor({ isTTY: io.isTTY, env });
   const ascii = options.ascii ?? shouldUseAscii({ env });
 
-  if (options.command === 'rules') {
-    out(renderRules(options.verbose));
-    return EXIT_OK;
-  }
-
   // Configuration is what is true of the repository; a flag is somebody
   // overriding it for one run. So a flag always wins, and lists add rather than
   // replace - a `--ignore-ref` on the command line is one more exclusion, not a
   // decision to throw away the ones the repository already declared.
+  //
+  // Read before `rules` prints anything, so that command lists the conventions
+  // this repository will actually check rather than the ones spec-graph ships.
   const loaded = options.noConfig ? { config: {} as SpecGraphConfig, source: null, problems: [] } : loadConfig(options.root);
   for (const problem of loaded.problems) err(`spec-graph: ${problem}\n`);
   const file = loaded.config;
+  const projectRules = file.rules ?? [];
+
+  // A `--rule` naming a project rule that does not exist is a flag that
+  // silently does nothing, and nothing in the output would distinguish that
+  // from a rule that ran and found none.
+  for (const id of Object.keys(options.severities)) {
+    if (!isProjectRule(id as AnyRuleId) || projectRules.some((rule) => rule.id === id)) continue;
+    const known = projectRules.map((rule) => rule.id);
+    const where = known.length > 0 ? `project rules here: ${known.join(', ')}` : 'this repository defines no project rules';
+    err(`spec-graph: unknown rule "${id}"\n  ${where}\n`);
+    return EXIT_ERROR;
+  }
+
+  if (options.command === 'rules') {
+    out(renderRules(options.verbose, projectRules));
+    return EXIT_OK;
+  }
 
   const patterns =
     options.patterns.length > 0 ? options.patterns : (file.patterns ?? DEFAULT_PATTERNS);
   const severityOverrides = { ...(file.severities ?? {}), ...options.severities };
-  const { severities, escalated } = resolveStrict(severityOverrides, options.strict || (file.strict ?? false));
+  const { severities, escalated } = resolveStrict(
+    severityOverrides,
+    options.strict || (file.strict ?? false),
+    projectRules,
+  );
 
   const analyseOptions: AnalyseOptions = {
     root: options.root,
@@ -511,6 +565,7 @@ export async function main(io: CliIO = {}): Promise<number> {
     ignoreFamilies: [...(file.ignoreFamilies ?? []), ...options.ignoreFamilies],
     historyPatterns: [...(file.historyPatterns ?? []), ...options.historyPatterns],
     severities,
+    projectRules,
     ...(file.maxRelated !== undefined ? { maxRelated: file.maxRelated } : {}),
   };
 
@@ -597,7 +652,7 @@ export async function main(io: CliIO = {}): Promise<number> {
       const baselineNote = note === undefined ? {} : { baseline: note };
       out(
         options.format === 'sarif'
-          ? formatSarif(reported, reported.graph, { version: await readVersion(), escalated })
+          ? formatSarif(reported, reported.graph, { version: await readVersion(), escalated, projectRules })
           : options.format === 'json'
             ? formatJson(reported, { escalated, ...baselineNote })
             : `${formatReport(reported, { color, ascii, verbose: options.verbose, max: options.max, escalated, ...baselineNote })}\n`,
@@ -613,12 +668,28 @@ export async function main(io: CliIO = {}): Promise<number> {
 /* Rendering                                                                  */
 /* -------------------------------------------------------------------------- */
 
-function renderRules(explain: boolean): string {
-  const width = Math.max(...RULE_IDS.map((id) => id.length));
+function renderRules(explain: boolean, projectRules: readonly ProjectRule[] = []): string {
+  // A project rule is described by the selector it is, because that is what it
+  // is - its message is a template, and a template is not a description.
+  const rows: [string, Severity, string, string | undefined][] = [
+    ...RULE_IDS.map((id): [string, Severity, string, string | undefined] => [
+      id,
+      DEFAULT_SEVERITIES[id],
+      RULE_DESCRIPTIONS[id],
+      RULE_QUERIES[id],
+    ]),
+    ...projectRules.map((rule): [string, Severity, string, string | undefined] => [
+      rule.id,
+      rule.severity,
+      rule.sources[0] as string,
+      rule.sources.slice(1).join(' | ') || undefined,
+    ]),
+  ];
+
+  const width = Math.max(...rows.map(([id]) => id.length));
   const lines: string[] = [];
-  for (const id of RULE_IDS) {
-    lines.push(`${id.padEnd(width)}  ${DEFAULT_SEVERITIES[id].padEnd(5)}  ${RULE_DESCRIPTIONS[id]}`);
-    const query = RULE_QUERIES[id];
+  for (const [id, severity, description, query] of rows) {
+    lines.push(`${id.padEnd(width)}  ${severity.padEnd(5)}  ${description}`);
     if (explain && query) lines.push(`${' '.repeat(width)}         ${query}`);
   }
   return `${lines.join('\n')}\n`;

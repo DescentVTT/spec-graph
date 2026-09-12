@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { scanMarkdown } from '../src/markdown.js';
 import { formatGraph } from '../src/report.js';
 import { analyseSources, type Source } from '../src/runner.js';
-import type { RuleId } from '../src/types.js';
+import type { AnyRuleId } from '../src/types.js';
 
 /**
  * Registers: files that hold many specifications rather than one.
@@ -17,7 +17,7 @@ import type { RuleId } from '../src/types.js';
 const analyse = (files: Record<string, string>) =>
   analyseSources(Object.entries(files).map(([path, text]): Source => ({ path, text })));
 
-const rules = (files: Record<string, string>): RuleId[] => analyse(files).diagnostics.map((d) => d.rule);
+const rules = (files: Record<string, string>): AnyRuleId[] => analyse(files).diagnostics.map((d) => d.rule);
 const ids = (files: Record<string, string>): string[] =>
   analyse(files)
     .corpus.documents.map((d) => d.id)

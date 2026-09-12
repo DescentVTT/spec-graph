@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { scanMarkdown } from '../src/markdown.js';
 import { analyseSources, type Source } from '../src/runner.js';
 import { DEFAULT_SEVERITIES, resolveStrict, RULE_IDS, sortDiagnostics } from '../src/rules.js';
-import type { Diagnostic, RuleId, Severity, SourceRef } from '../src/types.js';
+import type { AnyRuleId, Diagnostic, RuleId, Severity, SourceRef } from '../src/types.js';
 
 /**
  * Behaviours the design claims but that the happy-path suite never exercises.
@@ -15,7 +15,7 @@ import type { Diagnostic, RuleId, Severity, SourceRef } from '../src/types.js';
 const analyse = (files: Record<string, string>) =>
   analyseSources(Object.entries(files).map(([path, text]): Source => ({ path, text })));
 
-const rules = (files: Record<string, string>): RuleId[] => analyse(files).diagnostics.map((d) => d.rule);
+const rules = (files: Record<string, string>): AnyRuleId[] => analyse(files).diagnostics.map((d) => d.rule);
 
 /* -------------------------------------------------------------------------- */
 /* Report ordering                                                            */

@@ -13,10 +13,11 @@
 
 import { fingerprintOf } from './baseline.js';
 import type { SpecGraph } from './graph.js';
+import type { ProjectRule } from './project-rules.js';
 import { formatRef } from './source.js';
 import { DEFAULT_SEVERITIES, RULE_DESCRIPTIONS, RULE_IDS } from './rules.js';
 import type { AnalysisResult } from './runner.js';
-import type { Diagnostic, Edge, RuleId, Severity, SourceRef, SpecNode } from './types.js';
+import type { AnyRuleId, Diagnostic, Edge, RuleId, Severity, SourceRef, SpecNode } from './types.js';
 
 export interface ReporterOptions {
   readonly color?: boolean | undefined;
@@ -30,7 +31,7 @@ export interface ReporterOptions {
    * A finding that only became an error because of a flag has to say so, or the
    * reader cannot tell what would happen without it.
    */
-  readonly escalated?: ReadonlySet<RuleId> | undefined;
+  readonly escalated?: ReadonlySet<AnyRuleId> | undefined;
   /**
    * What a baseline accounted for on this run.
    *
@@ -221,7 +222,7 @@ function formatDiagnostic(
   diagnostic: Diagnostic,
   paint: Painter,
   marks: Glyphs,
-  escalated: ReadonlySet<RuleId>,
+  escalated: ReadonlySet<AnyRuleId>,
 ): string[] {
   const mark = severityMark(diagnostic.severity, paint, marks);
   const label = escalated.has(diagnostic.rule)
@@ -302,10 +303,25 @@ function ratchetFailed(baseline: ReporterOptions['baseline']): boolean {
 export function formatSarif(
   result: AnalysisResult,
   graph: SpecGraph,
-  options: { version?: string | undefined; escalated?: ReadonlySet<RuleId> | undefined } = {},
+  options: {
+    version?: string | undefined;
+    escalated?: ReadonlySet<AnyRuleId> | undefined;
+    projectRules?: readonly ProjectRule[] | undefined;
+  } = {},
 ): string {
   const escalated = options.escalated ?? EMPTY_RULES;
-  const fired = RULE_IDS.filter((id) => result.diagnostics.some((diagnostic) => diagnostic.rule === id));
+  // A project rule describes itself by the selector it is, because that is the
+  // only honest answer: its message is a template, and a template with `{0}` in
+  // it is not a description of anything. See ADR-0016.
+  const known: [AnyRuleId, string, Severity][] = [
+    ...RULE_IDS.map((id): [AnyRuleId, string, Severity] => [id, RULE_DESCRIPTIONS[id], DEFAULT_SEVERITIES[id]]),
+    ...(options.projectRules ?? []).map((rule): [AnyRuleId, string, Severity] => [
+      rule.id,
+      rule.sources.join(' | '),
+      rule.severity,
+    ]),
+  ];
+  const fired = known.filter(([id]) => result.diagnostics.some((diagnostic) => diagnostic.rule === id));
   return `${JSON.stringify(
     {
       $schema: 'https://json.schemastore.org/sarif-2.1.0.json',
@@ -319,10 +335,10 @@ export function formatSarif(
               ...(options.version === undefined ? {} : { version: options.version, semanticVersion: options.version }),
               // Only the rules that fired. A driver listing all of them
               // describes the tool; this file describes the run.
-              rules: fired.map((id) => ({
+              rules: fired.map(([id, description, level]) => ({
                 id,
-                shortDescription: { text: RULE_DESCRIPTIONS[id] },
-                defaultConfiguration: { level: sarifLevel(DEFAULT_SEVERITIES[id]) },
+                shortDescription: { text: description },
+                defaultConfiguration: { level: sarifLevel(level) },
               })),
             },
           },
@@ -396,7 +412,7 @@ function sarifLocation(at: SourceRef): {
 
 export function formatJson(
   result: AnalysisResult,
-  options: { escalated?: ReadonlySet<RuleId>; baseline?: ReporterOptions['baseline'] } = {},
+  options: { escalated?: ReadonlySet<AnyRuleId>; baseline?: ReporterOptions['baseline'] } = {},
 ): string {
   const escalated = options.escalated ?? EMPTY_RULES;
   return `${JSON.stringify(

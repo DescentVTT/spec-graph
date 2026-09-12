@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import { loadConfig, parseConfig, CONFIG_FILES, CONFIG_PACKAGE_KEY } from '../src/config.js';
 import { createFamilyFilter, analyseSources, type Source } from '../src/runner.js';
-import type { RuleId } from '../src/types.js';
+import type { AnyRuleId } from '../src/types.js';
 
 /**
  * Repository configuration, and the family rules it carries.
@@ -216,7 +216,7 @@ describe('family rules in a corpus', () => {
     { path: 'docs/rfcs/0001-a.md', text: '# A\n' },
     { path: 'docs/rfcs/0002-b.md', text: '# B\n\nKey words per RFC 2119. Builds on RFC 0001.\n' },
   ];
-  const rules = (options: Parameters<typeof analyseSources>[1]): RuleId[] =>
+  const rules = (options: Parameters<typeof analyseSources>[1]): AnyRuleId[] =>
     analyseSources(files, options).diagnostics.map((d) => d.rule);
 
   it('reports a citation of a standard the repository does not hold', () => {

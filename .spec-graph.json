@@ -1,3 +1,11 @@
 {
-  "patterns": ["docs/**/*.md", "README.md", "CONTRIBUTING.md", "CLAUDE.md"]
+  "patterns": ["docs/**/*.md", "README.md", "CONTRIBUTING.md", "CLAUDE.md"],
+  "rules": {
+    "adr-declares-a-status": {
+      "query": "document[path^=docs/adr][phase=unknown]",
+      "message": "{0} never says what its status is",
+      "hint": "add a status: field to {0.path} - accepted, superseded or rejected",
+      "severity": "error"
+    }
+  }
 }

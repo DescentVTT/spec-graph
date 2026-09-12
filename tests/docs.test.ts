@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import { HELP } from '../src/cli.js';
 import { DEFAULT_SEVERITIES, RULE_IDS } from '../src/rules.js';
-import { attributesOf } from '../src/select.js';
+import { attributesOf, SELECTOR_KEYS } from '../src/select.js';
 import { EDGE_KINDS, OPENNESS_OF, type Disposition, type DocumentNode, type ItemNode } from '../src/types.js';
 
 /**
@@ -99,27 +99,9 @@ describe('the README disposition table', () => {
 
 describe('the documented selector vocabulary', () => {
   /** Every attribute key the engine answers to, checked against both nodes. */
-  const SUPPORTED = [
-    'id',
-    'kind',
-    'title',
-    'file',
-    'line',
-    'document',
-    'path',
-    'phase',
-    'status',
-    'receptivity',
-    'alias',
-    'state',
-    'disposition',
-    'openness',
-    'section',
-    'text',
-    'body',
-    'evidence',
-    'conflicted',
-  ];
+  // The engine's own list, so the three assertions below cannot be satisfied
+  // by a copy of it that has quietly fallen behind.
+  const SUPPORTED = SELECTOR_KEYS;
 
   const documentNode: DocumentNode = {
     id: 'ADR-0001',
@@ -173,6 +155,21 @@ describe('the documented selector vocabulary', () => {
 
   it('answers front-matter keys', () => {
     expect(attributesOf(documentNode, 'fm.owner')).toEqual(['platform']);
+  });
+
+  it('is the list the engine actually switches on', () => {
+    // `SELECTOR_KEYS` is published so a message template can be strict about
+    // an attribute nobody answers to. A published list that has drifted from
+    // the switch it mirrors would reject a key that works, or accept one that
+    // renders as nothing - and a diagnostic with a blank where a document name
+    // should be is the failure ADR-0016 exists to prevent.
+    const source = readFileSync('src/select.ts', 'utf8');
+    const body = source.slice(
+      source.indexOf('export function attributesOf('),
+      source.indexOf('function testPredicate('),
+    );
+    const cases = [...body.matchAll(/case '([a-z.]+)':/g)].map((match) => match[1] as string);
+    expect([...new Set(cases)].sort()).toEqual([...SELECTOR_KEYS].sort());
   });
 });
 

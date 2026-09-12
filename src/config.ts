@@ -19,8 +19,9 @@
 
 import { readFileSync } from 'node:fs';
 
+import { compileProjectRules, type ProjectRule } from './project-rules.js';
 import { RULE_IDS } from './rules.js';
-import type { RuleId, Severity } from './types.js';
+import { isProjectRule, type AnyRuleId, type RuleId, type Severity } from './types.js';
 
 /** File names looked for, in order. The first that exists is the one used. */
 export const CONFIG_FILES: readonly string[] = Object.freeze([
@@ -55,9 +56,18 @@ export interface SpecGraphConfig {
   readonly baseline?: string | undefined;
   /** Fail when a baseline entry no longer occurs. See ADR-0012. */
   readonly ratchet?: boolean | undefined;
-  readonly severities?: Partial<Record<RuleId, Severity>> | undefined;
+  readonly severities?: Partial<Record<AnyRuleId, Severity>> | undefined;
   readonly strict?: boolean | undefined;
   readonly maxRelated?: number | undefined;
+  /**
+   * Conventions this repository checks that spec-graph does not.
+   *
+   * A selector, a sentence and a severity. Compiled here rather than carried as
+   * raw JSON, so a rule that cannot run is reported at load time next to every
+   * other configuration problem - and not as a rule that quietly finds nothing.
+   * See ADR-0016.
+   */
+  readonly rules?: readonly ProjectRule[] | undefined;
 }
 
 export interface LoadedConfig {
@@ -168,9 +178,12 @@ function readFields(raw: Record<string, unknown>, source: string): LoadedConfig 
     if (!isRecord(value)) {
       problems.push(`${source}: "severities" must be an object of rule to severity`);
     } else {
-      const severities: Partial<Record<RuleId, Severity>> = {};
+      const severities: Partial<Record<AnyRuleId, Severity>> = {};
       for (const [rule, level] of Object.entries(value)) {
-        if (!RULE_IDS.includes(rule as RuleId)) {
+        // A project rule is named here by its full id, `project:no-drafts`, the
+        // same spelling `--rule` takes and a report prints. Whether one exists
+        // is checked below, once both halves of the file have been read.
+        if (!RULE_IDS.includes(rule as RuleId) && !isProjectRule(rule as AnyRuleId)) {
           problems.push(`${source}: unknown rule "${rule}" in "severities"`);
           continue;
         }
@@ -178,10 +191,25 @@ function readFields(raw: Record<string, unknown>, source: string): LoadedConfig 
           problems.push(`${source}: "severities.${rule}" must be error, warn, info or off`);
           continue;
         }
-        severities[rule as RuleId] = level;
+        severities[rule as AnyRuleId] = level;
       }
       config.severities = severities;
     }
+  }
+
+  const compiled = raw['rules'] === undefined ? null : compileProjectRules(raw['rules'], source);
+  if (compiled !== null) {
+    problems.push(...compiled.problems);
+    config.rules = compiled.rules;
+  }
+
+  // A severity naming a project rule that nothing defines is a line that will
+  // never do anything, and reading like it does is the one thing a
+  // configuration file must not be allowed to do.
+  const defined = new Set<string>((compiled?.rules ?? []).map((rule) => rule.id));
+  for (const rule of Object.keys(config.severities ?? {})) {
+    if (!isProjectRule(rule as AnyRuleId) || defined.has(rule)) continue;
+    problems.push(`${source}: "severities.${rule}" names no rule in "rules"`);
   }
 
   for (const key of Object.keys(raw)) {
@@ -200,6 +228,7 @@ const KNOWN_KEYS: ReadonlySet<string> = new Set([
   'historyPatterns',
   'baseline',
   'ratchet',
+  'rules',
   'severities',
   'strict',
   'maxRelated',

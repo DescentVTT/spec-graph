@@ -2,7 +2,7 @@ import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { analyse, analyseSources, DEFAULT_CONCURRENCY, DEFAULT_PATTERNS } from '../src/runner.js';
-import type { RuleId } from '../src/types.js';
+import type { AnyRuleId } from '../src/types.js';
 
 /**
  * The orchestration layer, tested through its observable contract.
@@ -75,7 +75,7 @@ afterAll(async () => {
   await rm(ROOT, { recursive: true, force: true });
 });
 
-const rules = (diagnostics: readonly { rule: RuleId }[]): RuleId[] => diagnostics.map((d) => d.rule);
+const rules = (diagnostics: readonly { rule: AnyRuleId }[]): AnyRuleId[] => diagnostics.map((d) => d.rule);
 
 /* -------------------------------------------------------------------------- */
 

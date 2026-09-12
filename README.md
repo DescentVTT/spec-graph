@@ -363,6 +363,9 @@ gate without writing any code:
     ! npx spec-graph query 'document[path^=docs/prd] -depends-on-> document[phase=draft]'
 ```
 
+That shell line is a rule wearing a disguise. Give it a name and a sentence and
+it becomes one — see [your own rules](#your-own-rules) below.
+
 **Grammar**
 
 ```text
@@ -382,6 +385,64 @@ Relations    -kind->   <-kind-   =kind=>   <=kind=      (= forms are transitive)
 Items inherit their document's lifecycle, so `item[phase=retired]` means what you
 expect. A query evaluates to **paths**, not endpoints, which is why a finding can
 name both ends and the line that connects them.
+
+## Your own rules
+
+A convention spec-graph never anticipated is a selector plus a sentence. Write
+both in the config file and it becomes a rule like any other:
+
+```json
+{
+  "rules": {
+    "no-draft-dependency": {
+      "query": "document[phase=active] -depends-on-> document[phase=draft]",
+      "message": "{0} depends on {1}, which is still a draft",
+      "hint": "wait for {1} to be accepted, or drop it from {0.path}",
+      "severity": "error"
+    }
+  }
+}
+```
+
+```text
+x docs/adr/0002-delivery.md:4:13  project:no-draft-dependency
+    ADR-0002 depends on ADR-0001, which is still a draft
+    > wait for ADR-0001 to be accepted, or drop it from docs/adr/0002-delivery.md
+```
+
+The finding points at the line that *declares* the relation, because that is
+where a human goes to change the answer — the same discipline every built-in
+follows.
+
+| Field | |
+|---|---|
+| `query` | One selector, or a list of them read as a union. |
+| `message` | The headline. `{0}` is the first node on the path, `{1}` the next; `{1.phase}` and `{0.fm.owner}` read any selector attribute. |
+| `hint` | The next action. Optional, templated the same way. |
+| `severity` | `error`, `warn`, `info` or `off`. Defaults to `warn`. |
+
+It defaults to `warn` on purpose: a rule a team has just written has not yet
+earned the right to fail their build, and the first run of a new convention is
+when it is most likely to be wrong.
+
+The id is the name with `project:` in front, which is why it can never collide
+with a built-in — and why everything else already works. It is baselined by
+`--record-baseline`, silenced by `--rule project:no-draft-dependency=off`,
+escalated by `--strict`, listed by `spec-graph rules`, exempted on journals like
+every other rule about obligations, and emitted as a first-class `ruleId` in
+SARIF, where a project rule describes itself by the selector it is.
+
+Mistakes are reported when the file is read, not discovered as a rule that
+quietly finds nothing:
+
+```text
+spec-graph: .spec-graph.json: rules.no-drafts: mismatched arrow: use -kind-> for
+  one hop or =kind=> for transitive (at character 10)
+spec-graph: .spec-graph.json: rules.owner: "{1.phse}" asks for an attribute
+  nothing has
+```
+
+See [ADR-0016](docs/adr/0016-a-query-needs-a-sentence.md).
 
 ## Directives
 
@@ -523,7 +584,13 @@ command. spec-graph reads the first of `.spec-graph.json`,
   "baseline": ".spec-graph-baseline.json",
   "ratchet": true,
   "severities": { "self-reference": "off" },
-  "strict": true
+  "strict": true,
+  "rules": {
+    "no-draft-dependency": {
+      "query": "document[phase=active] -depends-on-> document[phase=draft]",
+      "message": "{0} depends on {1}, which is still a draft"
+    }
+  }
 }
 ```
 

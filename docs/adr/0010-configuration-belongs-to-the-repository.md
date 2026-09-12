@@ -105,9 +105,11 @@ whole mechanism off for one run.
 - [ ] Should configuration be discovered upward from the working directory
       rather than read from `--root`? A monorepo with per-package specs would
       want that, and nothing has asked yet.
-- [ ] Named queries from ADR-0005 still have no home. The file is now the
-      obvious one, but a query needs a severity and a message to be a rule, and
-      that is a larger design than this.
+- [x] Named queries from ADR-0005 still have no home.
+      **Resolved (2026-09-12):** they live here, under `rules`. The larger
+      design is [ADR-0016](0016-a-query-needs-a-sentence.md); what this file
+      contributes is the one thing it was always going to - a place a repository
+      can write down what is true of itself.
 
 ## See also
 

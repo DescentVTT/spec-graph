@@ -42,6 +42,7 @@ files ─▶ markdown.ts ─▶ extract.ts ─▶ resolve.ts ─▶ graph.ts ─
 | `graph.ts` | Indexed, immutable graph. Adjacency, reachability, Tarjan. |
 | `select.ts` | The selector language: parser and execution engine. |
 | `rules.ts` | The diagnostics. Two of them are selector queries. |
+| `project-rules.ts` | Selectors a repository declared, compiled and checked. |
 | `report.ts` | Terminal, JSON, Graphviz and Mermaid output. |
 | `glob.ts` / `paths.ts` | Pattern matching and POSIX path arithmetic. |
 | `runner.ts` / `cli.ts` | Orchestration and the command line. |
@@ -64,6 +65,12 @@ If a change needs to touch a rule, ask whether it belongs in a table instead.
 one; several are, and they are the proof the query language is worth exposing.
 If it is not expressible as a path query — dangling references never became
 edges, and a cycle is not a fixed-length path — implement it directly and say so.
+
+Before writing one, ask whether it belongs to *this* repository rather than to
+every repository. A convention one team holds is a `rules` entry in their own
+`.spec-graph.json` — a selector, a message and a severity, with no code involved
+([ADR-0016](docs/adr/0016-a-query-needs-a-sentence.md)). A built-in has to earn
+its place by being true of corpora nobody here has seen.
 
 ## The bar for a change
 

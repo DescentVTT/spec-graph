@@ -360,13 +360,34 @@ export type RuleId =
   | 'self-reference'
   | 'unknown-relation-key';
 
+/**
+ * A rule a repository wrote for itself, as a selector plus a sentence.
+ *
+ * Namespaced, and the namespace is load-bearing rather than decorative. A
+ * built-in id can never contain a colon, so a project rule can never collide
+ * with one however it is named - which means `--rule`, the severity table, a
+ * baseline entry and a SARIF `ruleId` all keep working without anyone having to
+ * reserve a vocabulary. See ADR-0016.
+ */
+export type ProjectRuleId = `project:${string}`;
+
+/** Any rule that can produce a finding: built in, or written by a repository. */
+export type AnyRuleId = RuleId | ProjectRuleId;
+
+/** True for an id in the project namespace, as opposed to a built-in. */
+export function isProjectRule(rule: AnyRuleId): rule is ProjectRuleId {
+  return rule.startsWith(PROJECT_RULE_PREFIX);
+}
+
+export const PROJECT_RULE_PREFIX = 'project:';
+
 export interface RelatedLocation {
   readonly at: SourceRef;
   readonly note: string;
 }
 
 export interface Diagnostic {
-  readonly rule: RuleId;
+  readonly rule: AnyRuleId;
   readonly severity: Exclude<Severity, 'off'>;
   /** One line, no trailing period. The headline of the finding. */
   readonly message: string;

@@ -15,8 +15,9 @@ import { createGlobMatcher, createReferenceFilter, walkFiles, type WalkedFile } 
 import { buildGraph, type SpecGraph } from './graph.js';
 import { toPosix } from './paths.js';
 import { resolveCorpus, type ResolvedCorpus } from './resolve.js';
+import type { ProjectRule } from './project-rules.js';
 import { runRules, type RuleOptions } from './rules.js';
-import type { AnalysisSummary, Diagnostic, ParseProblem, RuleId, Severity } from './types.js';
+import type { AnalysisSummary, AnyRuleId, Diagnostic, ParseProblem, Severity } from './types.js';
 
 /** Patterns used when the caller names none. */
 export const DEFAULT_PATTERNS: readonly string[] = Object.freeze([
@@ -54,7 +55,9 @@ export interface AnalyseOptions {
    * are still checked; their obligations and lifecycle are not. See ADR-0011.
    */
   readonly historyPatterns?: readonly string[] | undefined;
-  readonly severities?: Partial<Record<RuleId, Severity>> | undefined;
+  readonly severities?: Partial<Record<AnyRuleId, Severity>> | undefined;
+  /** Conventions the repository wrote for itself. See ADR-0016. */
+  readonly projectRules?: readonly ProjectRule[] | undefined;
   readonly concurrency?: number | undefined;
   readonly maxRelated?: number | undefined;
   readonly followSymlinks?: boolean | undefined;
@@ -98,6 +101,7 @@ export async function analyse(options: AnalyseOptions): Promise<AnalysisResult> 
       isIgnoredFamily: createFamilyFilter(options.families, options.ignoreFamilies),
       isRecord: createHistoryMatcher(options.historyPatterns),
       ...(options.severities !== undefined ? { severities: options.severities } : {}),
+      ...(options.projectRules !== undefined ? { projectRules: options.projectRules } : {}),
       ...(options.maxRelated !== undefined ? { maxRelated: options.maxRelated } : {}),
     }),
     walked.map((file) => file.path),
