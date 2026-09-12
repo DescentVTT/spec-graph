@@ -53,6 +53,18 @@ Three properties are kept deliberately:
 carries the baseline note, the summary and the per-file detail SARIF has nowhere
 to put.
 
+### A rule says which decision it came from (2026-09-13)
+
+`spec-graph rules <rule-id> --explain` prints the rule's severity, its selector
+where it has one, and the ADR that decided it. The last of those is the point.
+A finding is a claim about somebody's repository, and until now the reasoning
+behind the claim was in a document they had no way to find from the message.
+
+The table holds a **pointer, not a paraphrase**. A second copy of the reasoning
+is a second thing to keep true, and this project exists because that does not
+happen. A test holds every pointer to a file this corpus checks, so renaming an
+ADR breaks the link in the same run that breaks every reference to it.
+
 ### Markdown, because of who reads it (2026-09-13)
 
 SARIF puts a finding on the line that caused it, which is where somebody fixing
@@ -172,6 +184,15 @@ function of text.
 visualisation library, which is a runtime dependency wherever it sits in the
 tarball, producing output whose bytes depend on a layout pass. `--graph-format
 dot` and `mermaid` hand the layout to a tool built for it, and both are text.
+
+Asked as "elevate the Mermaid export with phase styling and typed edges", most
+of it turned out to be there already, in the commit that first built the engine:
+`toMermaid` emits a `classDef` per phase, a `class` on every document that has one, and
+`-->|kind|` on every edge. What is genuinely missing is a `subgraph` per
+directory, which is the one piece worth its own decision - it changes the shape
+of an export somebody's documentation build is parsing, to group a corpus that
+is one directory in most repositories. Left open rather than done for that
+reason, not because it is hard.
 
 **Emitting SARIF instead of JSON.** SARIF has no home for the baseline note, the
 per-file counts or the summary, and a consumer wanting those would have to

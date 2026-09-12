@@ -386,6 +386,19 @@ Items inherit their document's lifecycle, so `item[phase=retired]` means what yo
 expect. A query evaluates to **paths**, not endpoints, which is why a finding can
 name both ends and the line that connects them.
 
+`~=` is a regular expression matched by an automaton that cannot backtrack, so a
+predicate is linear in the subject whatever the pattern — `^([A-Za-z0-9_]+[ ]?)+$`
+against a fifty-four-character title takes `RegExp` 103 seconds and this 13
+microseconds. It reads the usual syntax minus backreferences and lookaround,
+which are not regular; both are refused when the selector is read, with the
+character pointed at. See [ADR-0017](docs/adr/0017-a-predicate-must-finish.md).
+
+On a register, a region answers its file's front matter for every descriptive
+key — `fm.owner` on a decision inside a register is the register's owner — while
+the keys a region owns itself, its identifier and status and title, and any key
+that declares a relation, stay on the file. See
+[ADR-0009](docs/adr/0009-a-specification-is-a-region.md).
+
 ## Your own rules
 
 A convention spec-graph never anticipated is a selector plus a sentence. Write
@@ -431,6 +444,12 @@ with a built-in — and why everything else already works. It is baselined by
 escalated by `--strict`, listed by `spec-graph rules`, exempted on journals like
 every other rule about obligations, and emitted as a first-class `ruleId` in
 SARIF, where a project rule describes itself by the selector it is.
+
+To see what a rule matches without copying its selector back out of the file:
+
+```bash
+spec-graph query project:no-draft-dependency --verbose
+```
 
 Mistakes are reported when the file is read, not discovered as a rule that
 quietly finds nothing:
@@ -594,6 +613,14 @@ command. spec-graph reads the first of `.spec-graph.json`,
 }
 ```
 
+The file is looked for in the working directory and then upward, as far as the
+repository — a directory holding `.git` — and **the directory holding it becomes
+the root**. So a run from `packages/auth` reports what a run from the top
+reports, byte for byte, because every path here is relative to the root. The
+nearest file wins, `--root` names the root yourself and turns discovery off, and
+a path typed on the command line stays relative to where you typed it. See
+[ADR-0018](docs/adr/0018-the-configuration-file-is-the-root.md).
+
 A flag always wins over the file, and list flags **add** to it rather than
 replacing it — a `--ignore-ref` on the command line is one more exclusion, not a
 decision to discard what the repository already declared. `--verbose` prints
@@ -644,10 +671,14 @@ already exists in the corpus.
 ```text
 spec-graph [check] [patterns...]     Validate the graph. The default.
 spec-graph query <selector>          Run a selector, print matching paths.
+spec-graph query project:<rule>      Run a registered rule by its id.
 spec-graph graph [patterns...]       Export for Graphviz, Mermaid or JSON.
-spec-graph rules [--explain]         List the diagnostics.
+spec-graph rules [rule-id]           List the diagnostics; --explain adds
+                                     each selector and the ADR behind it.
 
---root <dir>            Directory patterns resolve against
+--root <dir>            Directory patterns resolve against, and the root of the
+                        run. Without it the config file is discovered upward and
+                        its directory is the root
 --ignore <glob>         Skip paths (repeatable)
 --ignore-ref <glob>     Do not report these reference targets (repeatable)
 --family <name>         Families a bare identifier may name (repeatable)
@@ -657,7 +688,7 @@ spec-graph rules [--explain]         List the diagnostics.
 --record-baseline <f>   Write today's findings as accepted debt, exit 0
 --ratchet               Also fail when a baseline entry no longer occurs
 --no-config             Ignore .spec-graph.json and the package.json key
---format <fmt>          human | json | sarif
+--format <fmt>          human | json | sarif | markdown
 --graph-format <fmt>    dot | mermaid | json
 --documents-only        Hide items; their relations lift onto their documents
 --rule <id>=<severity>  error | warn | info | off (repeatable)
@@ -679,6 +710,19 @@ rather than a silent success.
 - name: Check the specification graph
   run: npx spec-graph "docs/**/*.md" --format json > spec-graph.json
 ```
+
+`--format markdown` writes the same facts as a table, for the place reviewers
+actually look:
+
+```yaml
+- name: Summarise the specification graph
+  if: always()
+  run: npx spec-graph --format markdown >> "$GITHUB_STEP_SUMMARY"
+```
+
+It leads with the verdict, counts the corpus, gives every finding its hint, and
+*names* the baseline entries that no longer occur rather than counting them —
+on a pull request a count is the one thing a reader cannot act on.
 
 The JSON report is versioned, flat, and carries start and end positions for
 every finding, so a bot can annotate a diff:
@@ -739,7 +783,7 @@ exported. Reporters, editor extensions and custom rules are all first-class.
 
 ## Design
 
-Twelve ADRs, which `spec-graph` validates on every CI run:
+Eighteen ADRs, which `spec-graph` validates on every CI run:
 
 - [ADR-0001 — A hand-written Markdown scanner](docs/adr/0001-hand-written-markdown-scanner.md)
 - [ADR-0002 — A four-phase lifecycle lattice](docs/adr/0002-lifecycle-lattice.md)
@@ -756,11 +800,16 @@ Twelve ADRs, which `spec-graph` validates on every CI run:
 - [ADR-0013 — When the scanner is unsure, it hands back prose](docs/adr/0013-the-scanner-hands-back-prose.md)
 - [ADR-0014 — A relation is spelled in both directions](docs/adr/0014-a-relation-is-spelled-both-ways.md)
 - [ADR-0015 — Feedback goes where the tools already look](docs/adr/0015-feedback-goes-where-the-tools-already-look.md)
+- [ADR-0016 — A query needs a sentence before it is a rule](docs/adr/0016-a-query-needs-a-sentence.md)
+- [ADR-0017 — A predicate must finish](docs/adr/0017-a-predicate-must-finish.md)
+- [ADR-0018 — The configuration file is the root](docs/adr/0018-the-configuration-file-is-the-root.md)
 
 **Zero runtime dependencies.** Node 22+, native ESM, TypeScript strict with
 `noUncheckedIndexedAccess` and `exactOptionalPropertyTypes`. The Markdown
-scanner, the front-matter reader, the glob matcher and the query parser are all
-written here, so the whole package is auditable in an afternoon.
+scanner, the front-matter reader, the glob matcher, the query parser and the
+regular-expression matcher behind `~=` are all written here, so the whole
+package is auditable in an afternoon — and nothing in the pipeline can take
+longer than its input.
 
 **Verified, not just covered.** 411 tests; 94.2% statement and 96.9% line
 coverage. Coverage says a line ran, so the suite is also held to a mutation

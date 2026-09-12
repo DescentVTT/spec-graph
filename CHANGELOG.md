@@ -3,6 +3,241 @@
 Notable changes, newest first. Versions follow [semver](https://semver.org):
 a patch fixes behaviour without asking anything of a repository that upgrades.
 
+## 0.5.0
+
+One shipped feature turned out to have shipped a false positive, and the
+predicate that was documented as dangerous is now an automaton that cannot
+backtrack. Four of the ADR suite's open questions answered by building the
+thing, seven directions declined with a reason, one deferred with its design
+settled so it is not re-litigated.
+
+### Fixed
+
+**A register's decisions answer for the front matter above them.** This was a
+false positive in the feature 0.4.0 led with, and the worst kind: confident and
+unanswerable. A region answered *nothing* for `fm.owner`, `!=` against an absent
+value is a mismatch, so a repository writing
+
+```json
+"rules": { "owned": { "query": "document[fm.owner!=platform]" } }
+```
+
+was told twice that a register saying `owner: platform` is not owned by
+platform — with the message rendering `{0.fm.owner}` as the literal placeholder,
+because there was nothing to put there.
+
+A region now carries its file's front matter minus two kinds of key. A
+**relation** key stays behind: `supersedes:` at the top of a register supersedes
+on behalf of the register, not of each decision in it. So does a key the region
+**answers for itself** — its identifier, status, title and aliases, which are
+precisely the things a register exists to vary row by row.
+[ADR-0009](docs/adr/0009-a-specification-is-a-region.md) carried this as a
+narrowed open question and called it a gap. It was a defect, and it was found by
+pointing the binary at a register rather than by reading the code.
+
+Read from the other side, this can *add* findings: a rule phrased positively,
+`document[fm.deprecated]`, now matches a register's decisions as well as the
+register. That is the same correction - the decisions really are described by
+the front matter above them - and worth knowing before upgrading a repository
+that keeps registers and writes rules about front matter.
+
+### Added
+
+**`~=` is matched by an automaton that cannot backtrack.**
+[ADR-0016](docs/adr/0016-a-query-needs-a-sentence.md) documented this hazard
+with `(a+)+$`, which nobody writes, and priced the fix at "worth it only if a
+real repository hangs". Both were wrong. `^([A-Za-z0-9_]+[ ]?)+$` is what
+somebody writes to check that a title is words separated by single spaces:
+
+| subject | `RegExp` | now |
+| --- | ---: | ---: |
+| `the quick brown fox jumps over the lazy dog!` | 0.9s | 11us |
+| `... over the lazy dog and!` | 5.4s | 12us |
+| `... over the lazy dog and keeps!` | 103s | 13us |
+
+A word of k letters can be cut into pieces 2^(k-1) ways and a backtracking
+engine tries the product, so a sixty-character title does not finish this year —
+unattended, on every build, against a corpus whose titles the author of the rule
+has not read. The work is now exactly O(pattern x subject), and **no stage of
+this pipeline can take longer than its input.**
+
+It costs a dialect. Backreferences and lookaround are not regular, so they are
+refused while the selector is read, with the character pointed at — as are three
+things `RegExp` accepts and should not: an unknown letter escape, which `RegExp`
+reads as the letter, so a pattern meant as an anchor silently matches a capital
+A; a Unicode property escape, which needs a table this package will not carry;
+and octal escapes. Everything else works, and a pattern that does not parse is
+now a usage error rather than a pattern that silently matches nothing.
+
+Verified against the engine it replaces: **1.33 million pattern-subject pairs,
+zero disagreements**, 19,000 of them committed as a gate. It earned that twice
+over, on one clause of the language specification read backwards in two
+different places - the word characters `` recognises, and whether a character
+whose upper case is ASCII may match `[A-Z]`. The second was found by the
+mutation score pointing at a corpus with a blind spot in it rather than at a
+test. See [ADR-0017](docs/adr/0017-a-predicate-must-finish.md) and
+[ADR-0007](docs/adr/0007-mutation-testing.md).
+
+**Configuration is discovered upward, and the file holding it is the root.**
+
+```bash
+cd packages/auth && spec-graph check     # the repository's rules, the
+                                         # repository's patterns, the
+                                         # repository's paths
+```
+
+[ADR-0010](docs/adr/0010-configuration-belongs-to-the-repository.md) worried
+that discovery would make a run depend on where it started. Reading the working
+directory already did, and silently: a check from a package directory found no
+configuration, ran no project rules, used the default include patterns, and
+printed a verdict in the same shape as the real one. Because the directory
+holding the file becomes the root, and every path here is relative to the root,
+a run from anywhere inside the repository now produces **byte-identical** output
+to a run from the top. The walk stops at the repository — a directory holding
+`.git` — so a stray file in a home directory cannot reach it. `--root` names the
+root yourself and turns discovery off, and a path typed on the command line
+stays relative to where you typed it. See
+[ADR-0018](docs/adr/0018-the-configuration-file-is-the-root.md).
+
+**`spec-graph query project:<rule>` runs a registered rule by name.** The rule
+is already compiled by the time the command runs, and the alternative was
+copying its selector back out of the configuration file by hand. Several
+selectors are deduped the way the check dedupes them, so this prints the set the
+check reports on; `--verbose` names them, which is the question a team
+calibrating a convention is actually asking. Built-in rules are deliberately not
+addressable this way: a project rule *is* its selector, while a built-in is a
+selector plus judgement, and printing a set that differs from the findings would
+invite the wrong conclusion.
+
+**`spec-graph rules <rule-id> --explain` names the ADR that decided it.** A rule
+that fires is a claim about somebody's repository, and the reasoning behind the
+claim was in a document nobody could find from the message. The table holds a
+pointer rather than a paraphrase, because a second copy of the reasoning would
+drift from the first — and a test holds every pointer to a file this corpus
+checks, so a renamed ADR breaks the link in the same run that breaks the
+reference.
+
+**`--format markdown`** writes the same facts as a GitHub-flavoured table, for
+`$GITHUB_STEP_SUMMARY` or a pull-request comment:
+
+```yaml
+- run: npx spec-graph --format markdown >> "$GITHUB_STEP_SUMMARY"
+```
+
+SARIF puts a finding on the line that caused it, which is where somebody fixing
+one wants it, and says nothing at all to the person deciding whether to merge.
+This leads with the verdict, counts the corpus, gives every finding its hint,
+and *names* the stale baseline entries rather than counting them — on a pull
+request a count is the one thing a reader cannot act on. No environment
+detection: a format that changed because a variable was set would be a format
+nobody controls.
+
+### Changed
+
+Four behaviours move, none of them a rule. Three can turn a run that passed
+into a usage error, which is the point in each case; the fourth changes what a
+run from a subdirectory reports.
+
+- **A `~=` pattern that does not parse is a usage error**, with the character
+  pointed at, rather than a pattern that matches nothing. The old silence was
+  indistinguishable from a rule that ran and found none.
+- **A `~=` pattern using a backreference, lookaround, `\p{...}`, an octal
+  escape or an unknown letter escape is refused**, for the reasons above. If
+  you have one, the message says which construct and why; `^=`, `$=` and `*=`
+  cover the fixed-prefix, suffix and substring cases without a pattern at all.
+- **A run from a subdirectory now finds the repository's configuration**, and
+  reports repository-relative paths because the configuration's directory is
+  the root. A script that read paths out of a nested run will see them change.
+  `--root` keeps the old behaviour exactly.
+- **`spec-graph rules <word>` reads the word as a rule id** and reports one
+  that names nothing. It used to be collected as an include pattern, which the
+  command has no use for.
+
+### Declined
+
+Each with its reasoning in the ADR that owns the question, rather than in a
+roadmap nobody reads:
+
+- **An MCP server.** The capability is already here — `analyseSources()` takes
+  text, `--format json` is the answer — so what is left is a protocol
+  implementation, hand-written to keep the dependency count at zero, tracking a
+  specification that is still moving, to expose three tools that are three shell
+  commands an agent can already run.
+- **A language server.** The right shape for editor feedback and a second
+  package's worth of work, and SARIF already reaches the problems pane. Two of
+  the three hard parts are done — `analyseSources()` needs no file on disk, and
+  every finding carries a span — so it should start when somebody wants hover
+  and go-to-definition, not as a way of delivering diagnostics that already
+  arrive.
+- **A `--watch` daemon.** Declined again, with a better reason than last time:
+  the incremental half of it cannot work. Whether a bare `ADR-0099` in prose is
+  a citation depends on which families exist elsewhere, and a near-miss
+  suggestion is computed against every sibling — touch one file and the honest
+  set to recompute is all of them. Which is fine, because the pipeline is a pure
+  function and 60 ms long. And then the resident index buys nothing, and the
+  feature is a loop.
+- **Code frames in the terminal.** The report already prints
+  `file:line:column`, which every terminal in use turns into a click, and
+  `renderMatch` already prints the shape of a multi-hop path.
+- **Provenance and attestation metadata.** A timestamp in the output means no
+  two reports of one corpus are ever byte-identical, which is the property every
+  format here is built to have. The commit is something CI already knows.
+- **An interactive SVG.** A layout engine or a vendored library is a runtime
+  dependency wherever it sits in the tarball, and its bytes depend on a layout
+  pass. `dot` and `mermaid` hand layout to tools built for it, and both are
+  text. The other half of that ask - phase styling and typed edges in the
+  Mermaid export - has been there since the first release. What is left is a
+  `subgraph` per directory, which changes the shape of an export somebody's
+  documentation build is parsing, to group a corpus that is one directory in
+  most repositories.
+- **Definition lists as a register form.** Two unrelated syntaxes behind one
+  name: raw `<dl>`, which the scanner leaves as prose deliberately because
+  ADR-0001's masking guarantee is what keeps a code fence quiet, and the
+  PHP-Markdown-Extra form, which is not CommonMark and which no corpus here
+  contains. Either would need a new parser for a convention nobody has written
+  down.
+
+One is deferred rather than declined, with half its design recorded so it is not
+re-litigated: a **relational diff** between two states of the graph, taken
+between two `--graph-format json` exports rather than between two git revisions,
+because revisions mean spawning a binary underneath a pipeline that is a pure
+function of text. See
+[ADR-0015](docs/adr/0015-feedback-goes-where-the-tools-already-look.md).
+
+### Verified
+
+| | |
+|---|---|
+| `npm run lint` | pass |
+| `npm test` | 833 passing, 21 files |
+| `npm run selfcheck` | pass, over 21 documents and 159 relations |
+| `npm run test:mutation` | **80.54%** over 9,697 mutants, 74m27s |
+| `break` | unchanged at 70 |
+
+79.41% over 8,585 mutants at 0.4.0 against 80.54% over 9,697 here, on the same
+machine: 1,112 more mutants and a point higher. The new code carries itself -
+`regex.ts` at **90.61%**, `config.ts` at 92.37%, `project-rules.ts` still at
+99.50% - and lose all 343 timeouts and the figure reads 77.00%.
+
+The first full run of this release read 80.35%, and its survivor list is where
+the last defect came from. A mutant on the line stepping past `^` in a negated
+class survived 1.33 million differential comparisons, because the corpus only
+ever tested classes against two-character subjects; one-character subjects
+killed it and then caught `[A-Z]` matching U+017F. `report.ts` went from 66.30%
+to 70.84% on the same pass, once the Markdown tests asserted the table's
+structure - rectangular rows, a blank line before every block, every summary
+number present - rather than fragments of its text. What remains there is
+mostly the older formatters.
+
+Between those two runs `rules.ts` moved from 79.42% to 76.02% and
+`directives.ts` from 77.92% to 74.03%, with neither file touched: the tests added
+in between changed which tests `perTest` believes cover which mutants.
+[ADR-0007](docs/adr/0007-mutation-testing.md) has recorded that shape for two
+releases, and it is why a per-file drop is a question and not an answer.
+
+The hosted number is the one that governs, because it is where the build fails,
+and it comes from CI on push. 75.40% from 0.4.0 stands until it does.
+
 ## 0.4.0
 
 Ten open questions across the ADR suite, answered. Five shipped, three declined

@@ -18,8 +18,9 @@ tests — Vitest reads `src/` directly.
 
 ## The pipeline
 
-Every module below is a pure function of its input except `runner.ts`, which is
-the only thing that touches the filesystem. That is deliberate: it is why the
+Every module below is a pure function of its input except `runner.ts`, `glob.ts`,
+`config.ts` and `cli.ts`, which are the only ones that touch the filesystem —
+and a test in `tests/docs.test.ts` holds that list to exactly four. That is deliberate: it is why the
 test suite can build pathological corpora in memory, and why a monorepo tool can
 feed spec-graph documents that never existed on disk.
 
@@ -41,6 +42,7 @@ files ─▶ markdown.ts ─▶ extract.ts ─▶ resolve.ts ─▶ graph.ts ─
 | `resolve.ts` | References → edges, or reportable foreign-key failures. |
 | `graph.ts` | Indexed, immutable graph. Adjacency, reachability, Tarjan. |
 | `select.ts` | The selector language: parser and execution engine. |
+| `regex.ts` | The matcher behind `~=`: an automaton that cannot backtrack. |
 | `rules.ts` | The diagnostics. Two of them are selector queries. |
 | `project-rules.ts` | Selectors a repository declared, compiled and checked. |
 | `report.ts` | Terminal, JSON, Graphviz and Mermaid output. |
@@ -58,6 +60,8 @@ a code change. That is the whole point of the design:
 - a resolution marker (`"**Moot**"`) → `MARKERS` in `state.ts`
 - a heading that holds obligations → `OBLIGATION_SECTIONS` in `extract.ts`
 - a specification family directory → `FAMILY_DIRECTORIES` in `identity.ts`
+- a front-matter key a register's regions must *not* inherit → `UNINHERITED` in
+  `extract.ts` ([ADR-0009](docs/adr/0009-a-specification-is-a-region.md))
 
 If a change needs to touch a rule, ask whether it belongs in a table instead.
 
@@ -100,6 +104,12 @@ Mutation testing matters here more than coverage does. This codebase is built ou
 of vocabularies and boundary conditions, and either can be weakened by an
 ordinary-looking refactor without a single test going red. If you are adding a
 heuristic, check that a mutant of it dies.
+
+**Where an oracle exists, use it.** `regex.ts` replaces a built-in engine, so
+its tests do not assert what its author believed about regular expressions —
+they run both engines over the same patterns and subjects and compare. That is
+what caught a clause of the language specification being read backwards, and it
+is the pattern to copy for anything else that re-implements something standard.
 
 ## Style
 

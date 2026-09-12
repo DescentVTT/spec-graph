@@ -52,8 +52,8 @@ export default {
   timeoutMS: 15000,
   concurrency: 8,
   // `break` is a regression guard, not an aspiration: it sits below the score
-  // that actually governs - 75.40% on the hosted runner at 0.4.0, against 79.41%
-  // over the same 8,585 mutants on a developer machine - so that losing ground
+  // that actually governs - 75.40% on the hosted runner at 0.4.0, against 80.54%
+  // over 9,697 mutants on a developer machine at 0.5.0 - so that losing ground
   // fails the build while ordinary refactoring does not.
   //
   // It stays at 70, and 0.3.0 measured three separate reasons why. Two full runs
@@ -61,7 +61,7 @@ export default {
   // point each in both directions, up to 4.76. An incremental run of the same
   // commit as the hosted rebuild read 3.18 points high. And roughly 300 of these
   // mutants are detected by timing out, which is a timing measurement: lose all
-  // 319 of them locally and 79.41 becomes 75.69, and losing the hosted run's 312
+  // 343 of them locally and 80.54 becomes 77.00, and losing the hosted run's 312
   // takes 75.40 to 71.76. A floor that chased any of those numbers would fail
   // builds for no reason.
   // See docs/adr/0007-mutation-testing.md.

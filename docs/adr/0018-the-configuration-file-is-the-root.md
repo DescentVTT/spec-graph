@@ -20,9 +20,9 @@ The worry was the right shape and pointed the wrong way. Reading configuration
 from the working directory is *already* a run that depends on where it started:
 
 ```text
-$ spec-graph check                      # at the top: 19 documents, 1 error
-$ cd packages/auth && spec-graph check  # here: no configuration, no rules,
-                                        # different patterns, different verdict
+$ spec-graph check                      # the repository's patterns, its rules,
+                                        # its baseline, its verdict
+$ cd packages/auth && spec-graph check  # none of the above, and no sign of it
 ```
 
 Nothing announces it. The second run finds a `.spec-graph.json` that does not
@@ -85,7 +85,8 @@ Leaving those alone was the alternative and it is a trap:
 which is a check quietly getting weaker.
 
 `--ignore-ref`, `--family` and `--ignore-family` are not paths and are left
-alone.
+alone. So is an absolute path: it was never relative to anywhere, so moving the
+root cannot change what it means.
 
 ### `--verbose` names the file the way the reader would have to type it
 
