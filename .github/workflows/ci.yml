@@ -34,6 +34,7 @@ jobs:
         run: npm run lint
 
       - name: Build
+        id: build
         run: npm run build
 
       - name: Test
@@ -44,6 +45,21 @@ jobs:
       # delegated into an archived decision - this step fails with the line.
       - name: Check this repository's own specification graph
         run: npm run selfcheck
+
+      # The same facts as a table on the job, which is the format's whole
+      # argument: the step above fails with a line number for whoever is fixing
+      # it, and says nothing to whoever is deciding whether to merge.
+      #
+      # Once, not six times, because the check runs on three platforms and two
+      # Node versions and six identical tables are six times nothing. Even when
+      # the check failed, because that is when somebody wants the table. Only
+      # when the build succeeded, because there is no dist to run otherwise.
+      # And never deciding the verdict - `check` already did that, and a second
+      # red step for one finding is a second thing to read and dismiss.
+      - name: Summarise it on the job
+        if: always() && steps.build.outcome == 'success' && matrix.os == 'ubuntu-latest' && matrix.node == '22'
+        continue-on-error: true
+        run: node ./bin/spec-graph.js check --format markdown >> "$GITHUB_STEP_SUMMARY"
 
   coverage:
     name: coverage
