@@ -337,3 +337,37 @@ function numberSpellings(number: number, witnesses: readonly (string | null | un
   for (const width of [3, 4]) out.add(String(number).padStart(width, '0'));
   return [...out];
 }
+
+/**
+ * True when two folded spellings are one edit apart.
+ *
+ * One edit, not two, and a transposition counts as one: `supercedesby` for
+ * `supercededby` is a slip of the finger, `categories` for `dependencies` is a
+ * different word. Written out rather than as a distance matrix because the
+ * answer is a yes or a no and the bound is one - the general algorithm would be
+ * more code, not less.
+ */
+export function withinOneEdit(a: string, b: string): boolean {
+  if (a === b) return false;
+  if (a.length === b.length) {
+    let first = -1;
+    for (let i = 0; i < a.length; i += 1) {
+      if (a[i] === b[i]) continue;
+      if (first === -1) {
+        first = i;
+        continue;
+      }
+      // A second difference is allowed only if the two are a swapped pair, and
+      // only if there is no third.
+      return first === i - 1 && a[first] === b[i] && a[i] === b[first] && a.slice(i + 1) === b.slice(i + 1);
+    }
+    return true;
+  }
+  const [short, long] = a.length < b.length ? [a, b] : [b, a];
+  if (long.length - short.length !== 1) return false;
+  for (let i = 0; i < short.length; i += 1) {
+    if (short[i] === long[i]) continue;
+    return short.slice(i) === long.slice(i + 1);
+  }
+  return true;
+}

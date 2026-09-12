@@ -23,7 +23,7 @@ exactly the noise that teaches people to ignore the output.
 
 ## Decision
 
-Three asymmetries.
+Four asymmetries.
 
 **Deliberate references are validated; opportunistic ones are not.** A link, a
 front-matter field or a directive that does not resolve is a broken foreign key
@@ -49,6 +49,29 @@ which was meant. Through 0.2.2 those spellings shared an index that held one id
 per key, so a second claimant did not make the link ambiguous, it overwrote the
 first.
 
+**A suggestion may be close in the name and never in the number.** Once a
+reference has failed outright, spec-graph offers the one document the author
+probably meant - `ARD-0015` for `ADR-0015`, `0002-cacheing.md` for its sibling
+one letter away. It will not do the same for `ADR-0003`, and that restraint is
+the whole design rather than a limitation of it: a family name is a word people
+misremember, while a number *is* the identity, and every number sits one edit
+from its neighbours. A repository of fifteen ADRs citing a sixteenth is told the
+plain truth instead of being sent to the fifteenth.
+
+The gates are narrow for the same reason. A path suggests only a sibling in the
+directory it already named, because a typo that also moved the file is two
+guesses stacked on one another. A family suggests only with its number intact.
+Everything else falls back to a one-edit match against the spellings a document
+already answers to, floored at six folded characters - below that an edit is
+most of the word. And each gate ends the same way: exactly one candidate, or
+silence, because a hint is the last place to reopen an ambiguity this module
+refuses to resolve anywhere else.
+
+There is deliberately no suggestion for a file that moved. Resolution already
+binds a path by its basename, so a link to `../guides/onboarding.md` finds the
+document now living in `handbook/` with no guess to confirm - and a suggestion
+nobody needs is a suggestion that can only ever be wrong.
+
 Link constructs are blanked before prose is scanned for bare identifiers, so a
 citation written as `[ADR-7](https://example.com/adr-7)` yields one reference
 rather than three. This relies on the masking guarantee in
@@ -70,5 +93,7 @@ on the superseded one with no redirect, and that is a finding
 
 - [ ] Should cross-repository references resolve? A monorepo can already pass
       several roots, but two separate checkouts cannot see each other.
-- [ ] Should a near-miss suggest a correction (`did you mean ADR-0009?`) by edit
-      distance? The plumbing carries candidates; nothing computes them yet.
+- [x] Should a near-miss suggest a correction (`did you mean ADR-0009?`) by edit
+      distance? **Resolved (2026-09-12):** yes, under the fourth asymmetry above.
+      Distance alone was the wrong question; what a suggestion needs is distance
+      in the part of the spelling that is not the identity.

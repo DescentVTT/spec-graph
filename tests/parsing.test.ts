@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { attr, attrList, directiveFor, parseDirectives } from '../src/directives.js';
-import { foldRelationKey, RELATION_KEYS, withinOneEdit } from '../src/extract.js';
+import { foldRelationKey, RELATION_KEYS } from '../src/extract.js';
 import {
   familyFromPath,
   identify,
@@ -12,6 +12,7 @@ import {
   parseBareRef,
   parsePrefixedRef,
   splitAnchor,
+  withinOneEdit,
 } from '../src/identity.js';
 import {
   isRetired,

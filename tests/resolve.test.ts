@@ -340,3 +340,158 @@ describe('percent-escaped destinations', () => {
     expect(dangling.map((d) => d.target)).toEqual(['docs/100%-uptime.md']);
   });
 });
+
+/* -------------------------------------------------------------------------- */
+
+
+/**
+ * "Did you mean ADR-0009?" - and, far more often, the deliberate silence.
+ *
+ * Every case below that expects `[]` is the point of the feature: a suggestion
+ * is only worth printing when the spelling pins one document down, and a number
+ * never pins anything down because every number has neighbours. See ADR-0004.
+ */
+describe('near-miss suggestions', () => {
+  const CORPUS: Record<string, string> = {
+    'docs/adr/0001-sharding.md': `---
+status: accepted
+---
+
+# ADR-0001: Sharding
+`,
+    'docs/adr/0002-caching.md': `---
+status: accepted
+---
+
+# ADR-0002: Caching
+`,
+    'docs/rfc/0002-transport.md': `---
+id: RFC-0002
+status: accepted
+---
+
+# RFC-0002: Transport
+`,
+    'docs/notes/abcd.md': `---
+id: abcd
+status: accepted
+---
+
+# Notes
+`,
+  };
+
+  const ADX = `---
+id: ADX-0002
+status: accepted
+---
+
+# ADX-0002: Elsewhere
+`;
+
+  /** The candidates offered for one unresolved reference in a fresh document. */
+  const suggest = (target: string, body?: string, extra: Record<string, string> = {}): readonly string[] => {
+    const line = body ?? `See [it](${target}).`;
+    const { dangling } = resolve({
+      ...CORPUS,
+      ...extra,
+      'docs/adr/0009-probe.md': `---
+status: accepted
+---
+
+# ADR-0009: Probe
+
+## Context
+
+${line}
+`,
+    });
+    const entry = dangling.find((candidate) => candidate.target === target);
+    expect(entry, `nothing was reported for "${target}"`).toBeDefined();
+    return entry?.candidates ?? [];
+  };
+
+  it('suggests the family a mistyped prefix is one edit from', () => {
+    expect(suggest('ARD-0002')).toEqual(['ADR-0002']);
+  });
+
+  it('suggests nothing when the number is what is wrong', () => {
+    // The whole discipline in one assertion: ADR-0001 and ADR-0002 are each one
+    // edit from ADR-0003, and neither of them is what the author meant.
+    expect(suggest('ADR-0003')).toEqual([]);
+    expect(suggest('ADR-0004')).toEqual([]);
+  });
+
+  it('suggests nothing when a mistyped family fits two corpora equally', () => {
+    // `ADQ` is one edit from `ADR` and one edit from `ADX`, and both families
+    // hold a document numbered 0002.
+    expect(suggest('ADQ-0002', undefined, { 'docs/adx/0002-x.md': ADX })).toEqual([]);
+    // With only one of the two families present it is a suggestion again, which
+    // is what makes the case above about ambiguity rather than about distance.
+    expect(suggest('ADQ-0002')).toEqual(['ADR-0002']);
+  });
+
+  it('suggests the sibling a mistyped basename is one edit from', () => {
+    expect(suggest('0002-cacheing.md')).toEqual(['ADR-0002']);
+  });
+
+  it('does not reach into another directory for a basename typo', () => {
+    // `0001-shardng.md` is one edit from a real file - in `docs/adr`, not here.
+    // A path names a place, and a typo that also moved the place is two guesses
+    // stacked on one another.
+    expect(suggest('../rfc/0001-shardng.md')).toEqual([]);
+  });
+
+  it('suggests the document a mistyped slug is one edit from', () => {
+    expect(suggest('0001-shardingg', 'See [[0001-shardingg]].')).toEqual(['ADR-0001']);
+  });
+
+  it('suggests nothing for a folded spelling too short to mean anything', () => {
+    // `abcd` is a real document here and `abce` is one edit from it. Four
+    // characters is not enough evidence to send anybody anywhere.
+    expect(suggest('abce', 'See [[abce]].')).toEqual([]);
+  });
+
+  it('suggests nothing for a bare number, however long it is written', () => {
+    // Six digits clears the length floor, so this is the bare-number gate on
+    // its own: `000002` sits one edit from a document that really is `000001`,
+    // and the only thing they differ in is the identity.
+    const bare = {
+      'notes/000001.md': `---
+status: accepted
+---
+
+# Rule One
+`,
+      'notes/index.md': `---
+status: accepted
+---
+
+# Index
+
+## Context
+
+See [it](000002).
+`,
+    };
+    const { dangling } = resolve(bare);
+    expect(dangling.map((entry) => entry.target)).toEqual(['000002']);
+    expect(dangling.flatMap((entry) => entry.candidates)).toEqual([]);
+  });
+
+  it('costs nothing on a reference that resolves', () => {
+    // Suggestions are computed after failure, never before it.
+    const { edges, dangling } = resolve({
+      ...CORPUS,
+      'docs/adr/0009-probe.md': `---
+status: accepted
+depends-on: ADR-0001
+---
+
+# ADR-0009: Probe
+`,
+    });
+    expect(dangling).toEqual([]);
+    expect(edges.some((edge) => edge.to === 'ADR-0001')).toBe(true);
+  });
+});

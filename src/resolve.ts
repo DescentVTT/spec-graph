@@ -27,8 +27,9 @@ import {
   parseBareRef,
   parsePrefixedRef,
   splitAnchor,
+  withinOneEdit,
 } from './identity.js';
-import { basenamePosix, extnamePosix, resolveFrom } from './paths.js';
+import { basenamePosix, dirnamePosix, extnamePosix, resolveFrom } from './paths.js';
 import type { DanglingRef, DocumentNode, Edge, ItemNode, MisreadKey, ParseProblem, SpecNode } from './types.js';
 
 export interface ResolveOptions {
@@ -83,6 +84,15 @@ interface Index {
   readonly byPathAlias: Map<string, Set<string>>;
   readonly byFamilyNumber: Map<string, Set<string>>;
   readonly families: Set<string>;
+  /** Every file by the directory holding it, for a basename that was mistyped. */
+  readonly byDirectory: Map<string, { stem: string; id: string }[]>;
+  /**
+   * Alias keys grouped by length.
+   *
+   * A one-edit match can only differ in length by one, so this turns the scan
+   * behind a suggestion from the whole corpus into three buckets of it.
+   */
+  readonly aliasesByLength: Map<number, string[]>;
   readonly anchors: Map<string, ReadonlySet<string>>;
   readonly itemIds: Set<string>;
   readonly familyOf: Map<string, string | null>;
@@ -194,6 +204,8 @@ function buildIndex(extracted: readonly ExtractedDocument[]): Index {
     byPathAlias: new Map(),
     byFamilyNumber: new Map(),
     families: new Set(),
+    byDirectory: new Map(),
+    aliasesByLength: new Map(),
     anchors: new Map(),
     itemIds: new Set(),
     familyOf: new Map(),
@@ -221,12 +233,17 @@ function buildIndex(extracted: readonly ExtractedDocument[]): Index {
     // ADR-0009 said a region does not claim the file's path; this is the index
     // where that had to be true.
     if (entry.containerId === null) {
-      index.byPath.set(entry.document.path.toLowerCase(), id);
+      const path = entry.document.path.toLowerCase();
+      index.byPath.set(path, id);
       for (const spelling of pathAliases(entry.document.path)) {
         const set = index.byPathAlias.get(spelling) ?? new Set<string>();
         set.add(id);
         index.byPathAlias.set(spelling, set);
       }
+      const directory = dirnamePosix(path);
+      const siblings = index.byDirectory.get(directory) ?? [];
+      siblings.push({ stem: stemOf(path), id });
+      index.byDirectory.set(directory, siblings);
     }
 
     if (entry.identity.family !== null && entry.identity.number !== null) {
@@ -240,7 +257,19 @@ function buildIndex(extracted: readonly ExtractedDocument[]): Index {
     for (const item of entry.items) index.itemIds.add(item.id);
   }
 
+  for (const alias of index.byAlias.keys()) {
+    const bucket = index.aliasesByLength.get(alias.length) ?? [];
+    bucket.push(alias);
+    index.aliasesByLength.set(alias.length, bucket);
+  }
+
   return index;
+}
+
+/** A file name with its extension taken off: `docs/a/0004-sharding.md` -> `0004-sharding`. */
+function stemOf(path: string): string {
+  const base = basenamePosix(path);
+  return base.slice(0, base.length - extnamePosix(base).length);
 }
 
 /** Every spelling of a path that addresses a file without naming it exactly. */
@@ -343,49 +372,53 @@ function percentDecoded(target: string): string | null {
 }
 
 function lookup(target: string, entry: ExtractedDocument, index: Index): Lookup {
-  const found = lookupExact(target, entry, index);
-  if (found.ids.length > 0) return found;
+  const exact = lookupExact(target, entry, index);
+  if (exact.length > 0) return { ids: exact, near: [] };
   // Tried second and never first, so a repository holding a file whose name
   // genuinely contains a percent escape keeps resolving by its written spelling.
   const decoded = percentDecoded(target);
-  return decoded === null ? found : lookupExact(decoded, entry, index);
+  const relaxed = decoded === null ? [] : lookupExact(decoded, entry, index);
+  if (relaxed.length > 0) return { ids: relaxed, near: [] };
+  // Suggestions are computed only once resolution has failed outright, so their
+  // cost is bounded by the number of findings rather than by the corpus.
+  return { ids: [], near: nearMisses(target, entry, index) };
 }
 
-function lookupExact(target: string, entry: ExtractedDocument, index: Index): Lookup {
+function lookupExact(target: string, entry: ExtractedDocument, index: Index): readonly string[] {
   if (looksLikePath(target)) {
     const resolved = resolveFrom(entry.document.path, target).toLowerCase();
     // Naming the file exactly is never ambiguous, whatever else is spelled the
     // same way.
     const byPath = index.byPath.get(resolved);
-    if (byPath) return { ids: [byPath], near: [] };
+    if (byPath) return [byPath];
     // An inexact spelling can belong to more than one file: `docs/A` is both
     // `docs/A.md` with its extension dropped and `docs/A/README.md` standing
     // for its directory. Handing back every claimant makes that an
     // ambiguous-reference the author can settle, rather than a silent pick of
     // whichever happened to be indexed last.
     const spelled = index.byPathAlias.get(resolved);
-    if (spelled && spelled.size > 0) return { ids: [...spelled], near: [] };
+    if (spelled && spelled.size > 0) return [...spelled];
     // A path may still be spelled as an identifier in a nested folder layout.
     const stem = basenamePosix(resolved);
     const byStem = index.byAlias.get(normaliseRef(stem.replace(/\.[^.]+$/, '')));
-    if (byStem && byStem.size > 0) return { ids: [...byStem], near: [] };
-    return { ids: [], near: [] };
+    if (byStem && byStem.size > 0) return [...byStem];
+    return [];
   }
 
   const key = normaliseRef(target);
-  if (key.length === 0) return { ids: [], near: [] };
+  if (key.length === 0) return [];
 
   const byId = index.byId.get(key);
-  if (byId) return { ids: [byId], near: [] };
+  if (byId) return [byId];
 
   const byAlias = index.byAlias.get(key);
-  if (byAlias && byAlias.size > 0) return { ids: [...byAlias], near: [] };
+  if (byAlias && byAlias.size > 0) return [...byAlias];
 
   const prefixed = parsePrefixedRef(target);
   if (prefixed) {
     const byFamily = index.byFamilyNumber.get(`${prefixed.family}:${prefixed.number}`);
-    if (byFamily && byFamily.size > 0) return { ids: [...byFamily], near: [] };
-    return { ids: [], near: [] };
+    if (byFamily && byFamily.size > 0) return [...byFamily];
+    return [];
   }
 
   // A bare number resolves only inside the citing document's own family. A
@@ -394,12 +427,95 @@ function lookupExact(target: string, entry: ExtractedDocument, index: Index): Lo
   const number = parseBareRef(target);
   if (number !== null) {
     const family = index.familyOf.get(entry.document.id) ?? null;
-    if (family === null) return { ids: [], near: [] };
+    if (family === null) return [];
     const byFamily = index.byFamilyNumber.get(`${family}:${number}`);
-    if (byFamily && byFamily.size > 0) return { ids: [...byFamily], near: [] };
+    if (byFamily && byFamily.size > 0) return [...byFamily];
   }
 
-  return { ids: [], near: [] };
+  return [];
+}
+
+/* -------------------------------------------------------------------------- */
+/* Near misses                                                                */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The one document a failed reference was probably meant to name.
+ *
+ * A suggestion is cheap to read and expensive to get wrong: "did you mean
+ * ADR-0008?" against a citation that meant ADR-0012 sends a reader to the wrong
+ * decision with a confidence nobody earned. So the bar is not closeness, it is
+ * closeness *in the part of the spelling that is not the identity*. A family
+ * name is a word people misremember. A number is the identity itself, and
+ * `ADR-0009` sits one edit from every neighbour it has - so numbers are never
+ * guessed at, and a repository of fifteen ADRs citing a sixteenth is told the
+ * plain truth instead.
+ *
+ * Two gates, plus a fallback:
+ *
+ * - a path in the right directory whose basename is one edit out - a typo;
+ * - a family one edit out with its number intact - `ARD-0009` for `ADR-0009`.
+ *
+ * Anything else falls through to a one-edit match against the folded spellings
+ * documents already answer to, which is where a mistyped slug or wiki name
+ * lands.
+ *
+ * There is deliberately no gate for a file that moved. Resolution already binds
+ * a path by its basename, so `../guides/onboarding.md` finds the document that
+ * is now in `handbook/` without anybody being asked to confirm a guess - and a
+ * suggestion nobody needs is a suggestion that can only be wrong.
+ *
+ * Every gate ends the same way: **exactly one** candidate, or nothing. Two
+ * suggestions is the ambiguity this module refuses to resolve anywhere else,
+ * and the tail of a hint is no place to start.
+ */
+function nearMisses(target: string, entry: ExtractedDocument, index: Index): string[] {
+  if (looksLikePath(target)) {
+    const resolved = resolveFrom(entry.document.path, target).toLowerCase();
+    const stem = stemOf(resolved);
+    const siblings = index.byDirectory.get(dirnamePosix(resolved)) ?? [];
+    return sole(siblings.filter((file) => withinOneEdit(file.stem, stem)).map((file) => file.id));
+  }
+
+  const prefixed = parsePrefixedRef(target);
+  if (prefixed !== null) {
+    const hits: string[] = [];
+    for (const family of index.families) {
+      // The family as written needs no exclusion: one edit is never zero edits.
+      if (!withinOneEdit(family.toLowerCase(), prefixed.family.toLowerCase())) continue;
+      for (const id of index.byFamilyNumber.get(`${family}:${prefixed.number}`) ?? []) hits.push(id);
+    }
+    return sole(hits);
+  }
+
+  // A bare `12` carries nothing but a number, which is the one thing this
+  // refuses to guess at.
+  if (parseBareRef(target) !== null) return [];
+
+  const key = normaliseRef(target);
+  if (key.length < MIN_SUGGESTIBLE) return [];
+  const hits: string[] = [];
+  for (const length of [key.length - 1, key.length, key.length + 1]) {
+    for (const alias of index.aliasesByLength.get(length) ?? []) {
+      if (!withinOneEdit(alias, key)) continue;
+      for (const id of index.byAlias.get(alias) ?? []) hits.push(id);
+    }
+  }
+  return sole(hits);
+}
+
+/**
+ * How long a folded spelling has to be before one edit means anything.
+ *
+ * Below six characters an edit is most of the word, and every corpus is full of
+ * short names that differ by exactly that much.
+ */
+const MIN_SUGGESTIBLE = 6;
+
+/** The candidates, if there is exactly one of them. Otherwise nothing. */
+function sole(ids: Iterable<string>): string[] {
+  const unique = new Set(ids);
+  return unique.size === 1 ? [...unique] : [];
 }
 
 /** Whether a repository has declared this reference none of its business. */
