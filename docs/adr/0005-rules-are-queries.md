@@ -74,3 +74,6 @@ document that links to itself is a formatting quirk, not a relationship.
 - [ADR-0003](0003-item-state-signals.md) defines `openness` and `state`.
 - [ADR-0016](0016-a-query-needs-a-sentence.md) is what makes the claim above
   true outside a command prompt.
+- [ADR-0017](0017-a-predicate-must-finish.md) is what the shared engine costs
+  and why the bill was paid rather than split: banning `~=` from rules and
+  keeping it for queries would have been two languages wearing one grammar.

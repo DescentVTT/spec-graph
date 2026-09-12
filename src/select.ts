@@ -21,6 +21,7 @@
  */
 
 import { receptivityOf } from './lifecycle.js';
+import { compilePattern, PatternError, type Matcher } from './regex.js';
 import { documentOf } from './resolve.js';
 import type { SpecGraph } from './graph.js';
 import { EDGE_KINDS, type Edge, type EdgeKind, type NodeKind, type SpecNode } from './types.js';
@@ -168,9 +169,23 @@ class Parser {
     const operator = operatorMatch[0] as Operator;
     this.position += operator.length;
 
+    const valueStart = this.position;
     const value = this.parseValue();
     if (this.source[this.position] !== ']') throw new QueryError('expected "]" to close the predicate', this.position);
     this.position += 1;
+    // A pattern is checked here rather than where it runs, because here is the
+    // only place that knows where in the selector it was written. It used to be
+    // compiled on first use and an unparseable one silently matched nothing,
+    // which is the same silence a misspelled relation would have produced if
+    // this grammar tolerated one. See ADR-0017.
+    if (operator === '~=') {
+      try {
+        pattern(value);
+      } catch (error) {
+        if (!(error instanceof PatternError)) throw error;
+        throw new QueryError(error.message, valueStart + error.offset + (quoted(this.source[valueStart]) ? 1 : 0));
+      }
+    }
     return { key, operator, value };
   }
 
@@ -380,27 +395,31 @@ function testPredicate(node: SpecNode, predicate: Predicate, graph?: SpecGraph):
       case '*=':
         return value.includes(needle);
       case '~=':
-        return safeRegExp(predicate.value).test(raw);
+        return pattern(predicate.value).test(raw);
       default:
         return false;
     }
   });
 }
 
-const regexCache = new Map<string, RegExp>();
+const patterns = new Map<string, Matcher>();
 
-function safeRegExp(source: string): RegExp {
-  const cached = regexCache.get(source);
+/**
+ * Compiles a `~=` pattern, once per distinct pattern.
+ *
+ * Cached because a rule runs its predicate against every node in the corpus,
+ * and because compiling is the expensive half now that matching is linear.
+ */
+export function pattern(source: string): Matcher {
+  const cached = patterns.get(source);
   if (cached) return cached;
-  let expression: RegExp;
-  try {
-    expression = new RegExp(source, 'i');
-  } catch {
-    // An invalid pattern matches nothing rather than crashing a whole run.
-    expression = /(?!)/;
-  }
-  regexCache.set(source, expression);
-  return expression;
+  const compiled = compilePattern(source);
+  patterns.set(source, compiled);
+  return compiled;
+}
+
+function quoted(char: string | undefined): boolean {
+  return char === '"' || char === "'";
 }
 
 /** True when a node satisfies a matcher. */

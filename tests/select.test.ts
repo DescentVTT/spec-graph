@@ -217,8 +217,25 @@ describe('matching', () => {
     expect(() => parseQuery('item[section=Open Questions]')).toThrow(QueryError);
   });
 
-  it('treats an invalid regex as matching nothing instead of crashing', () => {
-    expect(ids('document[id~="("]')).toEqual([]);
+  it('rejects an unparseable pattern rather than matching nothing with it', () => {
+    // It used to match nothing, which is indistinguishable from a pattern that
+    // ran and found none. Every other mistake in this grammar is a usage error
+    // that points at the character; a pattern is now one too. See ADR-0017.
+    expect(() => parseQuery('document[id~="("]')).toThrow(QueryError);
+    expect(() => parseQuery('document[id~=a{3,1}]')).toThrow(QueryError);
+  });
+
+  it('points at the character of the pattern that failed, not at the predicate', () => {
+    // The caret is the whole reason a pattern is compiled while parsing rather
+    // than on first use: this is the only place that knows where it was written.
+    const selector = 'document[id~="ab(c"]';
+    try {
+      parseQuery(selector);
+      expect.unreachable('should have thrown');
+    } catch (error) {
+      expect(error).toBeInstanceOf(QueryError);
+      expect(selector[(error as QueryError).offset]).toBe('(');
+    }
   });
 
   it('combines predicates conjunctively', () => {
