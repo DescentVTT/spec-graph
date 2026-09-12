@@ -125,6 +125,29 @@ every other typo anybody produced to argue the case. Two buys nothing and costs
 a false positive on a key that carries citations in exactly the corpora this
 tool is pointed at.
 
+### Verified
+
+| | |
+|---|---|
+| `npm run lint` | pass |
+| `npm test` | 748 passing, 20 files |
+| `npm run selfcheck` | pass, 60ms over 19 documents |
+| `npm run test:mutation` | **79.03%** over 8,589 mutants, 64m13s |
+| `break` | unchanged at 70 |
+
+79.69% over 8,126 mutants at 0.3.0 against 79.03% over 8,589 here, on the same
+machine: 0.66 points down on 463 more mutants, which is inside the band
+[ADR-0007](docs/adr/0007-mutation-testing.md) measured when two runs of
+*identical* source moved nine untouched files by more than a point each in both
+directions. The new module scores above the corpus: `project-rules.ts` at
+86.89%, `resolve.ts` at 84.74%.
+
+The figure is slightly conservative. The run started before the `rfc` test from
+the ADR-0014 measurement was written, and that test can only kill mutants, never
+create survivors. The hosted number - the one that actually governs, because it
+is where the build fails - comes from CI on push, and 75.14% from 0.3.0 stands
+until it does.
+
 ### Withdrawn
 
 [ADR-0013](docs/adr/0013-the-scanner-hands-back-prose.md) said a lone `\r` was

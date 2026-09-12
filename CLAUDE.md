@@ -40,16 +40,16 @@ Two thresholds are regression guards, set below the last measurement. They move
 accommodate a regression:
 
 - **Mutation score >= 70** (`break` in `stryker.config.mjs`). Two numbers, and
-  the difference matters: **75.14% on the hosted runner** at 0.3.0, 79.69% over
-  8,126 mutants on a developer machine. The hosted one governs - it is where the
-  build fails. `perTest` attribution moves with worker count, with how many files
-  are mutated, and with the platform, by up to sixteen points on a single file -
-  and two runs of *identical source* on one machine moved nine untouched files by
-  more than a point each, in both directions. An incremental run is a fast signal
-  and not a verdict: at 0.3.0 it read 3.18 points **high** against a full rebuild
-  of the same commit. See ADR-0007. The guard stays at 70 because ~300 mutants
-  are detected by timeout, and losing all of them takes the hosted figure to
-  71.28%.
+  the difference matters: **75.14% on the hosted runner** at 0.3.0, 79.03% over
+  8,589 mutants on a developer machine at 0.4.0. The hosted one governs - it is
+  where the build fails. `perTest` attribution moves with worker count, with how
+  many files are mutated, and with the platform, by up to sixteen points on a
+  single file - and two runs of *identical source* on one machine moved nine
+  untouched files by more than a point each, in both directions. An incremental
+  run is a fast signal and not a verdict: at 0.3.0 it read 3.18 points **high**
+  against a full rebuild of the same commit. See ADR-0007. The guard stays at 70
+  because ~300 mutants are detected by timeout, and losing all of them takes the
+  local figure to 75.39% and the hosted one to 71.28%.
 - **Coverage floors** in `vitest.config.ts`. Branches sits lowest on purpose;
   the remainder is defensive fallbacks and platform paths of which only one can
   run per machine.
