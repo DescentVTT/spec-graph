@@ -157,19 +157,30 @@ describe('the documented selector vocabulary', () => {
     expect(attributesOf(documentNode, 'fm.owner')).toEqual(['platform']);
   });
 
-  it('is the list the engine actually switches on', () => {
-    // `SELECTOR_KEYS` is published so a message template can be strict about
-    // an attribute nobody answers to. A published list that has drifted from
-    // the switch it mirrors would reject a key that works, or accept one that
-    // renders as nothing - and a diagnostic with a blank where a document name
-    // should be is the failure ADR-0016 exists to prevent.
-    const source = readFileSync('src/select.ts', 'utf8');
-    const body = source.slice(
-      source.indexOf('export function attributesOf('),
-      source.indexOf('function testPredicate('),
-    );
-    const cases = [...body.matchAll(/case '([a-z.]+)':/g)].map((match) => match[1] as string);
-    expect([...new Set(cases)].sort()).toEqual([...SELECTOR_KEYS].sort());
+  it('is published without duplicates and in one order', () => {
+    // `SELECTOR_KEYS` is published so a message template can be strict about an
+    // attribute nobody answers to (ADR-0016), and it is printed in the problem
+    // that rejects one. Sorted and unique is what makes that message readable
+    // and what keeps two runs producing the same bytes.
+    expect([...new Set(SELECTOR_KEYS)]).toEqual([...SELECTOR_KEYS]);
+    expect([...SELECTOR_KEYS].sort()).toEqual([...SELECTOR_KEYS]);
+  });
+
+  it('answers a template placeholder for every key it publishes', () => {
+    // The direction that matters. A published key the engine does not answer
+    // to would pass validation and then render as the placeholder itself, in a
+    // diagnostic somebody has to act on. The reverse - a key the engine knows
+    // and the list omits - only ever rejects something that would have worked,
+    // which is a worse error message and not a wrong report.
+    //
+    // Checked through behaviour rather than by reading `select.ts`, which was
+    // the first attempt: Stryker rewrites every source file it copies, so a
+    // test that greps its own source cannot run under the mutation gate, and a
+    // gate that has to be skipped is not a gate.
+    for (const key of SELECTOR_KEYS) {
+      const rendered = attributesOf(documentNode, key)[0] ?? attributesOf(itemNode, key)[0];
+      expect(rendered, `"{0.${key}}" would render as itself`).toBeDefined();
+    }
   });
 });
 

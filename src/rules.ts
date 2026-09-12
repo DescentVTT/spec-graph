@@ -144,6 +144,10 @@ export function runRules(graph: SpecGraph, corpus: ResolvedCorpus, options: Rule
 
   const emit = (rule: AnyRuleId, build: () => Built): void => {
     const severity = severities[rule];
+    // The `undefined` arm is the type system talking, not a case: the table is
+    // seeded from every built-in and every project rule, and nothing emits an
+    // id that is in neither. Deliberately untested - a mutant that drops it is
+    // equivalent, and a test asserting otherwise would be asserting a fiction.
     if (severity === undefined || severity === 'off') return;
     const body = build();
     if (exempt(graph, rule, body.nodes)) return;

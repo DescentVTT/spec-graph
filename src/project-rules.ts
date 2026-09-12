@@ -129,7 +129,7 @@ function compileOne(
   name: string,
   body: unknown,
   source: string,
-  problems: readonly string[] & { push(value: string): void },
+  problems: string[],
 ): ProjectRule | null {
   const where = `${source}: rules.${name}`;
   if (!NAME.test(name) || name.length > MAX_NAME_LENGTH) {
@@ -148,14 +148,15 @@ function compileOne(
   }
 
   const written = body['query'];
-  const sources = typeof written === 'string' ? [written] : written;
-  if (!Array.isArray(sources) || sources.length === 0 || sources.some((entry) => typeof entry !== 'string')) {
+  const listed: unknown[] = typeof written === 'string' ? [written] : Array.isArray(written) ? written : [];
+  if (listed.length === 0 || listed.some((entry) => typeof entry !== 'string')) {
     problems.push(`${where}: "query" must be a selector, or an array of them`);
     return null;
   }
+  const sources = listed as string[];
 
   const queries: QuerySpec[] = [];
-  for (const selector of sources as readonly string[]) {
+  for (const selector of sources) {
     try {
       queries.push(parseQuery(selector));
     } catch (error) {
@@ -201,7 +202,7 @@ function compileOne(
     id: `${PROJECT_RULE_PREFIX}${name}`,
     name,
     queries,
-    sources: sources as readonly string[],
+    sources,
     message: message.trim(),
     hint: hint.trim(),
     severity: declared,

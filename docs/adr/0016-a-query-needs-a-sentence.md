@@ -86,10 +86,17 @@ nothing.
 
 `{2}` is checked against the *shortest* selector behind a rule, not the longest,
 because a placeholder has to resolve for every one of them. The published list
-of attributes is `SELECTOR_KEYS`, and a test reads the switch in `select.ts` to
-make sure the list has not drifted from it — a published list that had would
-either reject a key that works or accept one that renders as a blank space where
-a document name should be.
+of attributes is `SELECTOR_KEYS`, and a test asserts that the engine answers to
+every key on it — the direction that matters, because a published key nothing
+answers to passes validation and then renders as the placeholder itself, in a
+diagnostic somebody has to act on. The reverse only ever rejects something that
+would have worked.
+
+The first version of that test read the switch out of `select.ts` and compared
+the two lists, which is the stronger check and does not work. Stryker rewrites
+every source file it copies, so a test that greps its own source fails the
+initial run and takes the whole mutation gate down with it. A gate that has to
+be skipped is not a gate, so the guard is behavioural.
 
 Selectors are kept as written, beside the compiled form. A report has to
 describe the rule, and the only honest description of a project rule is the
