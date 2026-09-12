@@ -183,18 +183,33 @@ function readEntry(row: unknown, where: string, problems: string[]): BaselineEnt
   return { rule: rule as AnyRuleId, document, subject, count };
 }
 
+/**
+ * An entry the run did not spend, and why.
+ *
+ * The distinction is the whole value of the label. `paid` is the ratchet
+ * working: the defect was fixed and the exemption can be struck. `gone` is not
+ * an achievement at all - the document the entry is about was not in this
+ * corpus, so nothing whatever is known about the defect. Both make the file
+ * stale and both need it re-recorded, but only one of them is good news, and a
+ * report that says "paid" over a narrowed `patterns` glob is congratulating a
+ * team for losing sight of the problem.
+ */
+export interface StaleEntry extends BaselineEntry {
+  readonly reason: 'paid' | 'gone';
+}
+
 export interface BaselineOutcome {
   /** Findings the baseline does not account for. These are the report. */
   readonly kept: readonly Diagnostic[];
   /** How many were accounted for. Reported as a number, not as a list. */
   readonly suppressed: number;
   /**
-   * Entries whose debt has been paid, wholly or partly.
+   * Entries whose debt was not spent, wholly or partly.
    *
    * The ratchet: once a repository is clean of something, saying so in the file
    * stops it coming back unnoticed.
    */
-  readonly stale: readonly BaselineEntry[];
+  readonly stale: readonly StaleEntry[];
 }
 
 /**
@@ -229,12 +244,18 @@ export function applyBaseline(
     suppressed += 1;
   }
 
-  const stale: BaselineEntry[] = [];
+  const stale: StaleEntry[] = [];
   for (const entry of baseline.findings) {
     const key = keyOf(entry.rule, entry.document, entry.subject);
     const unspent = budget.get(key) ?? 0;
     if (unspent <= 0) continue;
-    stale.push({ ...entry, count: Math.min(unspent, entry.count) });
+    // Asked of the graph rather than of the filesystem, because the graph is
+    // what this run looked at. A document that still exists on disk and fell
+    // outside the include patterns is gone for the purposes of the answer, and
+    // that is the case worth telling apart - it is the one a team reaches by
+    // editing a glob rather than by fixing anything.
+    const reason = graph.document(entry.document) === undefined ? 'gone' : 'paid';
+    stale.push({ ...entry, count: Math.min(unspent, entry.count), reason });
     // An entry counted once; a duplicate key in a hand-edited file must not
     // claim the same surplus twice.
     budget.set(key, 0);

@@ -621,6 +621,20 @@ resolves to your local RFC-0001 with `RFC` on the ignore list. No configuration
 can delete an edge. See
 [ADR-0010](docs/adr/0010-configuration-belongs-to-the-repository.md).
 
+`--verbose` lists everything they silenced, so one over-broad glob cannot quietly
+turn the check off and look like a clean repository:
+
+```text
+i docs/adr/0001-traps.md:15:3   ignored reference: trap 55 (2 times)
+i docs/rfcs/0002-transport.md:7:69  ignored family: RFC 2119
+```
+
+The JSON report carries the same rows under `suppressed`, without needing the
+flag. What is deliberately *not* listed is a bare identifier spec-graph read as
+prose on its own — `T-1000` was nobody's decision, and listing it would bury the
+entries that were. See
+[ADR-0008](docs/adr/0008-wiki-links-carry-no-path.md).
+
 Prose like `Phase 1`, `R69`, `Q-120`, `Table 2` and `Step 4` has never needed
 this: an identifier found in prose is only read as a citation when its family
 already exists in the corpus.

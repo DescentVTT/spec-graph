@@ -30,7 +30,16 @@ import {
   withinOneEdit,
 } from './identity.js';
 import { basenamePosix, dirnamePosix, extnamePosix, resolveFrom } from './paths.js';
-import type { DanglingRef, DocumentNode, Edge, ItemNode, MisreadKey, ParseProblem, SpecNode } from './types.js';
+import type {
+  DanglingRef,
+  DocumentNode,
+  Edge,
+  ItemNode,
+  MisreadKey,
+  ParseProblem,
+  SpecNode,
+  SuppressedRef,
+} from './types.js';
 
 export interface ResolveOptions {
   /**
@@ -69,6 +78,13 @@ export interface ResolvedCorpus {
   readonly dangling: readonly DanglingRef[];
   readonly problems: readonly ParseProblem[];
   readonly misreadKeys: readonly MisreadKey[];
+  /**
+   * References this repository declared none of its business.
+   *
+   * Not findings, and never reported as such - they are the audit trail for
+   * the two settings that can silence one. See ADR-0008.
+   */
+  readonly suppressed: readonly SuppressedRef[];
 }
 
 interface Index {
@@ -131,6 +147,7 @@ export function resolveCorpus(
 
   const edges: Edge[] = [];
   const dangling: DanglingRef[] = [];
+  const suppressed: SuppressedRef[] = [];
   const byKey = new Map<string, number>();
 
   // Structural edges: a register contains the specifications written inside it.
@@ -168,6 +185,10 @@ export function resolveCorpus(
       if (!nodes.has(candidate.from)) continue;
       const outcome = resolveOne(candidate, entry, index, nodes, options);
       if (outcome === null) continue;
+      if ('by' in outcome) {
+        suppressed.push(outcome);
+        continue;
+      }
       if ('reason' in outcome) {
         dangling.push(outcome);
         continue;
@@ -189,7 +210,7 @@ export function resolveCorpus(
     }
   }
 
-  return { nodes, documents, items, edges, dangling, problems, misreadKeys };
+  return { nodes, documents, items, edges, dangling, problems, misreadKeys, suppressed };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -300,7 +321,7 @@ function resolveOne(
   index: Index,
   nodes: ReadonlyMap<string, SpecNode>,
   options: ResolveOptions,
-): Edge | DanglingRef | null {
+): Edge | DanglingRef | SuppressedRef | null {
   const { target: bare, anchor } = splitAnchor(candidate.target);
 
   // A pure `#anchor` points inside the citing document.
@@ -318,7 +339,8 @@ function resolveOne(
 
   if (found.ids.length === 0) {
     if (candidate.opportunistic && !worthReporting(bare, index)) return null;
-    if (isFiltered(candidate.target, bare, options)) return null;
+    const silenced = filteredBy(candidate.target, bare, options);
+    if (silenced !== null) return suppression(candidate, silenced);
     // A trailing slash names a directory. Linking to one is ordinary - "the
     // decisions live in [archive/](archive/)" - and is not a citation of any
     // document. Resolution is still attempted first, so a directory-style
@@ -330,7 +352,8 @@ function resolveOne(
 
   if (found.ids.length > 1) {
     if (candidate.opportunistic) return null;
-    if (isFiltered(candidate.target, bare, options)) return null;
+    const silenced = filteredBy(candidate.target, bare, options);
+    if (silenced !== null) return suppression(candidate, silenced);
     return dangle(candidate, 'ambiguous', found.ids);
   }
 
@@ -518,11 +541,19 @@ function sole(ids: Iterable<string>): string[] {
   return unique.size === 1 ? [...unique] : [];
 }
 
-/** Whether a repository has declared this reference none of its business. */
-function isFiltered(target: string, bare: string, options: ResolveOptions): boolean {
-  if (options.isIgnoredReference?.(target)) return true;
+/**
+ * Which setting, if any, declared this reference none of the repository's
+ * business.
+ *
+ * Returns the mechanism rather than a boolean so the audit trail can say which
+ * line of configuration to go and look at. A team that silenced eight things
+ * with one glob and one with a family needs to be told them apart.
+ */
+function filteredBy(target: string, bare: string, options: ResolveOptions): SuppressedRef['by'] | null {
+  if (options.isIgnoredReference?.(target)) return 'reference';
   const prefixed = parsePrefixedRef(bare);
-  return prefixed !== null && options.isIgnoredFamily?.(prefixed.family) === true;
+  if (prefixed !== null && options.isIgnoredFamily?.(prefixed.family) === true) return 'family';
+  return null;
 }
 
 /**
@@ -561,7 +592,7 @@ function bindAnchor(
   index: Index,
   nodes: ReadonlyMap<string, SpecNode>,
   options: ResolveOptions,
-): Edge | DanglingRef | null {
+): Edge | DanglingRef | SuppressedRef | null {
   const itemId = `${documentId}#${anchor}`;
   if (index.itemIds.has(itemId)) return makeEdge(candidate, itemId);
 
@@ -573,7 +604,8 @@ function bindAnchor(
   const loose = anchor.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-|-$/g, '');
   if (anchors?.has(loose)) return makeEdge(candidate, documentId);
 
-  if (isFiltered(candidate.target, splitAnchor(candidate.target).target, options)) return null;
+  const silenced = filteredBy(candidate.target, splitAnchor(candidate.target).target, options);
+  if (silenced !== null) return suppression(candidate, silenced);
 
   const candidates = [...(nodes.keys() as Iterable<string>)].filter(
     (id) => id.startsWith(`${documentId}#`) && id.toLowerCase().includes(loose),
@@ -603,6 +635,10 @@ function makeEdge(candidate: ReferenceCandidate, resolved: string): Edge {
     declaredIn: [candidate.declaredAt.file],
     reflexive: documentOf(from) === documentOf(to),
   };
+}
+
+function suppression(candidate: ReferenceCandidate, by: SuppressedRef['by']): SuppressedRef {
+  return { target: candidate.target, from: candidate.from, at: candidate.declaredAt, by };
 }
 
 function dangle(

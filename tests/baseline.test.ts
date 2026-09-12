@@ -125,7 +125,7 @@ describe('the ratchet', () => {
     const { graph, diagnostics } = analyse(fixed);
     const outcome = applyBaseline(graph, diagnostics, baseline);
     expect(outcome.stale).toEqual([
-      { rule: 'broken-reference', document: 'ADR-0004', subject: 'docs/plans/x.md', count: 1 },
+      { rule: 'broken-reference', document: 'ADR-0004', subject: 'docs/plans/x.md', count: 1, reason: 'paid' },
     ]);
   });
 

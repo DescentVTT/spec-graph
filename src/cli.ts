@@ -9,7 +9,14 @@
  * itself could not run. A usage mistake never masquerades as a passing build.
  */
 
-import { applyBaseline, EMPTY_BASELINE, formatBaseline, parseBaseline, type Baseline } from './baseline.js';
+import {
+  applyBaseline,
+  EMPTY_BASELINE,
+  formatBaseline,
+  parseBaseline,
+  type Baseline,
+  type StaleEntry,
+} from './baseline.js';
 import { loadConfig, type SpecGraphConfig } from './config.js';
 import { underRoot } from './glob.js';
 import { analyse, DEFAULT_PATTERNS, withDiagnostics, type AnalyseOptions } from './runner.js';
@@ -143,7 +150,8 @@ OPTIONS
                           still wins, so --strict --rule x=warn exempts x.
   --color / --no-color    Force colour on or off
   --ascii                 Use ASCII glyphs only
-  --verbose               Include parse problems and per-file detail
+  --verbose               Include parse problems, per-file detail, and every
+                          reference --ignore-ref or --ignore-family silenced
   -h, --help              Show this help
   -v, --version           Show the version
 
@@ -630,20 +638,37 @@ export async function main(io: CliIO = {}): Promise<number> {
       const source = options.baseline ?? file.baseline ?? null;
       const ratchet = options.ratchet || file.ratchet === true;
       let reported = result;
-      let note: { source: string; suppressed: number; stale: number; ratchet: boolean } | undefined;
+      let note:
+        | {
+            source: string;
+            suppressed: number;
+            stale: number;
+            ratchet: boolean;
+            entries: readonly StaleEntry[];
+          }
+        | undefined;
       if (source !== null) {
         const held = await readBaseline(underRoot(options.root, source), source);
         for (const problem of held.problems) err(`spec-graph: ${problem}\n`);
         const outcome = applyBaseline(result.graph, result.diagnostics, held.baseline);
         reported = withDiagnostics(result, outcome.kept);
-        note = { source, suppressed: outcome.suppressed, stale: outcome.stale.length, ratchet };
+        note = {
+          source,
+          suppressed: outcome.suppressed,
+          stale: outcome.stale.length,
+          ratchet,
+          entries: outcome.stale,
+        };
         // Listed rather than counted when the run turns on them: a number is
-        // enough to know the file has slack, and not enough to strike it. Never
-        // in JSON, where the entries are already in the report and a stray line
-        // on stdout is the difference between parsing and not.
+        // enough to know the file has slack, and not enough to strike it. On
+        // stdout only for a human - the structured formats carry the same rows
+        // inside the document, where a stray line is the difference between
+        // parsing and not.
         if (options.format === 'human' && (options.verbose || (ratchet && outcome.stale.length > 0))) {
           for (const entry of outcome.stale) {
-            out(`  paid: ${entry.rule} ${entry.document}${entry.subject === '' ? '' : ` "${entry.subject}"`}\n`);
+            const subject = entry.subject === '' ? '' : ` "${entry.subject}"`;
+            const why = entry.reason === 'gone' ? ` - ${entry.document} is not in this corpus` : '';
+            out(`  ${entry.reason}: ${entry.rule} ${entry.document}${subject}${why}\n`);
           }
         }
       }

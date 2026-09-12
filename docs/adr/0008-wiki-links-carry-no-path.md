@@ -112,8 +112,19 @@ citation style the resolver does not understand, without a second option.
       [ADR-0010](0010-configuration-belongs-to-the-repository.md).
       `ignoreReferences` in `.spec-graph.json`, with the flag still available
       and still winning.
-- [ ] Should a suppressed reference still appear somewhere, so a repository can
-      audit what it has silenced? `--verbose` is the obvious home.
+- [x] Should a suppressed reference still appear somewhere, so a repository can
+      audit what it has silenced? **Resolved (2026-09-12):** yes, and
+      `--verbose` was the right home. The human report groups by target - a
+      concept tag used forty times is one decision - and names the setting that
+      did it, `ignoreReferences` or `ignoreFamilies`. The JSON report carries
+      every site unconditionally, because a machine reader that has to ask for
+      something twice will not ask.
+
+      What is *not* logged is the line that matters most: a bare identifier
+      spec-graph read as prose on its own, by the asymmetry in
+      [ADR-0004](0004-reference-resolution.md). `T-1000` was never suppressed by
+      anybody - crediting a configuration setting with silence the tool produced
+      itself would bury the handful of entries a team can actually act on.
 
 ## See also
 

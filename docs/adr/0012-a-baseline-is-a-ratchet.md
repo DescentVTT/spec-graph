@@ -184,9 +184,21 @@ alternative was a baseline that expires whenever somebody adds a paragraph.
 
 ## Open Questions
 
-- [ ] Should `--baseline` warn when an entry names a document that no longer
-      exists at all? It is reported as stale today, which is correct but says
-      "paid" where "gone" would be more useful.
+- [x] Should `--baseline` warn when an entry names a document that no longer
+      exists at all? **Resolved (2026-09-12):** yes - a stale entry now carries
+      `paid` or `gone`, and the difference is the whole value of the label.
+      `paid` is the ratchet working. `gone` is not an achievement at all: the
+      document was not in this corpus, so nothing whatever is known about the
+      defect, and the ordinary way to produce one is to narrow an include
+      pattern. Both still make the file stale and both still trip `--ratchet`,
+      because the file needs re-recording either way - but the verdict now says
+      "N of them name documents this run did not see - check the include
+      patterns before re-recording" rather than congratulating a team for losing
+      sight of a problem.
+
+      Asked of the graph rather than of the filesystem, deliberately. A document
+      that still exists on disk and fell outside the patterns is gone for the
+      purposes of the answer, and that is precisely the case worth catching.
 - [x] Named queries from [ADR-0005](0005-rules-are-queries.md) still have no
       home, and a baseline of user-defined rules would need one first.
       **Resolved (2026-09-12):** they have one

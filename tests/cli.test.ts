@@ -627,11 +627,16 @@ describe('the other side of the ratchet', () => {
    * about the repository except for the one exemption somebody already paid
    * off and forgot to strike.
    */
-  async function withSlack(): Promise<void> {
+  async function withSlack(entry?: Record<string, unknown>): Promise<void> {
     const { readFile, writeFile } = await import('node:fs/promises');
     await run('check', '--root', LEGACY, '--no-config', '--record-baseline', FILE);
     const held = JSON.parse(await readFile(path, 'utf8')) as { version: number; findings: unknown[] };
-    held.findings.push({ rule: 'broken-reference', document: 'ADR-0001', subject: 'docs/never-existed.md', count: 1 });
+    // ADR-0003 is a real document in this corpus, and it has no broken link to
+    // `docs/never-existed.md`. That is what "paid" means: the exemption
+    // outlived the defect, and the document is still here to prove it.
+    held.findings.push(
+      entry ?? { rule: 'broken-reference', document: 'ADR-0003', subject: 'docs/never-existed.md', count: 1 },
+    );
     await writeFile(path, JSON.stringify(held));
   }
 
@@ -649,6 +654,45 @@ describe('the other side of the ratchet', () => {
     }
   });
 
+  it('tells a document that left the corpus apart from a defect that was fixed', async () => {
+    // The distinction ADR-0012 asked for. An entry about a document this run
+    // never saw is not the ratchet working - the usual way to produce one is to
+    // narrow an include pattern, which loses sight of a defect rather than
+    // fixing it, and "paid" would be congratulating somebody for that.
+    const { rm } = await import('node:fs/promises');
+    await withSlack({ rule: 'broken-reference', document: 'ADR-0404', subject: 'docs/x.md', count: 1 });
+    try {
+      const loose = await run('check', '--root', LEGACY, '--no-config', '--baseline', FILE, '--verbose');
+      expect(loose.out).toContain('gone: broken-reference ADR-0404 "docs/x.md" - ADR-0404 is not in this corpus');
+      expect(loose.out).toContain('check the include patterns before re-recording');
+      expect(loose.out).not.toContain('paid: broken-reference ADR-0404');
+    } finally {
+      await rm(path, { force: true });
+    }
+  });
+
+  it('names the stale entries in the JSON report, where a bot can read them', async () => {
+    // ADR-0015 left this open: the human report names them and JSON counted
+    // them. A number is enough to know the file has slack and never enough to
+    // strike it, and the rows cannot go on stdout without breaking the parse.
+    const { rm } = await import('node:fs/promises');
+    await withSlack();
+    try {
+      const json = await run('check', '--root', LEGACY, '--no-config', '--baseline', FILE, '--format', 'json');
+      const report = JSON.parse(json.out) as {
+        baseline: { stale: number; entries: { rule: string; document: string; reason: string }[] };
+      };
+      expect(report.baseline.stale).toBe(1);
+      expect(report.baseline.entries).toEqual([
+        { rule: 'broken-reference', document: 'ADR-0003', subject: 'docs/never-existed.md', count: 1, reason: 'paid' },
+      ]);
+      // Nothing leaked onto stdout beside the document.
+      expect(json.out.trimStart().startsWith('{')).toBe(true);
+    } finally {
+      await rm(path, { force: true });
+    }
+  });
+
   it('fails on the slack when asked to', async () => {
     const { rm } = await import('node:fs/promises');
     await withSlack();
@@ -657,7 +701,7 @@ describe('the other side of the ratchet', () => {
       expect(tight.code).toBe(EXIT_FAILED);
       // Named, not counted: a number says the file has slack, and is not enough
       // to strike it.
-      expect(tight.out).toContain('paid: broken-reference ADR-0001 "docs/never-existed.md"');
+      expect(tight.out).toContain('paid: broken-reference ADR-0003 "docs/never-existed.md"');
       // The verdict has to agree with the exit code.
       expect(tight.out).toContain('the baseline is looser than the repository');
       expect(tight.out).not.toContain('the specification graph is consistent');

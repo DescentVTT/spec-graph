@@ -11,13 +11,22 @@
  * terminal cannot render them.
  */
 
-import { fingerprintOf } from './baseline.js';
+import { fingerprintOf, type StaleEntry } from './baseline.js';
 import type { SpecGraph } from './graph.js';
 import type { ProjectRule } from './project-rules.js';
 import { formatRef } from './source.js';
 import { DEFAULT_SEVERITIES, RULE_DESCRIPTIONS, RULE_IDS } from './rules.js';
 import type { AnalysisResult } from './runner.js';
-import type { AnyRuleId, Diagnostic, Edge, RuleId, Severity, SourceRef, SpecNode } from './types.js';
+import type {
+  AnyRuleId,
+  Diagnostic,
+  Edge,
+  RuleId,
+  Severity,
+  SourceRef,
+  SpecNode,
+  SuppressedRef,
+} from './types.js';
 
 export interface ReporterOptions {
   readonly color?: boolean | undefined;
@@ -36,9 +45,13 @@ export interface ReporterOptions {
    * What a baseline accounted for on this run.
    *
    * Reported as counts rather than as a list: the point of accepted debt is
-   * that nobody has to read it every time. `stale` is the ratchet - debt that
-   * has been paid and can be struck from the file - and `ratchet` says whether
-   * this run was asked to fail over it.
+   * that nobody has to read it every time. `stale` is the ratchet - debt the
+   * run did not spend and which can be struck from the file - and `ratchet`
+   * says whether this run was asked to fail over it.
+   *
+   * `entries` carries the stale ones themselves, for the structured formats. A
+   * number is enough to know the file has slack and never enough to strike it,
+   * and a bot that wants to open the pull request needs the rows.
    */
   readonly baseline?:
     | {
@@ -46,6 +59,7 @@ export interface ReporterOptions {
         readonly suppressed: number;
         readonly stale: number;
         readonly ratchet?: boolean | undefined;
+        readonly entries?: readonly StaleEntry[] | undefined;
       }
     | undefined;
 }
@@ -176,6 +190,19 @@ export function formatReport(result: AnalysisResult, options: ReporterOptions = 
     lines.push('');
   }
 
+  // What the repository told spec-graph to stop looking at. Only under
+  // --verbose, and never as a finding: these are not defects, they are the one
+  // place a configuration can make the check quieter, and a single over-broad
+  // glob looks exactly like a clean repository from the outside. See ADR-0008.
+  if (options.verbose && result.corpus.suppressed.length > 0) {
+    for (const [target, entry] of groupSuppressed(result.corpus.suppressed)) {
+      const where = entry.by === 'family' ? 'ignored family' : 'ignored reference';
+      const times = entry.count === 1 ? '' : ` (${entry.count} times)`;
+      lines.push(`${paint.dim(marks.info)} ${paint.location(formatRef(entry.at))}  ${paint.dim(`${where}: ${target}${times}`)}`);
+    }
+    lines.push('');
+  }
+
   const tally: string[] = [];
   if (summary.errors > 0) tally.push(paint.error(`${summary.errors} ${plural(summary.errors, 'error')}`));
   if (summary.warnings > 0) tally.push(paint.warn(`${summary.warnings} ${plural(summary.warnings, 'warning')}`));
@@ -195,9 +222,17 @@ export function formatReport(result: AnalysisResult, options: ReporterOptions = 
   // painted and worded as one.
   const ratcheted = ratchetFailed(baseline);
   if (baseline !== undefined && baseline.stale > 0) {
+    // A "gone" entry is not the ratchet working, and saying so matters more
+    // than the count does: the usual way to produce one is to narrow an include
+    // pattern, which loses sight of a defect rather than fixing it.
+    const gone = (baseline.entries ?? []).filter((entry) => entry.reason === 'gone').length;
+    const because =
+      gone === 0
+        ? `tighten it: spec-graph check --record-baseline ${baseline.source}`
+        : `${gone} of them ${gone === 1 ? 'names a document' : 'name documents'} this run did not see - check the include patterns before re-recording`;
     const text = `${baseline.stale} baseline ${plural(baseline.stale, 'entry', 'entries')} no longer ${
       baseline.stale === 1 ? 'occurs' : 'occur'
-    } - tighten it: spec-graph check --record-baseline ${baseline.source}`;
+    } - ${because}`;
     lines.push(ratcheted ? `${paint.error(marks.error)} ${text}` : paint.dim(text));
   }
 
@@ -269,6 +304,25 @@ function plural(count: number, word: string, plural?: string): string {
  * Deliberately flat and versioned: this is the contract a CI annotator or a
  * dashboard builds against, and it must be safe to add fields to it later.
  */
+/**
+ * One row per silenced target, with the first place it was written.
+ *
+ * Grouped because a concept tag used forty times is one decision, and forty
+ * lines of it would bury the one entry somebody needs to see. Insertion order
+ * is document order, which is already deterministic.
+ */
+function groupSuppressed(
+  suppressed: readonly SuppressedRef[],
+): Map<string, { at: SourceRef; by: SuppressedRef['by']; count: number }> {
+  const out = new Map<string, { at: SourceRef; by: SuppressedRef['by']; count: number }>();
+  for (const entry of suppressed) {
+    const seen = out.get(entry.target);
+    if (seen === undefined) out.set(entry.target, { at: entry.at, by: entry.by, count: 1 });
+    else seen.count += 1;
+  }
+  return out;
+}
+
 /**
  * True when a baseline was asked to ratchet and has slack left in it.
  *
@@ -423,6 +477,16 @@ export function formatJson(
       ...(options.baseline === undefined ? {} : { baseline: options.baseline }),
       summary: result.summary,
       files: result.files,
+      // The audit trail for what configuration silenced. Always present, unlike
+      // the human report's --verbose gate: a machine reader that has to ask for
+      // it twice will not ask. See ADR-0008.
+      suppressed: result.corpus.suppressed.map((entry) => ({
+        target: entry.target,
+        from: entry.from,
+        by: entry.by,
+        file: entry.at.file,
+        line: entry.at.span.start.line,
+      })),
       diagnostics: result.diagnostics.map((diagnostic) => ({
         rule: diagnostic.rule,
         severity: diagnostic.severity,

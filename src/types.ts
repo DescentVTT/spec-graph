@@ -321,6 +321,27 @@ export interface DanglingRef {
 }
 
 /**
+ * A citation that failed to resolve and that configuration told us to ignore.
+ *
+ * Kept so a repository can audit its own silence. `ignoreReferences` and
+ * `ignoreFamilies` are the two places a team can tell spec-graph to stop
+ * reporting something, and a single over-broad glob can quietly turn the whole
+ * check off - which looks exactly like a clean repository. The opportunistic
+ * rule from [ADR-0004] is deliberately not counted here: reading `SHA-256` as
+ * prose is spec-graph's own judgement, not a decision anybody wrote down, and
+ * listing it would bury the handful of entries that are. See ADR-0008.
+ */
+export interface SuppressedRef {
+  /** The identifier as written. */
+  readonly target: string;
+  /** The document that wrote it. */
+  readonly from: string;
+  readonly at: SourceRef;
+  /** Which declaration silenced it. */
+  readonly by: 'reference' | 'family';
+}
+
+/**
  * A front-matter key that reads as a relation and is not one.
  *
  * Front matter is an open vocabulary - `title`, `tags`, `sidebar_position` and

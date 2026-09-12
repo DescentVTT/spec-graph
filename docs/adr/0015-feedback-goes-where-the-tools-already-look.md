@@ -110,9 +110,18 @@ so in practice the description is written once.
       findings have exactly one - `superseded-by: ADR-0002` added to a named
       file. Not attempted: a wrong automatic fix to a specification is a worse
       failure than a missing one.
-- [ ] The stale baseline entries are named in the human report and counted in
-      JSON. If a team asks for the list in JSON, the note is where it goes -
-      though `--record-baseline` and a diff remain the better answer.
+- [x] The stale baseline entries are named in the human report and counted in
+      JSON. **Resolved (2026-09-12):** they are in the note, as
+      `baseline.entries`, each carrying the `paid` or `gone` label from
+      [ADR-0012](0012-a-baseline-is-a-ratchet.md). A count is enough to know the
+      file has slack and never enough to strike it, and the rows cannot go on
+      stdout beside a JSON document without breaking the parse.
+
+      Not added to SARIF. The semantically correct slot is
+      `invocations[].toolConfigurationNotifications`, and nothing that consumes
+      SARIF renders it - an annotation nobody sees is the cost of this format
+      without the benefit. `--record-baseline` and a diff remain the better
+      answer there, as they were always going to be.
 
 ## See also
 

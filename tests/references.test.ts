@@ -336,3 +336,101 @@ describe('front-matter keys that read as relations', () => {
     expect(found.map((d) => d.target)).toEqual(['supercedes-by', 'require-by']);
   });
 });
+
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Auditing what a repository has silenced.
+ *
+ * A suppression filter is the one setting that can make the check quieter, and
+ * a single over-broad glob looks exactly like a clean repository from the
+ * outside. ADR-0008 left this open with `--verbose` named as the obvious home.
+ */
+describe('the audit trail for suppressed references', () => {
+  const CITED = `---
+status: accepted
+---
+
+# ADR-0001: Traps
+
+See [[trap 55]], [[trap 54]] and [[trap 55]] again, plus RFC 2119.
+`;
+
+  const RFC = ['---', 'id: RFC-0001', 'status: accepted', '---', '', '# RFC-0001: Local', ''].join(String.fromCharCode(10));
+
+  const suppressedIn = (ignoreReferences: readonly string[], families: readonly string[] = []) =>
+    analyseSources([{ path: 'docs/adr/0001-traps.md', text: CITED }], {
+      isIgnoredReference: createReferenceFilter(ignoreReferences),
+      ...(families.length > 0 ? { isIgnoredFamily: (family: string) => families.includes(family) } : {}),
+    }).corpus.suppressed;
+
+  it('records every site, not one row per target', () => {
+    // Grouping is the reporter's job. The corpus keeps what actually happened,
+    // because "this glob silenced eleven citations" is the number that tells a
+    // team their glob is too wide.
+    const found = suppressedIn(['trap *']);
+    expect(found.map((entry) => entry.target)).toEqual(['trap 55', 'trap 54', 'trap 55']);
+    expect(found.every((entry) => entry.by === 'reference')).toBe(true);
+    expect(found[0]?.from).toBe('ADR-0001');
+    expect(found[0]?.at.file).toBe('docs/adr/0001-traps.md');
+  });
+
+  it('says which of the two settings did it', () => {
+    // The family filter only has anything to do once the corpus holds an RFC.
+    // Without one, `RFC 2119` is prose by the ADR-0004 asymmetry and is never
+    // offered to a filter at all - which the case below is the proof of.
+    const local = { path: 'docs/rfcs/0001-local.md', text: RFC };
+    const found = analyseSources([{ path: 'docs/adr/0001-traps.md', text: CITED }, local], {
+      isIgnoredReference: createReferenceFilter(['trap *']),
+      isIgnoredFamily: (family: string) => family === 'RFC',
+    }).corpus.suppressed;
+    expect(found.map((entry) => [entry.target, entry.by])).toEqual([
+      ['trap 55', 'reference'],
+      ['trap 54', 'reference'],
+      ['trap 55', 'reference'],
+      ['RFC 2119', 'family'],
+    ]);
+  });
+
+  it('offers nothing to the family filter that was never a citation', () => {
+    // No RFC in the corpus, so `RFC 2119` never becomes a reference and the
+    // filter is not consulted. Logging it would credit a configuration setting
+    // with silence that spec-graph produced on its own.
+    expect(suppressedIn([], ['RFC']).map((entry) => entry.target)).toEqual([]);
+  });
+
+  it('is empty when the repository has silenced nothing', () => {
+    // The wiki links are still unresolved here; they are reported as findings
+    // rather than logged as suppressions, because nobody decided anything.
+    const result = analyseSources([{ path: 'docs/adr/0001-traps.md', text: CITED }]);
+    expect(result.corpus.suppressed).toEqual([]);
+    expect(result.diagnostics.map((d) => d.rule)).toContain('broken-reference');
+  });
+
+  it('does not log what spec-graph judged to be prose on its own', () => {
+    // `T-1000` in a repository of ADRs is a sentence about a robot, and that is
+    // the ADR-0004 asymmetry rather than a decision anybody wrote down. Logging
+    // it would bury the entries that are.
+    const text = `---
+status: accepted
+---
+
+# ADR-0001: Robots
+
+We considered T-1000 and SHA-256.
+`;
+    const result = analyseSources([{ path: 'docs/adr/0001-robots.md', text }]);
+    expect(result.corpus.suppressed).toEqual([]);
+    expect(result.diagnostics).toEqual([]);
+  });
+
+  it('never turns a suppression into an edge or a finding', () => {
+    // The filter is consulted only after resolution has already failed, so
+    // nothing here can delete a relation from the graph. See ADR-0010.
+    const result = analyseSources([{ path: 'docs/adr/0001-traps.md', text: CITED }], {
+      isIgnoredReference: createReferenceFilter(['trap *']),
+    });
+    expect(result.diagnostics).toEqual([]);
+    expect(result.corpus.edges.filter((edge) => edge.kind !== 'contains')).toEqual([]);
+  });
+});
