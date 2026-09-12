@@ -144,9 +144,9 @@ A hand-written engine replacing a built-in one has something rare available: an
 oracle. So the useful question is not "does it do what I think" but "does it do
 what the thing it replaced did", and that is asked mechanically.
 
-The committed test compares both engines over a hand-written corpus of 126
-patterns against 29 subjects, and over 1,000 patterns generated from a seeded
-grammar against 12 subjects — about 15,000 comparisons on every run, with the
+The committed test compares both engines over a hand-written corpus of 130
+patterns against 53 subjects, and over 1,000 patterns generated from a seeded
+grammar against 12 subjects — about 19,000 comparisons on every run, with the
 seed fixed so a failure reproduces on every machine. Off to one side, a larger
 run of the same comparison covered **1.33 million pattern-subject pairs with
 zero disagreements**, and confirmed that every pattern the generator produced
@@ -170,6 +170,19 @@ refused both. Repeating a zero-width assertion is exactly as meaningless as it
 sounds and both engines read it as matching the empty string; the fix was to
 remember whether a group had been written. Those shapes are in the committed
 corpus now.
+
+And the corpus itself has been wrong. The mutation score is what said so: a
+survivor sat on the line that steps past the `^` in a negated class, where
+`[^abc]` mutated to `[^[^abc]` passed 1.33 million comparisons. The corpus tested
+classes against `"[]"`, and the `]` cancelled the wrongly-included `[`. Adding
+every metacharacter as a **one-character subject** killed it, and then found a
+real defect the oracle had been agreeing with: `[\d-\w]` matched U+017F,
+because upper-casing it gives `S` and the range check tried the character's case
+forms without asking whether the fold survived. It does not - the same clause,
+for the second time, in a second place. See
+[ADR-0007](0007-mutation-testing.md), which now carries the general form: the
+oracle checks the implementation against a corpus, and the mutation score checks
+the corpus.
 
 That is the same lesson [ADR-0013](0013-the-scanner-hands-back-prose.md) drew
 from an open question that turned out to be false, and

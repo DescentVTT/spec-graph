@@ -476,6 +476,18 @@ describe('running a registered rule by name', () => {
     expect(result.err).toContain('project:no-draft-dependency');
   });
 
+  it('rejects a --rule naming a project rule nothing declares', async () => {
+    // A flag that silently does nothing is indistinguishable from a rule that
+    // ran and found none, which is the one thing a check must never be.
+    const result = await run('check', '--root', PROJECT, '--rule', 'project:no-such-rule=off');
+    expect(result.code).toBe(EXIT_ERROR);
+    expect(result.err).toContain('unknown rule "project:no-such-rule"');
+    expect(result.err).toContain('project:no-draft-dependency');
+    // The one that does exist is accepted and silences the only error, so the
+    // check above is about the name rather than about the namespace.
+    expect((await run('check', '--root', PROJECT, '--rule', 'project:no-draft-dependency=off')).code).toBe(EXIT_OK);
+  });
+
   it('says so when the repository declares none at all', async () => {
     const result = await run('query', 'project:anything', '--root', PROJECT, '--no-config');
     expect(result.code).toBe(EXIT_ERROR);
@@ -508,16 +520,25 @@ describe('finding the configuration from a subdirectory', () => {
   });
 
   it('keeps a pattern typed on the command line relative to where it was typed', async () => {
-    // The root moved up; the pattern did not. `docs/*.md` from inside the
-    // package means the package's docs, and reporting them against the root is
-    // what makes a baseline key survive being recorded from anywhere.
-    const nested = await runIn(absolute(`${PROJECT}/docs`), 'query', 'document', '.', '--format', 'json');
-    expect(nested.code).toBe(EXIT_OK);
-    const parsed = JSON.parse(nested.out) as { matches: { nodes: { file: string }[] }[] };
-    expect(parsed.matches.map((match) => (match.nodes[0] as { file: string }).file).sort()).toEqual([
-      'docs/0001.md',
-      'docs/0002.md',
-    ]);
+    // The root moved up; the pattern did not. `deep/*.md` typed inside the
+    // package means that package's `deep`, and reporting what it finds against
+    // the root is what makes a baseline key survive being recorded anywhere.
+    const files = async (cwd: string, ...argv: string[]): Promise<string[]> => {
+      const run = await runIn(cwd, 'query', 'document', ...argv, '--format', 'json');
+      expect(run.code, run.err).toBe(EXIT_OK);
+      const parsed = JSON.parse(run.out) as { matches: { nodes: { file: string }[] }[] };
+      return parsed.matches.map((match) => (match.nodes[0] as { file: string }).file).sort();
+    };
+
+    expect(await files(absolute(`${PROJECT}/docs`), 'deep/*.md')).toEqual(['docs/deep/0003.md']);
+    expect(await files(absolute(`${PROJECT}/docs`), '*.md')).toEqual(['docs/0001.md', 'docs/0002.md']);
+  });
+
+  it('anchors a negated pattern by its glob, not by its exclamation mark', async () => {
+    const nested = await runIn(absolute(`${PROJECT}/docs`), 'check', '**/*.md', '!deep/**', '--format', 'markdown');
+    const top = await run('check', '--root', PROJECT, 'docs/**/*.md', '!docs/deep/**', '--format', 'markdown');
+    expect(nested.out).toBe(top.out);
+    expect(nested.out).not.toContain('0003');
   });
 
   it('leaves an absolute path alone, since it was never relative to anywhere', async () => {

@@ -11,6 +11,7 @@ import {
   shouldUseColor,
 } from '../src/report.js';
 import { analyseSources, type Source } from '../src/runner.js';
+import { formatRef } from '../src/source.js';
 import type { AnalysisResult } from '../src/runner.js';
 import type { Diagnostic } from '../src/types.js';
 
@@ -341,26 +342,138 @@ describe('json report', () => {
 describe('markdown report', () => {
   const rows = (text: string): string[] => text.split('\n').filter((line) => line.startsWith('| '));
 
+  /** The cells of one GFM row, without the empty ends the pipes produce. */
+  const cells = (row: string): string[] =>
+    row
+      .split('|')
+      .slice(1, -1)
+      .map((cell) => cell.trim());
+
+  /** Every `| key | value |` pair in the summary table, as an object. */
+  const counts = (text: string): Record<string, string> => {
+    const out: Record<string, string> = {};
+    for (const row of rows(text)) {
+      const parts = cells(row);
+      if (parts.length === 2 && /^[A-Z]/.test(parts[0] as string)) out[parts[0] as string] = parts[1] as string;
+    }
+    return out;
+  };
+
   it('leads with the verdict, because that is what a reviewer is deciding', () => {
     const text = formatMarkdown(result());
     expect(text.startsWith('### spec-graph')).toBe(true);
     expect(text).toContain('The specification graph is inconsistent.');
-    expect(formatMarkdown({ ...result(), ok: true }).includes('holds')).toBe(true);
   });
 
-  it('counts the corpus and the findings in one table', () => {
+  it('has one verdict for each way a run can end', () => {
+    // Four states, and the reporter must agree with the exit code in all four:
+    // a report that says "consistent" above a failing build is worse than none.
+    const failing = result();
+    const clean = { ...failing, ok: true, summary: { ...failing.summary, errors: 0, warnings: 0 } };
+    const warning = { ...failing, ok: true, summary: { ...failing.summary, errors: 0, warnings: 2 } };
+    const loose = { source: 'b.json', suppressed: 0, stale: 1, ratchet: true };
+
+    expect(formatMarkdown(failing)).toContain('The specification graph is inconsistent.');
+    expect(formatMarkdown(clean)).toContain('The specification graph is consistent.');
+    expect(formatMarkdown(warning)).toContain('No errors - the specification graph holds.');
+    expect(formatMarkdown(clean, { baseline: loose })).toContain('The baseline is looser than the repository.');
+    // A failing run stays failing, whatever the baseline is doing.
+    expect(formatMarkdown(failing, { baseline: loose })).toContain('The specification graph is inconsistent.');
+  });
+
+  it('carries every number in the summary, and no invented ones', () => {
+    const { summary } = result();
+    expect(counts(formatMarkdown(result()))).toEqual({
+      Documents: String(summary.documents),
+      Items: String(summary.items),
+      Relations: String(summary.edges),
+      'Open obligations': String(summary.openObligations),
+      Errors: String(summary.errors),
+      Warnings: String(summary.warnings),
+      Notes: String(summary.infos),
+    });
+  });
+
+  it('keeps every table rectangular, because one stray pipe misaligns the rest', () => {
+    // A GFM table is its header's width. A row with a cell too many or too few
+    // does not fail loudly - it renders as garbage from there to the bottom.
+    const text = formatMarkdown(result(), {
+      verbose: true,
+      baseline: {
+        source: '.baseline.json',
+        suppressed: 1,
+        stale: 1,
+        entries: [{ rule: 'broken-reference', document: 'ADR-0001', subject: 'x', count: 1, reason: 'paid' }],
+      },
+    });
+    let width = 0;
+    for (const row of rows(text)) {
+      const line = cells(row);
+      if (row.includes('---')) {
+        // A separator row declares the width of the table that follows it.
+        expect(line.length).toBe(width);
+        continue;
+      }
+      if (line.length !== width) width = line.length;
+      expect(cells(row).length).toBe(width);
+    }
+    expect(width).toBeGreaterThan(0);
+  });
+
+  it('leaves a blank line before every block, or a table stops being a table', () => {
+    // GFM only reads a table when a blank line precedes it. A stray line of
+    // text above one turns the whole thing into a paragraph full of pipes, and
+    // nothing anywhere reports an error - so the blank lines this pushes are
+    // load-bearing rather than decoration. Same for the <details> blocks.
+    const text = formatMarkdown(
+      result([{ path: 'docs/adr/0001-a.md', text: '<!-- @spec-node id="ADR-0001" colour="red" -->\n' }]),
+      {
+        verbose: true,
+        baseline: {
+          source: 'b.json',
+          suppressed: 1,
+          stale: 1,
+          entries: [{ rule: 'ghost-handover', document: 'ADR-0002', subject: '', count: 1, reason: 'gone' }],
+        },
+      },
+    );
+    const lines = text.split('\n');
+    expect(lines[1]).toBe('');
+    for (const [index, line] of lines.entries()) {
+      if (index === 0) continue;
+      const previous = lines[index - 1] as string;
+      if (line.startsWith('|')) expect(previous === '' || previous.startsWith('|'), line).toBe(true);
+      if (line.startsWith('<')) expect(previous, line).toBe('');
+    }
+    // And the closing tag is a line of its own, not the tail of one.
+    expect(lines).toContain('</details>');
+  });
+
+  it('gives every table a separator row, or none of it renders as a table', () => {
     const text = formatMarkdown(result());
-    expect(text).toContain('| Documents | 3 |');
-    expect(text).toContain('| Relations |');
-    expect(text).toContain('| Errors | 1 |');
+    const headers = rows(text).filter((row) => row.includes('Rule') || row.includes('| |'));
+    expect(headers.length).toBeGreaterThan(0);
+    for (const header of headers) {
+      const next = rows(text)[rows(text).indexOf(header) + 1];
+      expect(next, header).toMatch(/^\| -+/);
+    }
   });
 
-  it('carries the hint beside the message, not instead of it', () => {
-    // A finding without its next action is the half a reader cannot act on.
-    const row = rows(formatMarkdown(result())).find((line) => line.includes('ghost-handover'));
-    expect(row).toBeDefined();
-    expect(row).toContain('<br>');
-    expect(row).toContain('|');
+  it('turns each finding into one row carrying everything the terminal shows', () => {
+    const { diagnostics } = result();
+    const text = formatMarkdown(result());
+    const findings = rows(text).filter((row) => cells(row).length === 4 && !row.includes('---') && !row.includes('Rule'));
+    expect(findings).toHaveLength(diagnostics.length);
+
+    for (const [index, diagnostic] of diagnostics.entries()) {
+      const [severity, rule, where, what] = cells(findings[index] as string);
+      expect(severity).toBe(diagnostic.severity);
+      expect(rule).toBe(`\`${diagnostic.rule}\``);
+      expect(where).toBe(`\`${formatRef(diagnostic.at)}\``);
+      // The message and the hint, in that order. A finding without its next
+      // action is the half a reader cannot act on.
+      expect(what).toBe(`${diagnostic.message}<br>${diagnostic.hint}`);
+    }
   });
 
   it('escapes a pipe, and flattens a newline, so one message cannot become two rows', () => {
@@ -370,7 +483,7 @@ describe('markdown report', () => {
     const first = base.diagnostics[0] as Diagnostic;
     const text = formatMarkdown({
       ...base,
-      diagnostics: [{ ...first, message: 'a | b\ncontinued', hint: 'c | d' }],
+      diagnostics: [{ ...first, message: 'a | b' + '\n' + 'continued', hint: 'c | d' }],
     });
     expect(text).toContain('a &#124; b continued');
     expect(text).toContain('c &#124; d');
@@ -393,10 +506,42 @@ describe('markdown report', () => {
         ],
       },
     });
-    expect(text).toContain('2 findings accepted by');
+    expect(text).toContain('2 findings accepted by `.spec-graph-baseline.json`');
+    expect(text).toContain('2 entries no longer occur');
     expect(text).toContain('1 of them names a document this run did not see');
     expect(text).toContain('| paid | `broken-reference` | `ADR-0001` | fixed |');
-    expect(text).toContain('check the include patterns');
+    expect(text).toContain('| gone | `ghost-handover` | `ADR-0002` | not in this corpus - check the include patterns |');
+  });
+
+  it('counts in the singular when there is one of something', () => {
+    // Every plural in this format is a decision about one sentence, and the
+    // one-of-each case is the one nobody exercises by accident.
+    const one = formatMarkdown(result(), {
+      baseline: {
+        source: 'b.json',
+        suppressed: 1,
+        stale: 1,
+        entries: [{ rule: 'ghost-handover', document: 'ADR-0002', subject: '', count: 1, reason: 'gone' }],
+      },
+    });
+    expect(one).toContain('1 finding accepted by');
+    expect(one).toContain('1 entry no longer occurs');
+    expect(one).toContain('1 of them names a document');
+
+    const many = formatMarkdown(result(), {
+      baseline: {
+        source: 'b.json',
+        suppressed: 3,
+        stale: 2,
+        entries: [
+          { rule: 'ghost-handover', document: 'ADR-0002', subject: '', count: 1, reason: 'gone' },
+          { rule: 'ghost-handover', document: 'ADR-0003', subject: '', count: 1, reason: 'gone' },
+        ],
+      },
+    });
+    expect(many).toContain('3 findings accepted by');
+    expect(many).toContain('2 entries no longer occur');
+    expect(many).toContain('2 of them name documents');
   });
 
   it('says a baseline with no slack left in it has none', () => {
@@ -405,36 +550,50 @@ describe('markdown report', () => {
     });
     expect(text).toContain('1 finding accepted by');
     expect(text).not.toContain('no longer');
+    expect(text).not.toContain('| Entry |');
+  });
+
+  it('says nothing about a baseline when there was none', () => {
+    expect(formatMarkdown(result())).not.toContain('accepted by');
   });
 
   it('marks what only became an error because of --strict', () => {
     const text = formatMarkdown(result(), { escalated: new Set(['ghost-handover' as const]) });
-    expect(text).toContain('ghost-handover (strict)');
+    expect(text).toContain('`ghost-handover (strict)`');
+    expect(formatMarkdown(result())).not.toContain('(strict)');
   });
 
   it('truncates with --max and says how much it left out', () => {
     const base = result();
     const doubled = { ...base, diagnostics: [...base.diagnostics, ...base.diagnostics] };
-    const text = formatMarkdown(doubled, { max: 1 });
-    expect(rows(text).filter((line) => line.includes('docs/adr'))).toHaveLength(1);
-    expect(text).toContain('... and 1 more');
+    expect(rows(formatMarkdown(doubled, { max: 1 })).filter((line) => line.includes('docs/adr'))).toHaveLength(1);
+    expect(formatMarkdown(doubled, { max: 1 })).toContain('... and 1 more');
+    // Zero is no limit, the same as everywhere else in this tool.
+    expect(rows(formatMarkdown(doubled, { max: 0 })).filter((line) => line.includes('docs/adr'))).toHaveLength(2);
+    expect(formatMarkdown(doubled, { max: 2 })).not.toContain('more');
+  });
+
+  it('leaves the findings table out when there are no findings', () => {
+    const clean = formatMarkdown(result([{ path: 'docs/adr/0001-a.md', text: '# A' + '\n' }]));
+    expect(clean).not.toContain('| Rule |');
+    expect(clean).toContain('The specification graph is consistent.');
   });
 
   it('keeps the input problems and the silenced references behind --verbose', () => {
-    const quiet = formatMarkdown(result());
-    expect(quiet).not.toContain('<details>');
-    const loud = formatMarkdown(
-      result([{ path: 'docs/adr/0001-a.md', text: '<!-- @spec-node id="ADR-0001" colour="red" -->\n' }]),
-      { verbose: true },
-    );
+    const problematic = result([
+      { path: 'docs/adr/0001-a.md', text: '<!-- @spec-node id="ADR-0001" colour="red" -->' + '\n' },
+    ]);
+    expect(formatMarkdown(problematic)).not.toContain('<details>');
+    const loud = formatMarkdown(problematic, { verbose: true });
     expect(loud).toContain('<details><summary>Problems with the input</summary>');
+    expect(loud).toContain('</details>');
     expect(loud).toContain('colour');
   });
 
   it('ends with exactly one newline, whatever it printed last', () => {
     for (const text of [formatMarkdown(result()), formatMarkdown(result(), { verbose: true })]) {
       expect(text.endsWith('\n')).toBe(true);
-      expect(text.endsWith('\n\n')).toBe(false);
+      expect(text.endsWith('\n' + '\n')).toBe(false);
     }
   });
 });

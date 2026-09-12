@@ -281,6 +281,44 @@ detect nothing a human would call a defect. Where a table entry is load-bearing 
 the checkbox characters, the four lifecycle phases - it has a test. Where it is
 one synonym among many, it does not.
 
+**A survivor can be a defect in the test corpus rather than in the tests.**
+0.5.0 produced the clearest example this project has had, because the module in
+question is verified against an oracle and the oracle agreed anyway.
+
+`regex.ts` is checked by running every pattern through both it and `RegExp` and
+comparing — 1.33 million pattern-subject pairs, no disagreements. Its mutation
+score still had a survivor on the line that steps past the `^` in a negated
+character class:
+
+```ts
+if (negated) this.position += 1;
+```
+
+Mutated to `-= 1`, `[^abc]` compiles as `[^[^abc]`, and the whole suite still
+passed. Hand-mutating it — the practice above — confirmed the survivor was real
+rather than a `perTest` artefact, and then the question was why 1.33 million
+comparisons had missed it. The answer is that the corpus had a blind spot with a
+name: **a two-character subject gives the pattern a second chance.** The class
+tests were run against `"[]"`, where the wrongly-included `[` is cancelled by the
+`]` that follows it. One character on its own is a different question, and the
+corpus contained none.
+
+Adding `[`, `]`, `^`, `{`, `|` and the rest as subjects in their own right killed
+that mutant. It also found a **bug the oracle had been agreeing with all along**:
+`[\d-\w]` matched U+017F, because upper-casing it gives `S` and the range
+check tried the character's case forms without asking whether the fold survived.
+It does not — the specification keeps a non-ASCII character out of ASCII, which
+is the same clause that had already been read wrongly once, in the word-character
+set for `\b`. Two bugs, one clause, found by two different techniques a week
+apart.
+
+So the composition is worth stating: **the oracle checks the implementation
+against a corpus, and the mutation score checks the corpus.** Neither finds what
+the other does. A differential test with a blind spot passes forever; a mutation
+score with no oracle behind it only says the tests notice changes, not that the
+changes are wrong.
+
+
 ## Open Questions
 
 - [x] Should the `Regex` mutator be scoped? At 57.9% it was among the weakest.

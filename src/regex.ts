@@ -156,13 +156,26 @@ function accepts(set: CharSet, code: number): boolean {
   return set.negated ? !hit : hit;
 }
 
+/**
+ * Whether some member of a range folds to the same thing a code unit does.
+ *
+ * Asked backwards, by trying the character's own case forms against the raw
+ * range - and then checking that the form found there really does fold to the
+ * same place, which is the part that is easy to leave out. U+017F upper-cases
+ * to `S`, so without that check it matches `[A-Z]`, and it must not: the fold
+ * keeps it outside ASCII, which is the same clause `isWordChar` gets wrong if
+ * nobody is watching. The differential corpus caught both.
+ */
 function inRange(low: number, high: number, code: number): boolean {
   if (code >= low && code <= high) return true;
+  const folded = canonical(code);
   const char = String.fromCharCode(code);
-  const lower = char.toLowerCase();
-  if (lower.length === 1 && lower.charCodeAt(0) >= low && lower.charCodeAt(0) <= high) return true;
-  const upper = char.toUpperCase();
-  return upper.length === 1 && upper.charCodeAt(0) >= low && upper.charCodeAt(0) <= high;
+  for (const variant of [char.toLowerCase(), char.toUpperCase()]) {
+    if (variant.length !== 1) continue;
+    const candidate = variant.charCodeAt(0);
+    if (candidate >= low && candidate <= high && canonical(candidate) === folded) return true;
+  }
+  return false;
 }
 
 function within(ranges: readonly Range[], code: number): boolean {

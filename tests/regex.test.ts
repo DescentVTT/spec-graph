@@ -229,7 +229,9 @@ describe('rejection', () => {
     rejects('^*', 'nothing to repeat');
     rejects('a\\', 'ends with a backslash');
     rejects('\\xZZ', 'hex digits');
+    rejects('\\xZ1', 'hex digits');
     rejects('\\u00', 'hex digits');
+    rejects('\\u00g1', 'hex digits');
     rejects('\\c1', 'letter after');
     rejects('\\07', 'octal');
     rejects('[\\B]', 'not a character');
@@ -246,6 +248,8 @@ describe('rejection', () => {
       }
     })();
     expect(error?.offset).toBe(2);
+    // The name is what a stack trace and a `catch` block see.
+    expect(error?.name).toBe('PatternError');
   });
 });
 
@@ -272,8 +276,27 @@ const SUBJECTS: readonly string[] = [
   '-',
   '--',
   '-a-',
-  ']',
   'a-b',
+  // One character on its own, for every character a pattern can be written
+  // out of. A two-character subject gives the pattern a second chance: `[]`
+  // hides a wrong `[^abc]` because the `]` matches whatever the `[` did.
+  '[',
+  ']',
+  '^',
+  '$',
+  '{',
+  '}',
+  '(',
+  ')',
+  '|',
+  '*',
+  '+',
+  '?',
+  '.',
+  '\\',
+  '/',
+  '_',
+  ' ',
   '[]',
   '{0}',
   'a\nb',
@@ -282,6 +305,16 @@ const SUBJECTS: readonly string[] = [
   '\u00e9\u00c9',
   '\u4e2d\u6587',
   'stra\u00dfe',
+  // Case folding that is not a case change, and characters no table has an
+  // opinion about until it is asked.
+  '\u00b5',
+  '\u03bc',
+  '\u0390',
+  '\u0399',
+  '\u017f',
+  '\u212a',
+  '\u00a0',
+  '\u0001',
   'a'.repeat(40),
   'ab'.repeat(20),
 ];
@@ -418,6 +451,12 @@ const PATTERNS: readonly string[] = [
   'a{0,0}',
   'a{0}b',
   '(a{0})*',
+  // `\0` followed by a letter is a NUL; followed by a digit it is an octal
+  // escape, which is refused. One anchor in one regex is the difference.
+  '\\0a1',
+  '\\cA',
+  '\\u0390',
+  '\\u00b5',
 ];
 
 describe('agrees with RegExp', () => {

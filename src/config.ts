@@ -157,6 +157,10 @@ export function discoverConfig(from: string, io: DiscoveryIO = {}): DiscoveredCo
     if (loaded.source !== null) return { ...loaded, root: directory };
     if (exists(`${directory}/.git`)) break;
     const parent = dirnamePosix(directory);
+    // Two guards for one job, and each makes the other unreachable: a path with
+    // no separator left in it gives back `''`, and `''` gives back itself. Only
+    // one of them can ever fire, which is why neither has a test - removing
+    // either leaves the loop terminating on the other.
     if (parent === '' || parent === directory) break;
     directory = parent;
   }

@@ -274,6 +274,10 @@ describe('discovering a configuration upward', () => {
   it('tolerates a path with a trailing separator', () => {
     const io = tree({ [`/repo/${CONFIG}`]: '{}', '/repo/.git': '' });
     expect(discoverConfig('/repo/docs/', io).root).toBe('/repo');
+    // Including when the walk finds nothing and hands the start back: the root
+    // is what every path in the run is relative to, so it is normalised once
+    // here rather than everywhere it is joined.
+    expect(discoverConfig('/repo/docs//', tree({})).root).toBe('/repo/docs');
   });
 
   it('gives up at the top of a relative path rather than reading the filesystem root', () => {
