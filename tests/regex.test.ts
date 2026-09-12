@@ -85,6 +85,18 @@ describe('matching', () => {
     expect(test('^[\\d-x]+$', 'w')).toBe(false);
   });
 
+  it('takes a quantifier on a group that holds only an assertion', () => {
+    // `RegExp` rejects `\b*` and accepts `(\b)*`, which is the same nothing
+    // said twice - a group makes its contents quantifiable. Repeating a
+    // zero-width assertion is as meaningless as it sounds, and both engines
+    // read it as matching the empty string. Found by probing the degenerate
+    // shapes a pattern generator will never produce.
+    expect(test('(\\b)*a', 'a')).toBe(true);
+    expect(new RegExp('(\\b)*a', 'i').test('a')).toBe(true);
+    expect(() => compilePattern('\\b*a')).toThrow(PatternError);
+    expect(() => compilePattern('^*a')).toThrow(PatternError);
+  });
+
   it('reads a brace that opens nothing as a brace', () => {
     // `{0}` is what a project-rule message is made of, and a pattern written
     // against one has to be able to say so.
@@ -260,6 +272,8 @@ const SUBJECTS: readonly string[] = [
   '-',
   '--',
   '-a-',
+  ']',
+  'a-b',
   '[]',
   '{0}',
   'a\nb',
@@ -372,6 +386,38 @@ const PATTERNS: readonly string[] = [
   '[\\u00e0-\\u00ff]',
   '[\\u4e00-\\u9fff]+',
   '\\u00df',
+  // Degenerate shapes, which is where two engines actually differ. A grammar
+  // that generates patterns will not produce an empty group, an alternation
+  // with nothing on one side, or a class whose first character closes it, and
+  // those are exactly the corners where somebody's reading of Annex B shows.
+  '()',
+  '()*',
+  '()+',
+  '(|)',
+  '(|)*',
+  '(?:)',
+  '(?:)*',
+  '(()())',
+  '^()$',
+  '^(?:|a)+$',
+  '^(?:a|)*$',
+  '((a?)*)*',
+  '(\\b)*a',
+  '(^)?a',
+  'a||b',
+  '|',
+  '||',
+  '^^a$$',
+  '\\B\\B',
+  '[a-a]',
+  '[]-a]',
+  '[^]a]',
+  '[\\d-\\w]',
+  '[\\s\\S]*',
+  '[^\\s\\S]',
+  'a{0,0}',
+  'a{0}b',
+  '(a{0})*',
 ];
 
 describe('agrees with RegExp', () => {

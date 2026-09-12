@@ -144,8 +144,8 @@ A hand-written engine replacing a built-in one has something rare available: an
 oracle. So the useful question is not "does it do what I think" but "does it do
 what the thing it replaced did", and that is asked mechanically.
 
-The committed test compares both engines over a hand-written corpus of 100
-patterns against 27 subjects, and over 1,000 patterns generated from a seeded
+The committed test compares both engines over a hand-written corpus of 126
+patterns against 29 subjects, and over 1,000 patterns generated from a seeded
 grammar against 12 subjects — about 15,000 comparisons on every run, with the
 seed fixed so a failure reproduces on every machine. Off to one side, a larger
 run of the same comparison covered **1.33 million pattern-subject pairs with
@@ -159,6 +159,17 @@ basic set. It does say that — in Unicode mode, where `Canonicalize` has no
 clause keeping a non-ASCII character out of ASCII. This is the non-Unicode
 dialect, `RegExp` says no, and reading the clause was not enough. Running it
 was.
+
+The generated corpus has a blind spot, and it is the one that matters: a
+grammar produces the shapes its author thought to write down. It will never
+emit an empty group, an alternation with nothing on one side, a class whose
+first character closes it, or `a{0}`. Probing those by hand found the second
+divergence - `RegExp` rejects `\b*` and accepts `(\b)*`, because a group makes
+its contents quantifiable, and this parser treats a group as transparent and so
+refused both. Repeating a zero-width assertion is exactly as meaningless as it
+sounds and both engines read it as matching the empty string; the fix was to
+remember whether a group had been written. Those shapes are in the committed
+corpus now.
 
 That is the same lesson [ADR-0013](0013-the-scanner-hands-back-prose.md) drew
 from an open question that turned out to be false, and

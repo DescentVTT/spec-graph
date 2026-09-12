@@ -245,12 +245,15 @@ class PatternParser {
 
   private parseQuantified(): Node {
     const start = this.position;
+    // A group makes its contents quantifiable: `RegExp` rejects `\b*` and
+    // accepts `(\b)*`, which is the same nothing said twice, and this parser
+    // treats a group as transparent - so whether one was written is the only
+    // thing left that distinguishes the two.
+    const grouped = this.peek() === '(';
     const atom = this.parseAtom();
     const bounds = this.parseQuantifier();
     if (bounds === null) return atom;
-    if (atom.kind === 'assert') {
-      // `^*` is legal in Annex B and means nothing. Rejecting it saves the
-      // compiler from having to decide what repeating a zero-width assertion is.
+    if (atom.kind === 'assert' && !grouped) {
       throw new PatternError('nothing to repeat: a quantifier cannot follow an anchor', start);
     }
     return { kind: 'repeat', node: atom, min: bounds.min, max: bounds.max };
