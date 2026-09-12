@@ -1,7 +1,7 @@
 import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { loadConfig, parseConfig, CONFIG_FILES, CONFIG_PACKAGE_KEY } from '../src/config.js';
+import { discoverConfig, loadConfig, parseConfig, CONFIG_FILES, CONFIG_PACKAGE_KEY } from '../src/config.js';
 import { createFamilyFilter, analyseSources, type Source } from '../src/runner.js';
 import type { AnyRuleId } from '../src/types.js';
 
@@ -172,6 +172,114 @@ describe('finding a configuration', () => {
     await write('package.json', JSON.stringify({ [CONFIG_PACKAGE_KEY]: { ignore: ['package'] } }));
     await write(CONFIG_FILES[0] as string, JSON.stringify({ ignore: ['file'] }));
     expect(loadConfig(ROOT).config.ignore).toEqual(['file']);
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/* Discovery                                                                  */
+/* -------------------------------------------------------------------------- */
+
+describe('discovering a configuration upward', () => {
+  /**
+   * A directory tree as a map of path to contents.
+   *
+   * Injected rather than written to disk, because what is under test is the
+   * order the walk visits directories in, and a temporary tree would test the
+   * filesystem's opinion of that as well as ours.
+   */
+  const tree = (files: Readonly<Record<string, string>>) => {
+    const read = (path: string): string => {
+      const hit = files[path];
+      if (hit === undefined) throw new Error(`ENOENT ${path}`);
+      return hit;
+    };
+    return { read, exists: (path: string): boolean => path in files };
+  };
+
+  const CONFIG = CONFIG_FILES[0] as string;
+
+  it('reads the configuration in the starting directory, and stays there', () => {
+    const io = tree({ [`/repo/${CONFIG}`]: '{"strict":true}', '/repo/.git': '' });
+    const found = discoverConfig('/repo', io);
+    expect(found.root).toBe('/repo');
+    expect(found.config.strict).toBe(true);
+  });
+
+  it('walks up until it finds one, and makes that directory the root', () => {
+    const io = tree({ [`/repo/${CONFIG}`]: '{"strict":true}', '/repo/.git': '' });
+    const found = discoverConfig('/repo/packages/auth/docs', io);
+    expect(found.root).toBe('/repo');
+    expect(found.source).toBe(CONFIG);
+    expect(found.config.strict).toBe(true);
+  });
+
+  it('lets the nearest configuration win', () => {
+    const io = tree({
+      [`/repo/${CONFIG}`]: '{"ignore":["root"]}',
+      [`/repo/packages/auth/${CONFIG}`]: '{"ignore":["package"]}',
+      '/repo/.git': '',
+    });
+    const found = discoverConfig('/repo/packages/auth/docs', io);
+    expect(found.root).toBe('/repo/packages/auth');
+    expect(found.config.ignore).toEqual(['package']);
+  });
+
+  it('stops at the repository, and never reads above it', () => {
+    // A configuration file in a home directory or a parent checkout is one
+    // nobody in this repository can see, and a run that silently picked it up
+    // would be worse than no discovery at all.
+    const io = tree({ [`/home/${CONFIG}`]: '{"strict":true}', '/home/repo/.git': '' });
+    const found = discoverConfig('/home/repo/docs', io);
+    expect(found.source).toBeNull();
+    expect(found.root).toBe('/home/repo/docs');
+  });
+
+  it('gives back the starting directory when there is nothing to find', () => {
+    const found = discoverConfig('/repo/docs', tree({}));
+    expect(found).toEqual({ config: {}, source: null, problems: [], root: '/repo/docs' });
+  });
+
+  it('stops on a package.json that carries the key, and walks past one that does not', () => {
+    const bare = tree({
+      '/repo/packages/auth/package.json': '{"name":"auth"}',
+      [`/repo/${CONFIG}`]: '{"ignore":["root"]}',
+      '/repo/.git': '',
+    });
+    expect(discoverConfig('/repo/packages/auth', bare).root).toBe('/repo');
+
+    const carrying = tree({
+      '/repo/packages/auth/package.json': `{"name":"auth","${CONFIG_PACKAGE_KEY}":{"ignore":["package"]}}`,
+      [`/repo/${CONFIG}`]: '{"ignore":["root"]}',
+      '/repo/.git': '',
+    });
+    const found = discoverConfig('/repo/packages/auth', carrying);
+    expect(found.root).toBe('/repo/packages/auth');
+    expect(found.config.ignore).toEqual(['package']);
+  });
+
+  it('stops on a configuration it cannot read, rather than falling through to a parent', () => {
+    // Silently checking against the parent's configuration because this one has
+    // a trailing comma in it is the worst available answer.
+    const io = tree({
+      [`/repo/packages/auth/${CONFIG}`]: '{ broken',
+      [`/repo/${CONFIG}`]: '{"ignore":["root"]}',
+      '/repo/.git': '',
+    });
+    const found = discoverConfig('/repo/packages/auth', io);
+    expect(found.root).toBe('/repo/packages/auth');
+    expect(found.problems[0]).toContain('not valid JSON');
+    expect(found.config.ignore).toBeUndefined();
+  });
+
+  it('tolerates a path with a trailing separator', () => {
+    const io = tree({ [`/repo/${CONFIG}`]: '{}', '/repo/.git': '' });
+    expect(discoverConfig('/repo/docs/', io).root).toBe('/repo');
+  });
+
+  it('gives up at the top of a relative path rather than reading the filesystem root', () => {
+    // Only tests and `--root` produce a relative start, and `--root` turns
+    // discovery off - so the useful property is that the walk terminates.
+    expect(discoverConfig('docs/adr', tree({})).root).toBe('docs/adr');
   });
 });
 

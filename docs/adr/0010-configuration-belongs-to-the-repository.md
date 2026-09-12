@@ -102,13 +102,21 @@ whole mechanism off for one run.
 
 ## Open Questions
 
-- [ ] Should configuration be discovered upward from the working directory
-      rather than read from `--root`? A monorepo with per-package specs would
-      want that, and nothing has asked yet. Worth noting (2026-09-12) that
-      upward discovery is the one change here that could make a run depend on
-      where it was started from, which is the same property that makes
-      byte-determinism hard to reason about - so if it lands it should be a flag
-      rather than a default.
+- [x] Should configuration be discovered upward from the working directory
+      rather than read from `--root`? **Resolved (2026-09-13):** yes, and the
+      worry recorded here pointed the wrong way.
+      [ADR-0018](0018-the-configuration-file-is-the-root.md) has it: reading
+      configuration from the working directory is *already* a run that depends
+      on where it started, and silently so - `cd packages/auth && spec-graph
+      check` found no configuration, ran no project rules, used the default
+      include patterns and printed a verdict in the same shape as the real one.
+
+      What makes discovery the more deterministic answer rather than the less is
+      that the directory holding the file becomes the **root**. Every path here
+      is relative to the root, so a run from anywhere inside the repository
+      produces byte-identical output to a run from the top. It is a flag in the
+      sense this question asked for, inverted: `--root` is how a caller turns
+      discovery off.
 - [x] Named queries from ADR-0005 still have no home.
       **Resolved (2026-09-12):** they live here, under `rules`. The larger
       design is [ADR-0016](0016-a-query-needs-a-sentence.md); what this file
@@ -121,3 +129,5 @@ whole mechanism off for one run.
   rules refine rather than replace.
 - [ADR-0008](0008-wiki-links-carry-no-path.md) - the same
   suppresses-findings-never-edges guarantee.
+- [ADR-0018](0018-the-configuration-file-is-the-root.md) - how this file is
+  found, and why finding it decides where the repository starts.

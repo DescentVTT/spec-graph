@@ -177,9 +177,19 @@ skipped:
 - **Time-box the match.** There is no deadline for a regex in Node without a
   worker, and a resident worker is the thing ADR-0015 declined.
 
-So `~=` stays, on the same terms it already had, and the help now says it is a
-JavaScript regular expression run once per node. `^=`, `$=` and `*=` cover the
-cases most rules actually want and cannot backtrack at all.
+So `~=` stayed, on the same terms it already had, and the help said it was a
+JavaScript regular expression run once per node.
+
+**Amended 2026-09-13.** That held for one release.
+[ADR-0017](0017-a-predicate-must-finish.md) removes the hazard rather than
+documenting it: `~=` is now matched by an automaton that cannot backtrack, so
+the predicate is linear in the subject whatever the pattern. The fourth
+alternative - the one this ADR left as an open question and priced at "worth it
+only if a real repository hangs" - turned out to be the cheap one, and the
+reason is that the pricing was wrong. `(a+)+$` is a pattern nobody writes;
+`^([A-Za-z0-9_]+[ ]?)+$` is what somebody writes to check that a title is words
+separated by single spaces, and it takes V8 103 seconds against a
+fifty-four-character title. The question was never whether anybody had hung yet.
 
 **A transitive project rule can produce ten thousand findings.** That is the
 engine's match limit doing its job — the ceiling is fixed rather than a function
@@ -196,19 +206,41 @@ gate down with it.
 
 ## Open Questions
 
-- [ ] Should `spec-graph query project:no-drafts` run a named rule by its id?
-      The rule is already compiled by then, and a team debugging a convention
-      currently has to copy the selector out of the file.
+- [x] Should `spec-graph query project:no-drafts` run a named rule by its id?
+      **Resolved (2026-09-13):** yes, shipped. The rule is already compiled by
+      the time the command runs, and the namespace that made everything else
+      free makes this free too - no selector begins with a word and a colon, so
+      there is nothing to disambiguate and nothing added to the grammar.
+
+      Two details are deliberate. A rule with several selectors runs them as
+      the same union `projectFindings` does, deduped on the path, so what this
+      prints is the set `check` reports on rather than a longer one. And
+      `--verbose` names the selectors, because the question a team debugging a
+      convention is actually asking is "what did I write".
+
+      Built-in rules are **not** addressable this way. A project rule *is* its
+      selector; a built-in is a selector plus judgement - the hand-off between
+      `ghost-handover` and `stale-premise`, the record exemption, the related
+      cap - so `query rule:ghost-handover` would print a set that differs from
+      the findings and invite somebody to conclude the rule is broken.
+      `rules --explain` already shows those selectors, labelled as what they
+      are.
 - [ ] Should a project rule be able to name its own `related` locations? It gets
       every edge after the first, which is the right default and is not
       configurable.
 - [ ] Should a rule be able to declare itself exempt from the record exemption?
       No corpus has asked, and guessing at the answer would mean shipping a knob
       that documents a distinction nobody has needed to draw.
-- [ ] Should `~=` run on a matcher that cannot backtrack? A hand-written NFA
-      would make the predicate linear in the subject and close the hang above,
-      at the cost of a regex dialect that is not the one anybody expects. Worth
-      it only if a real repository hangs on this; none has.
+- [x] Should `~=` run on a matcher that cannot backtrack?
+      **Resolved (2026-09-13): yes, and the condition attached to this question
+      was the wrong one.** "Worth it only if a real repository hangs on this"
+      makes the case rest on somebody having already lost a build, when what the
+      question was really about is whether a pure pipeline may contain one
+      component whose running time nobody can bound. It may not.
+      [ADR-0017](0017-a-predicate-must-finish.md) has the measurements, the
+      dialect it costs, and the 1.33 million-pair differential test against the
+      engine it replaced - including the one clause of the specification that
+      test caught this ADR's author reading wrongly.
 
 ## See also
 
@@ -220,3 +252,8 @@ gate down with it.
   in.
 - [ADR-0006](0006-false-positives-cost-more.md) is why a new rule defaults to
   `warn`.
+- [ADR-0017](0017-a-predicate-must-finish.md) closed the hazard this ADR moved
+  into a configuration file.
+- [ADR-0009](0009-a-specification-is-a-region.md) carried the other cost of
+  shipping this: a rule reading `fm.owner` saw nothing on a register's regions,
+  and `!=` reads nothing as a mismatch.

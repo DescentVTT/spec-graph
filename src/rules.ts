@@ -78,6 +78,33 @@ export const RULE_DESCRIPTIONS: Readonly<Record<RuleId, string>> = Object.freeze
 });
 
 /**
+ * The decision behind each rule.
+ *
+ * A rule that fires is a claim about somebody's repository, and the reasoning
+ * for the claim is written down - in the ADR that decided it, not in a string
+ * table. So the table holds a pointer rather than a paraphrase: a second copy
+ * of the reasoning would drift from the first, and the first is the one
+ * `npm run selfcheck` keeps honest.
+ *
+ * Printed by `spec-graph rules --explain`, which is how somebody who has just
+ * been told their document is inconsistent finds out why anybody decided that.
+ */
+export const RULE_DECISIONS: Readonly<Record<RuleId, string>> = Object.freeze({
+  'ghost-handover': 'docs/adr/0002-lifecycle-lattice.md',
+  'stale-premise': 'docs/adr/0002-lifecycle-lattice.md',
+  'broken-reference': 'docs/adr/0004-reference-resolution.md',
+  'reference-outside-corpus': 'docs/adr/0004-reference-resolution.md',
+  'ambiguous-reference': 'docs/adr/0004-reference-resolution.md',
+  'circular-delegation': 'docs/adr/0005-rules-are-queries.md',
+  'orphaned-obligation': 'docs/adr/0003-item-state-signals.md',
+  'live-supersession': 'docs/adr/0002-lifecycle-lattice.md',
+  'unreciprocated-supersession': 'docs/adr/0006-false-positives-cost-more.md',
+  'state-conflict': 'docs/adr/0003-item-state-signals.md',
+  'self-reference': 'docs/adr/0006-false-positives-cost-more.md',
+  'unknown-relation-key': 'docs/adr/0014-a-relation-is-spelled-both-ways.md',
+});
+
+/**
  * The severity map `--strict` implies, and which rules it actually moved.
  *
  * Strict raises `warn` to `error` and leaves `info` alone. That asymmetry is

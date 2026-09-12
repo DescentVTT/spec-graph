@@ -17,12 +17,13 @@ import {
   type Baseline,
   type StaleEntry,
 } from './baseline.js';
-import { loadConfig, type SpecGraphConfig } from './config.js';
-import { underRoot } from './glob.js';
-import { analyse, DEFAULT_PATTERNS, withDiagnostics, type AnalyseOptions } from './runner.js';
+import { discoverConfig, loadConfig, type SpecGraphConfig } from './config.js';
+import { isGlob, underRoot } from './glob.js';
+import { analyse, DEFAULT_PATTERNS, withDiagnostics, type AnalyseOptions, type AnalysisResult } from './runner.js';
 import {
   formatGraph,
   formatJson,
+  formatMarkdown,
   formatReport,
   formatSarif,
   shouldUseAscii,
@@ -30,9 +31,17 @@ import {
   type GraphFormat,
 } from './report.js';
 import type { ProjectRule } from './project-rules.js';
-import { DEFAULT_SEVERITIES, resolveStrict, RULE_DESCRIPTIONS, RULE_IDS, RULE_QUERIES } from './rules.js';
+import {
+  DEFAULT_SEVERITIES,
+  resolveStrict,
+  RULE_DECISIONS,
+  RULE_DESCRIPTIONS,
+  RULE_IDS,
+  RULE_QUERIES,
+} from './rules.js';
+import { toPosix } from './paths.js';
 import { formatRef } from './source.js';
-import { execute, parseQuery, QueryError, renderMatch, type Match } from './select.js';
+import { execute, parseQuery, QueryError, renderMatch, type Match, type QuerySpec } from './select.js';
 import { isProjectRule, type AnyRuleId, type RuleId, type Severity, type SpecNode } from './types.js';
 
 export const EXIT_OK = 0;
@@ -52,6 +61,14 @@ export interface CliOptions {
   readonly command: Command;
   readonly patterns: readonly string[];
   readonly root: string;
+  /**
+   * Whether `--root` was given.
+   *
+   * When it was, the caller has named the root and configuration is read from
+   * exactly there. When it was not, the root is discovered - which is a
+   * different question from what the root currently is. See ADR-0018.
+   */
+  readonly rootExplicit: boolean;
   readonly ignore: readonly string[];
   /** Reference targets to leave unreported when they do not resolve. */
   readonly ignoreReferences: readonly string[];
@@ -76,7 +93,7 @@ export interface CliOptions {
   readonly ratchet: boolean;
   /** Skip the repository configuration file entirely. */
   readonly noConfig: boolean;
-  readonly format: 'human' | 'json' | 'sarif';
+  readonly format: 'human' | 'json' | 'sarif' | 'markdown';
   readonly graphFormat: GraphFormat;
   readonly severities: Partial<Record<AnyRuleId, Severity>>;
   readonly color: boolean | null;
@@ -105,18 +122,27 @@ export const HELP = `spec-graph - turn Markdown specifications into a verifiable
 
 USAGE
   spec-graph [check] [patterns...] [options]
-  spec-graph query <selector> [patterns...] [options]
+  spec-graph query <selector|project:rule> [patterns...] [options]
   spec-graph graph [patterns...] [--graph-format dot|mermaid|json]
-  spec-graph rules [--explain]
+  spec-graph rules [rule-id] [--explain]
 
 COMMANDS
   check     Validate the specification graph. The default.
-  query     Run a selector and print the matching paths.
+  query     Run a selector - or a registered project rule, by its id - and
+            print the matching paths.
   graph     Export the graph for Graphviz, Mermaid, or another tool.
-  rules     List the diagnostics that will run, built in and project.
+  rules     List the diagnostics that will run, built in and project. Name one
+            to see only that one; --explain adds its selector and the ADR that
+            decided it.
 
 OPTIONS
-  --root <dir>            Directory the patterns resolve against (default: cwd)
+  --root <dir>            Directory the patterns resolve against. Without it,
+                          .spec-graph.json is looked for in the working
+                          directory and then upward as far as the repository,
+                          and the directory holding it becomes the root - so a
+                          run from a subdirectory reports what a run from the
+                          top reports. Paths typed on the command line stay
+                          relative to where they were typed.
   --ignore <glob>         Skip paths. Repeatable.
   --ignore-ref <glob>     Do not report these reference targets when they fail
                           to resolve, for repositories where [[...]] tags a
@@ -136,9 +162,10 @@ OPTIONS
   --ratchet               Also fail when a baseline entry no longer occurs, so
                           a paid-off exemption cannot outlive the defect.
   --no-config             Ignore .spec-graph.json and the package.json key.
-  --format <fmt>          human, json, or sarif - the interchange format
-                          GitHub code scanning and editors already read
-                          (default: human)
+  --format <fmt>          human, json, sarif or markdown. sarif is the
+                          interchange format GitHub code scanning and editors
+                          already read; markdown is a table for a pull-request
+                          comment or $GITHUB_STEP_SUMMARY (default: human)
   --graph-format <fmt>    dot, mermaid or json (default: dot)
   --documents-only        Leave items out of the exported graph
   --rule <id>=<severity>  Override one rule: error, warn, info or off. A project
@@ -168,8 +195,11 @@ SELECTORS
                alias, document, state (or disposition), openness, section,
                text, body, evidence, conflicted, fm.<front-matter-key>
   Operators:   = != ^= $= *= ~=   and [attr] for "is present"
-               ~= is a JavaScript regular expression, run once per node; ^= $=
-               and *= cover most cases and cannot backtrack
+               ~= is a regular expression, matched by an automaton that cannot
+               backtrack: linear in the subject, whatever the pattern. It reads
+               the usual syntax minus backreferences and lookaround, which are
+               not regular - both are refused when the selector is read, with
+               the character pointed at
   Relations:   -kind->  <-kind-   =kind=>  <=kind=   (= forms are transitive)
 
 EXIT CODES
@@ -219,6 +249,10 @@ PROJECT RULES
   with a built-in. A selector that does not parse, or a {2} the query can never
   reach, is reported when the file is read rather than found missing later.
 
+  To see what one matches without copying its selector out of the file:
+
+    spec-graph query project:no-draft-dependency --verbose
+
 ADOPTING THIS ON AN OLD REPOSITORY
   Record what is already wrong, then report only what happens next:
 
@@ -238,7 +272,10 @@ EXAMPLES
   spec-graph check --history "**/JOURNAL_*.md"   # a log is not a specification
   spec-graph check --baseline .spec-graph-baseline.json
   spec-graph rules --explain                # including this repository's own
+  spec-graph rules ghost-handover --explain      # and why it exists
   spec-graph check --rule project:no-draft-dependency=off
+  spec-graph query project:no-draft-dependency   # what does that rule match?
+  spec-graph check --format markdown >> "$GITHUB_STEP_SUMMARY"
 `;
 
 const SEVERITIES: readonly Severity[] = ['error', 'warn', 'info', 'off'];
@@ -265,7 +302,8 @@ export function parseArgs(argv: readonly string[], cwd: string): CliOptions {
   let noConfig = false;
   const severities: Partial<Record<AnyRuleId, Severity>> = {};
   let root = cwd;
-  let format: 'human' | 'json' | 'sarif' = 'human';
+  let rootExplicit = false;
+  let format: 'human' | 'json' | 'sarif' | 'markdown' = 'human';
   let graphFormat: GraphFormat = 'dot';
   let color: boolean | null = null;
   let ascii: boolean | null = null;
@@ -336,6 +374,7 @@ export function parseArgs(argv: readonly string[], cwd: string): CliOptions {
         break;
       case '--root':
         root = next(arg, i);
+        rootExplicit = true;
         i += 1;
         break;
       case '--ignore':
@@ -371,8 +410,8 @@ export function parseArgs(argv: readonly string[], cwd: string): CliOptions {
         break;
       case '--format': {
         const value = next(arg, i);
-        if (value !== 'human' && value !== 'json' && value !== 'sarif') {
-          throw new UsageError(`--format must be human, json or sarif, got "${value}"`);
+        if (value !== 'human' && value !== 'json' && value !== 'sarif' && value !== 'markdown') {
+          throw new UsageError(`--format must be human, json, sarif or markdown, got "${value}"`);
         }
         format = value;
         i += 1;
@@ -425,8 +464,8 @@ export function parseArgs(argv: readonly string[], cwd: string): CliOptions {
   // SARIF is a report about findings, and only `check` produces those. Falling
   // back to JSON would hand a pipeline something its uploader rejects with a
   // message about a schema rather than about the command that was run.
-  if (format === 'sarif' && command !== 'check' && !help && !version) {
-    throw new UsageError(`--format sarif reports findings, so it belongs to check, not to ${command}`);
+  if ((format === 'sarif' || format === 'markdown') && command !== 'check' && !help && !version) {
+    throw new UsageError(`--format ${format} reports findings, so it belongs to check, not to ${command}`);
   }
 
   if (command === 'query' && selector === null && !help && !version) {
@@ -437,6 +476,7 @@ export function parseArgs(argv: readonly string[], cwd: string): CliOptions {
     command,
     patterns,
     root,
+    rootExplicit,
     ignore,
     ignoreReferences,
     families,
@@ -534,29 +574,45 @@ export async function main(io: CliIO = {}): Promise<number> {
   //
   // Read before `rules` prints anything, so that command lists the conventions
   // this repository will actually check rather than the ones spec-graph ships.
-  const loaded = options.noConfig ? { config: {} as SpecGraphConfig, source: null, problems: [] } : loadConfig(options.root);
+  const loaded = options.noConfig
+    ? { config: {} as SpecGraphConfig, source: null, problems: [], root: options.root }
+    : options.rootExplicit
+      ? { ...loadConfig(options.root), root: options.root }
+      : discoverConfig(options.root);
   for (const problem of loaded.problems) err(`spec-graph: ${problem}\n`);
   const file = loaded.config;
   const projectRules = file.rules ?? [];
+  const root = loaded.root;
+  // How far the root moved up. Everything a repository declares about itself is
+  // relative to the root; everything typed on the command line is relative to
+  // where it was typed, and this is what keeps those two readings apart.
+  const here = below(root, options.root);
 
   // A `--rule` naming a project rule that does not exist is a flag that
   // silently does nothing, and nothing in the output would distinguish that
   // from a rule that ran and found none.
   for (const id of Object.keys(options.severities)) {
     if (!isProjectRule(id as AnyRuleId) || projectRules.some((rule) => rule.id === id)) continue;
-    const known = projectRules.map((rule) => rule.id);
-    const where = known.length > 0 ? `project rules here: ${known.join(', ')}` : 'this repository defines no project rules';
-    err(`spec-graph: unknown rule "${id}"\n  ${where}\n`);
+    err(`spec-graph: unknown rule "${id}"\n  ${knownProjectRules(projectRules)}\n`);
     return EXIT_ERROR;
   }
 
   if (options.command === 'rules') {
-    out(renderRules(options.verbose, projectRules));
+    // The one positional argument `rules` can take is a rule id: this command
+    // reads no files, so a pattern here would be a word with nowhere to go.
+    const wanted = options.patterns[0];
+    if (wanted !== undefined && !RULE_IDS.includes(wanted as RuleId) && !projectRules.some((rule) => rule.id === wanted)) {
+      err(
+        `spec-graph: unknown rule "${wanted}"\n  known rules: ${RULE_IDS.join(', ')}\n  ${knownProjectRules(projectRules)}\n`,
+      );
+      return EXIT_ERROR;
+    }
+    out(renderRules(options.verbose, projectRules, wanted ?? null, loaded.source));
     return EXIT_OK;
   }
 
   const patterns =
-    options.patterns.length > 0 ? options.patterns : (file.patterns ?? DEFAULT_PATTERNS);
+    options.patterns.length > 0 ? options.patterns.map((pattern) => anchor(here, pattern)) : (file.patterns ?? DEFAULT_PATTERNS);
   const severityOverrides = { ...(file.severities ?? {}), ...options.severities };
   const { severities, escalated } = resolveStrict(
     severityOverrides,
@@ -565,19 +621,28 @@ export async function main(io: CliIO = {}): Promise<number> {
   );
 
   const analyseOptions: AnalyseOptions = {
-    root: options.root,
+    root,
     patterns,
-    ignore: [...(file.ignore ?? []), ...options.ignore],
+    // A bare name prunes a directory of that name at any depth, the way a
+    // .gitignore line does, so it means the same thing wherever it was typed.
+    // A path or a glob is matched against the repository-relative path, and
+    // leaving that one alone would make it silently match nothing.
+    ignore: [...(file.ignore ?? []), ...options.ignore.map((pattern) => anchorPath(here, pattern))],
     ignoreReferences: [...(file.ignoreReferences ?? []), ...options.ignoreReferences],
     families: [...(file.families ?? []), ...options.families],
     ignoreFamilies: [...(file.ignoreFamilies ?? []), ...options.ignoreFamilies],
-    historyPatterns: [...(file.historyPatterns ?? []), ...options.historyPatterns],
+    historyPatterns: [...(file.historyPatterns ?? []), ...options.historyPatterns.map((pattern) => anchorPath(here, pattern))],
     severities,
     projectRules,
     ...(file.maxRelated !== undefined ? { maxRelated: file.maxRelated } : {}),
   };
 
-  if (options.verbose && loaded.source !== null) out(`configuration: ${loaded.source}\n`);
+  // Named the way the reader would have to type it, because a discovered
+  // configuration is often not the one in front of them.
+  if (options.verbose && loaded.source !== null) {
+    const depth = here === '' ? 0 : here.split('/').length;
+    out(`configuration: ${'../'.repeat(depth)}${loaded.source}\n`);
+  }
 
   let result;
   try {
@@ -590,8 +655,8 @@ export async function main(io: CliIO = {}): Promise<number> {
   if (result.files.length === 0) {
     err(
       `spec-graph: no specifications matched ${
-        options.patterns.length > 0 ? options.patterns.map((p) => `"${p}"`).join(', ') : 'the default patterns'
-      }\n  looked under ${options.root}\n`,
+        patterns.map((p) => `"${p}"`).join(', ')
+      }\n  looked under ${root}\n`,
     );
     return EXIT_ERROR;
   }
@@ -602,17 +667,36 @@ export async function main(io: CliIO = {}): Promise<number> {
       return EXIT_OK;
 
     case 'query': {
-      try {
-        const matches = execute(result.graph, parseQuery(options.selector as string));
-        out(renderMatches(matches, options.format === 'json' ? 'json' : 'human', result.graph.nodes.size));
-        return matches.length > 0 ? EXIT_OK : EXIT_FAILED;
-      } catch (error) {
-        if (error instanceof QueryError) {
-          err(renderQueryError(options.selector as string, error));
+      const selector = options.selector as string;
+      let queries: readonly QuerySpec[];
+
+      // A registered rule is asked for by name, because by the time this runs
+      // it is already compiled and the alternative is copying its selector out
+      // of the configuration file by hand. The namespace cannot collide with
+      // the grammar: no selector begins with a word and a colon. See ADR-0016.
+      if (isProjectRule(selector as AnyRuleId)) {
+        const rule = projectRules.find((candidate) => candidate.id === selector);
+        if (rule === undefined) {
+          err(`spec-graph: unknown rule "${selector}"\n  ${knownProjectRules(projectRules)}\n`);
           return EXIT_ERROR;
         }
-        throw error;
+        queries = rule.queries;
+        if (options.verbose) for (const source of rule.sources) out(`${rule.id}: ${source}\n`);
+      } else {
+        try {
+          queries = [parseQuery(selector)];
+        } catch (error) {
+          if (error instanceof QueryError) {
+            err(renderQueryError(selector, error));
+            return EXIT_ERROR;
+          }
+          throw error;
+        }
       }
+
+      const matches = union(result.graph, queries);
+      out(renderMatches(matches, options.format === 'json' ? 'json' : 'human', result.graph.nodes.size));
+      return matches.length > 0 ? EXIT_OK : EXIT_FAILED;
     }
 
     default: {
@@ -623,7 +707,7 @@ export async function main(io: CliIO = {}): Promise<number> {
         const text = formatBaseline(result.graph, result.diagnostics);
         try {
           const { writeFile } = await import('node:fs/promises');
-          await writeFile(underRoot(options.root, options.recordBaseline), text, 'utf8');
+          await writeFile(underRoot(root, anchor(here, options.recordBaseline)), text, 'utf8');
         } catch (error) {
           err(`spec-graph: cannot write ${options.recordBaseline}: ${(error as Error).message}\n`);
           return EXIT_ERROR;
@@ -635,7 +719,7 @@ export async function main(io: CliIO = {}): Promise<number> {
         return EXIT_OK;
       }
 
-      const source = options.baseline ?? file.baseline ?? null;
+      const source = options.baseline === null ? (file.baseline ?? null) : anchor(here, options.baseline);
       const ratchet = options.ratchet || file.ratchet === true;
       let reported = result;
       let note:
@@ -648,7 +732,7 @@ export async function main(io: CliIO = {}): Promise<number> {
           }
         | undefined;
       if (source !== null) {
-        const held = await readBaseline(underRoot(options.root, source), source);
+        const held = await readBaseline(underRoot(root, source), source);
         for (const problem of held.problems) err(`spec-graph: ${problem}\n`);
         const outcome = applyBaseline(result.graph, result.diagnostics, held.baseline);
         reported = withDiagnostics(result, outcome.kept);
@@ -675,12 +759,15 @@ export async function main(io: CliIO = {}): Promise<number> {
       const looseBaseline = note !== undefined && note.ratchet && note.stale > 0;
 
       const baselineNote = note === undefined ? {} : { baseline: note };
+      const reporterOptions = { verbose: options.verbose, max: options.max, escalated, ...baselineNote };
       out(
         options.format === 'sarif'
           ? formatSarif(reported, reported.graph, { version: await readVersion(), escalated, projectRules })
           : options.format === 'json'
             ? formatJson(reported, { escalated, ...baselineNote })
-            : `${formatReport(reported, { color, ascii, verbose: options.verbose, max: options.max, escalated, ...baselineNote })}\n`,
+            : options.format === 'markdown'
+              ? formatMarkdown(reported, reporterOptions)
+              : `${formatReport(reported, { color, ascii, ...reporterOptions })}\n`,
       );
       if (!reported.ok || looseBaseline) return EXIT_FAILED;
       if (options.maxWarnings >= 0 && reported.summary.warnings > options.maxWarnings) return EXIT_FAILED;
@@ -693,29 +780,109 @@ export async function main(io: CliIO = {}): Promise<number> {
 /* Rendering                                                                  */
 /* -------------------------------------------------------------------------- */
 
-function renderRules(explain: boolean, projectRules: readonly ProjectRule[] = []): string {
+/**
+ * Where the working directory sits below the root, or `''` when it is the root.
+ *
+ * Discovery only ever walks upward, so the root is always a prefix of the
+ * directory the command was typed in, and this is a slice rather than path
+ * arithmetic.
+ */
+function below(root: string, from: string): string {
+  const start = toPosix(from).replace(/[/]+$/, '');
+  return start.startsWith(`${root}/`) ? start.slice(root.length + 1) : '';
+}
+
+/**
+ * Re-anchors a path typed in `prefix` so it reads from the root.
+ *
+ * An absolute path is left alone: it was not relative to anywhere, so moving
+ * the root cannot change what it means.
+ */
+function anchor(prefix: string, value: string): string {
+  if (prefix === '' || ABSOLUTE.test(value)) return value;
+  return value.startsWith('!') ? `!${prefix}/${value.slice(1)}` : `${prefix}/${value}`;
+}
+
+const ABSOLUTE = /^(?:[/\\]|[A-Za-z]:)/;
+
+/** The same, for an ignore, where a bare name is a directory at any depth. */
+function anchorPath(prefix: string, pattern: string): string {
+  return isGlob(pattern) || pattern.includes('/') ? anchor(prefix, pattern) : pattern;
+}
+
+function knownProjectRules(projectRules: readonly ProjectRule[]): string {
+  const known = projectRules.map((rule) => rule.id);
+  return known.length > 0 ? `project rules here: ${known.join(', ')}` : 'this repository defines no project rules';
+}
+
+/**
+ * Runs a list of selectors as one result set.
+ *
+ * A project rule is a union of its selectors, and a path that two of them both
+ * find is one path - the same dedupe `projectFindings` does, so that asking
+ * this command what a rule matches answers with the set `check` reports on.
+ */
+function union(graph: AnalysisResult['graph'], queries: readonly QuerySpec[]): Match[] {
+  if (queries.length === 1) return execute(graph, queries[0] as QuerySpec);
+  const seen = new Set<string>();
+  const matches: Match[] = [];
+  for (const spec of queries) {
+    for (const match of execute(graph, spec)) {
+      const key = match.nodes.map((node) => node.id).join('>');
+      if (seen.has(key)) continue;
+      seen.add(key);
+      matches.push(match);
+    }
+  }
+  return matches;
+}
+
+interface RuleRow {
+  readonly id: string;
+  readonly severity: Severity;
+  readonly description: string;
+  /** The selector, where the rule is one. */
+  readonly query: string | undefined;
+  /** Where the reasoning is: an ADR, or the file that declared the rule. */
+  readonly decided: string;
+}
+
+function renderRules(
+  explain: boolean,
+  projectRules: readonly ProjectRule[] = [],
+  only: string | null = null,
+  configSource: string | null = null,
+): string {
   // A project rule is described by the selector it is, because that is what it
   // is - its message is a template, and a template is not a description.
-  const rows: [string, Severity, string, string | undefined][] = [
-    ...RULE_IDS.map((id): [string, Severity, string, string | undefined] => [
+  const rows: RuleRow[] = [
+    ...RULE_IDS.map((id): RuleRow => ({
       id,
-      DEFAULT_SEVERITIES[id],
-      RULE_DESCRIPTIONS[id],
-      RULE_QUERIES[id],
-    ]),
-    ...projectRules.map((rule): [string, Severity, string, string | undefined] => [
-      rule.id,
-      rule.severity,
-      rule.sources[0] as string,
-      rule.sources.slice(1).join(' | ') || undefined,
-    ]),
+      severity: DEFAULT_SEVERITIES[id],
+      description: RULE_DESCRIPTIONS[id],
+      query: RULE_QUERIES[id],
+      decided: RULE_DECISIONS[id],
+    })),
+    ...projectRules.map((rule): RuleRow => ({
+      id: rule.id,
+      severity: rule.severity,
+      description: rule.sources[0] as string,
+      query: rule.sources.slice(1).join(' | ') || undefined,
+      decided: configSource === null ? `rules.${rule.name}` : `${configSource}: rules.${rule.name}`,
+    })),
   ];
 
-  const width = Math.max(...rows.map(([id]) => id.length));
+  const shown = only === null ? rows : rows.filter((row) => row.id === only);
+  const width = Math.max(...shown.map((row) => row.id.length));
   const lines: string[] = [];
-  for (const [id, severity, description, query] of rows) {
-    lines.push(`${id.padEnd(width)}  ${severity.padEnd(5)}  ${description}`);
-    if (explain && query) lines.push(`${' '.repeat(width)}         ${query}`);
+  for (const row of shown) {
+    lines.push(`${row.id.padEnd(width)}  ${row.severity.padEnd(5)}  ${row.description}`);
+    if (!explain) continue;
+    if (row.query) lines.push(`${' '.repeat(width)}         ${row.query}`);
+    // Where the decision is written down, rather than a second copy of it. A
+    // reader who has just been told their document is inconsistent is entitled
+    // to know who decided that and why, and the ADR is the answer.
+    lines.push(`${' '.repeat(width)}         ${row.decided}`);
   }
   return `${lines.join('\n')}\n`;
 }

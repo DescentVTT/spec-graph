@@ -17,8 +17,9 @@
  * overrides it for one run.
  */
 
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 
+import { dirnamePosix, toPosix } from './paths.js';
 import { compileProjectRules, type ProjectRule } from './project-rules.js';
 import { RULE_IDS } from './rules.js';
 import { isProjectRule, type AnyRuleId, type RuleId, type Severity } from './types.js';
@@ -78,6 +79,24 @@ export interface LoadedConfig {
   readonly problems: readonly string[];
 }
 
+export interface DiscoveredConfig extends LoadedConfig {
+  /**
+   * The directory the configuration was found in.
+   *
+   * This is the root of the run. Every path in spec-graph is relative to it -
+   * node identities, baseline keys, SARIF locations - so the configuration file
+   * naming the repository is the same statement as the repository having a
+   * root. See ADR-0018.
+   */
+  readonly root: string;
+}
+
+/** Injected so discovery can be tested without a directory tree. */
+export interface DiscoveryIO {
+  readonly read?: ((path: string) => string) | undefined;
+  readonly exists?: ((path: string) => boolean) | undefined;
+}
+
 const EMPTY: LoadedConfig = { config: {}, source: null, problems: [] };
 
 /**
@@ -109,6 +128,39 @@ export function loadConfig(root: string, read: (path: string) => string = defaul
     return { config: {}, source: `package.json`, problems: [`"${CONFIG_PACKAGE_KEY}" must be an object`] };
   }
   return readFields(section, `package.json#${CONFIG_PACKAGE_KEY}`);
+}
+
+/**
+ * Finds the configuration by walking up from a directory.
+ *
+ * A monorepo is invoked from inside a package - `packages/auth`, or
+ * `docs/architecture` - and reading configuration from the working directory
+ * meant that the same repository checked differently depending on where
+ * somebody stood in it. ADR-0010 worried that discovery would make a run
+ * depend on where it started. It does the opposite: because the directory
+ * holding the configuration becomes the root, a run from anywhere inside the
+ * repository produces byte-identical output to a run from the top.
+ *
+ * The walk stops at the repository, which is a directory holding `.git`.
+ * Above that is somebody else's checkout or a home directory, and a run that
+ * silently picked up a configuration file nobody in the repository can see
+ * would be worse than no discovery at all. See ADR-0018.
+ */
+export function discoverConfig(from: string, io: DiscoveryIO = {}): DiscoveredConfig {
+  const read = io.read ?? defaultRead;
+  const exists = io.exists ?? existsSync;
+  const start = toPosix(from).replace(/\/+$/, '');
+
+  let directory = start;
+  for (;;) {
+    const loaded = loadConfig(directory, read);
+    if (loaded.source !== null) return { ...loaded, root: directory };
+    if (exists(`${directory}/.git`)) break;
+    const parent = dirnamePosix(directory);
+    if (parent === '' || parent === directory) break;
+    directory = parent;
+  }
+  return { ...EMPTY, root: start };
 }
 
 /** Parses config text. Exported so the shape can be tested without a disk. */

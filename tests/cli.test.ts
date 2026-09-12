@@ -12,11 +12,16 @@ interface Run {
 
 /** Runs the CLI in-process and captures both streams. */
 async function run(...argv: string[]): Promise<Run> {
+  return runIn(process.cwd(), ...argv);
+}
+
+/** The same, from somewhere else in the tree, for configuration discovery. */
+async function runIn(cwd: string, ...argv: string[]): Promise<Run> {
   let out = '';
   let err = '';
   const code = await main({
     argv,
-    cwd: process.cwd(),
+    cwd,
     stdout: (text) => {
       out += text;
     },
@@ -441,6 +446,98 @@ describe('graph', () => {
   });
 });
 
+describe('running a registered rule by name', () => {
+  const PROJECT = 'tests/fixtures/project';
+
+  it('runs the rule the configuration declared', async () => {
+    // The open question ADR-0016 shipped with: the rule is already compiled by
+    // now, and the alternative is copying its selector out of the file by hand.
+    const result = await run('query', 'project:no-draft-dependency', '--root', PROJECT);
+    expect(result.code).toBe(EXIT_OK);
+    expect(result.out).toContain('ADR-0001 -depends-on-> ADR-0002');
+    expect(result.out).toContain('1 match');
+  });
+
+  it('reads a rule with two selectors as a union, and a path both find as one', async () => {
+    const result = await run('query', 'project:twice-over', '--root', PROJECT);
+    expect(result.out).toContain('1 match');
+    expect(result.out).toContain('ADR-0002');
+  });
+
+  it('names the selector under --verbose, which is what calibrating one needs', async () => {
+    const result = await run('query', 'project:no-draft-dependency', '--root', PROJECT, '--verbose');
+    expect(result.out).toContain('project:no-draft-dependency: document[phase=active] -depends-on-> document[phase=draft]');
+  });
+
+  it('rejects a name nothing declares, and lists what is declared', async () => {
+    const result = await run('query', 'project:no-such-rule', '--root', PROJECT);
+    expect(result.code).toBe(EXIT_ERROR);
+    expect(result.err).toContain('unknown rule "project:no-such-rule"');
+    expect(result.err).toContain('project:no-draft-dependency');
+  });
+
+  it('says so when the repository declares none at all', async () => {
+    const result = await run('query', 'project:anything', '--root', PROJECT, '--no-config');
+    expect(result.code).toBe(EXIT_ERROR);
+    expect(result.err).toContain('defines no project rules');
+  });
+
+  it('still reads a selector that only looks like a namespace', async () => {
+    const result = await run('query', 'document[id=ADR-0002]', '--root', PROJECT);
+    expect(result.code).toBe(EXIT_OK);
+  });
+});
+
+describe('finding the configuration from a subdirectory', () => {
+  const PROJECT = 'tests/fixtures/project';
+  const absolute = (relative: string): string => `${process.cwd()}/${relative}`;
+
+  it('reports exactly what a run from the top reports', async () => {
+    // The whole claim of ADR-0018 in one assertion. Markdown rather than the
+    // human report because the human one prints how long the run took.
+    const top = await run('check', '--root', PROJECT, '--format', 'markdown');
+    const nested = await runIn(absolute(`${PROJECT}/docs`), 'check', '--format', 'markdown');
+    expect(nested.out).toBe(top.out);
+    expect(nested.out).toContain('docs/0001.md');
+    expect(nested.code).toBe(top.code);
+  });
+
+  it('names the configuration the way the reader would have to type it', async () => {
+    const nested = await runIn(absolute(`${PROJECT}/docs`), 'check', '--verbose', '--format', 'markdown');
+    expect(nested.out).toContain('configuration: ../.spec-graph.json');
+  });
+
+  it('keeps a pattern typed on the command line relative to where it was typed', async () => {
+    // The root moved up; the pattern did not. `docs/*.md` from inside the
+    // package means the package's docs, and reporting them against the root is
+    // what makes a baseline key survive being recorded from anywhere.
+    const nested = await runIn(absolute(`${PROJECT}/docs`), 'query', 'document', '.', '--format', 'json');
+    expect(nested.code).toBe(EXIT_OK);
+    const parsed = JSON.parse(nested.out) as { matches: { nodes: { file: string }[] }[] };
+    expect(parsed.matches.map((match) => (match.nodes[0] as { file: string }).file).sort()).toEqual([
+      'docs/0001.md',
+      'docs/0002.md',
+    ]);
+  });
+
+  it('leaves an absolute path alone, since it was never relative to anywhere', async () => {
+    // The root moving cannot change what an absolute path means, and a run from
+    // a subdirectory must not start prefixing one.
+    const absolutePattern = absolute(`${PROJECT}/docs/0001.md`);
+    const nested = await runIn(absolute(`${PROJECT}/docs`), 'check', absolutePattern, '--format', 'markdown');
+    const top = await run('check', '--root', PROJECT, absolutePattern, '--format', 'markdown');
+    expect(nested.out).toBe(top.out);
+  });
+
+  it('does not discover anything when --root says where the root is', async () => {
+    // A flag always wins, and naming the root is naming it. Pointed at the
+    // documents directory, the rules one level above it never run.
+    const result = await run('check', '--root', `${PROJECT}/docs`);
+    expect(result.out).not.toContain('project:no-draft-dependency');
+    expect(result.code).toBe(EXIT_OK);
+  });
+});
+
 describe('rules', () => {
   it('lists every rule with its default severity', async () => {
     const result = await run('rules');
@@ -452,6 +549,37 @@ describe('rules', () => {
   it('shows the selector equivalent with --explain', async () => {
     const result = await run('rules', '--explain');
     expect(result.out).toContain('-delegates-to,blocked-by->');
+  });
+
+  it('names the ADR that decided each rule, rather than paraphrasing it', async () => {
+    // A rule that fires is a claim about somebody's repository. The reasoning
+    // is written down once, in an ADR this corpus checks, and pointed at from
+    // here - a second copy would be the drift this tool exists to catch.
+    const result = await run('rules', '--explain');
+    expect(result.out).toContain('docs/adr/0002-lifecycle-lattice.md');
+    expect(result.out).toContain('docs/adr/0014-a-relation-is-spelled-both-ways.md');
+  });
+
+  it('narrows to one rule when asked for one', async () => {
+    const result = await run('rules', 'ghost-handover', '--explain');
+    expect(result.code).toBe(EXIT_OK);
+    expect(result.out).toContain('ghost-handover');
+    expect(result.out).not.toContain('stale-premise');
+    expect(result.out.trimEnd().split('\n')).toHaveLength(3);
+  });
+
+  it('narrows to a project rule, and names where it was declared', async () => {
+    const result = await run('rules', 'project:twice-over', '--explain', '--root', 'tests/fixtures/project');
+    expect(result.out).toContain('.spec-graph.json: rules.twice-over');
+    expect(result.out).not.toContain('ghost-handover');
+  });
+
+  it('rejects a name no rule has, and lists both kinds', async () => {
+    const result = await run('rules', 'ghost-handoverr', '--root', 'tests/fixtures/project');
+    expect(result.code).toBe(EXIT_ERROR);
+    expect(result.err).toContain('unknown rule "ghost-handoverr"');
+    expect(result.err).toContain('ghost-handover,');
+    expect(result.err).toContain('project:no-draft-dependency');
   });
 });
 

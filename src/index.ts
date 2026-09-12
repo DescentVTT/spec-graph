@@ -32,8 +32,8 @@ export {
 } from './baseline.js';
 export type { Baseline, BaselineEntry, BaselineOutcome, ParsedBaseline, StaleEntry } from './baseline.js';
 
-export { loadConfig, parseConfig, CONFIG_FILES, CONFIG_PACKAGE_KEY } from './config.js';
-export type { LoadedConfig, SpecGraphConfig } from './config.js';
+export { discoverConfig, loadConfig, parseConfig, CONFIG_FILES, CONFIG_PACKAGE_KEY } from './config.js';
+export type { DiscoveredConfig, DiscoveryIO, LoadedConfig, SpecGraphConfig } from './config.js';
 
 export { main, parseArgs, HELP, UsageError, EXIT_OK, EXIT_FAILED, EXIT_ERROR } from './cli.js';
 export type { CliIO, CliOptions, Command } from './cli.js';
@@ -57,12 +57,16 @@ export {
   execute,
   matches,
   parseQuery,
+  pattern,
   query,
   renderMatch,
   QueryError,
   DEFAULT_MATCH_LIMIT,
   SELECTOR_KEYS,
 } from './select.js';
+
+export { compilePattern, PatternError } from './regex.js';
+export type { Matcher } from './regex.js';
 export type {
   ExecuteOptions,
   Match,
@@ -78,6 +82,7 @@ export {
   runRules,
   sortDiagnostics,
   DEFAULT_SEVERITIES,
+  RULE_DECISIONS,
   RULE_DESCRIPTIONS,
   RULE_IDS,
   RULE_QUERIES,
@@ -91,6 +96,7 @@ export {
   createPainter,
   formatGraph,
   formatJson,
+  formatMarkdown,
   formatReport,
   formatSarif,
   shouldUseAscii,
@@ -98,7 +104,13 @@ export {
 } from './report.js';
 export type { ColorEnvironment, GraphExportOptions, GraphFormat, Painter, ReporterOptions } from './report.js';
 
-export { extractDocument, extractSpecifications, classifyReference, sectionPathAt } from './extract.js';
+export {
+  extractDocument,
+  extractSpecifications,
+  classifyReference,
+  inheritableFrontMatter,
+  sectionPathAt,
+} from './extract.js';
 export { findSpecificationRegions, readRegionStatus, regionAt } from './sections.js';
 export type { RegionStatus, SpecificationRegion } from './sections.js';
 export type { Classification, ExtractedDocument, ExtractInput, ReferenceCandidate } from './extract.js';

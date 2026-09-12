@@ -295,6 +295,133 @@ function plural(count: number, word: string, plural?: string): string {
 }
 
 /* -------------------------------------------------------------------------- */
+/* Markdown                                                                   */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The same report as GitHub-flavoured Markdown.
+ *
+ * SARIF puts a finding on the line that caused it, which is where somebody
+ * fixing one wants it. It says nothing to the person deciding whether to merge,
+ * because a code-scanning alert is a list of lines and not a verdict. This is
+ * the verdict: one table, the counts above it, and the baseline's slack
+ * underneath, sized to be read without scrolling.
+ *
+ * Written for `$GITHUB_STEP_SUMMARY` and for a pull-request comment, but it is
+ * named for what it is rather than for where it goes - the same text is what a
+ * review tool, a chat message or a generated page wants.
+ *
+ * It carries no duration, which the JSON report does, so two runs over one
+ * corpus produce identical bytes. That is what lets a test compare a run from
+ * a subdirectory against a run from the root and assert they are the same
+ * report rather than the same shape. See ADR-0015 and ADR-0018.
+ */
+export function formatMarkdown(result: AnalysisResult, options: ReporterOptions = {}): string {
+  const { summary } = result;
+  const escalated = options.escalated ?? EMPTY_RULES;
+  const ratcheted = ratchetFailed(options.baseline);
+  const lines: string[] = ['### spec-graph', ''];
+
+  const verdict =
+    ratcheted && result.ok
+      ? 'The baseline is looser than the repository.'
+      : result.ok
+        ? summary.errors + summary.warnings === 0
+          ? 'The specification graph is consistent.'
+          : 'No errors - the specification graph holds.'
+        : 'The specification graph is inconsistent.';
+  lines.push(verdict, '');
+
+  lines.push('| | |', '| --- | ---: |');
+  lines.push(`| Documents | ${summary.documents} |`);
+  lines.push(`| Items | ${summary.items} |`);
+  lines.push(`| Relations | ${summary.edges} |`);
+  lines.push(`| Open obligations | ${summary.openObligations} |`);
+  lines.push(`| Errors | ${summary.errors} |`);
+  lines.push(`| Warnings | ${summary.warnings} |`);
+  lines.push(`| Notes | ${summary.infos} |`);
+  lines.push('');
+
+  const limit = options.max && options.max > 0 ? options.max : result.diagnostics.length;
+  const shown = result.diagnostics.slice(0, limit);
+
+  if (shown.length > 0) {
+    lines.push('| | Rule | Where | Finding |', '| --- | --- | --- | --- |');
+    for (const diagnostic of shown) {
+      const rule = escalated.has(diagnostic.rule) ? `${diagnostic.rule} (strict)` : diagnostic.rule;
+      // The hint in the same cell, under the message. A finding without its
+      // next action is the half a reader cannot act on, and a fifth column
+      // would push the message off the side of the page.
+      const what = `${cell(diagnostic.message)}<br>${cell(diagnostic.hint)}`;
+      lines.push(`| ${diagnostic.severity} | \`${cell(rule)}\` | \`${cell(formatRef(diagnostic.at))}\` | ${what} |`);
+    }
+    if (result.diagnostics.length > shown.length) {
+      lines.push(`| | | | ... and ${result.diagnostics.length - shown.length} more |`);
+    }
+    lines.push('');
+  }
+
+  const baseline = options.baseline;
+  if (baseline !== undefined) {
+    const accepted = `${baseline.suppressed} ${plural(baseline.suppressed, 'finding')} accepted by \`${cell(baseline.source)}\``;
+    if (baseline.stale === 0) {
+      lines.push(accepted, '');
+    } else {
+      const gone = (baseline.entries ?? []).filter((entry) => entry.reason === 'gone').length;
+      lines.push(
+        `${accepted}, and ${baseline.stale} ${plural(baseline.stale, 'entry', 'entries')} no longer ${
+          baseline.stale === 1 ? 'occurs' : 'occur'
+        }${
+          gone === 0
+            ? ''
+            : ` - ${gone} of them ${gone === 1 ? 'names a document' : 'name documents'} this run did not see`
+        }.`,
+        '',
+      );
+      // Listed rather than counted, because the point of a summary on a pull
+      // request is that somebody can act on it without opening a terminal.
+      lines.push('| Entry | Rule | Document | Why |', '| --- | --- | --- | --- |');
+      for (const entry of baseline.entries ?? []) {
+        const why = entry.reason === 'gone' ? 'not in this corpus - check the include patterns' : 'fixed';
+        lines.push(`| ${entry.reason} | \`${cell(entry.rule)}\` | \`${cell(entry.document)}\` | ${why} |`);
+      }
+      lines.push('');
+    }
+  }
+
+  if (options.verbose && result.problems.length > 0) {
+    lines.push('<details><summary>Problems with the input</summary>', '');
+    for (const problem of result.problems) {
+      lines.push(`- \`${cell(formatRef(problem.at))}\` ${cell(problem.message)}`);
+    }
+    lines.push('', '</details>', '');
+  }
+
+  if (options.verbose && result.corpus.suppressed.length > 0) {
+    lines.push('<details><summary>References this configuration silenced</summary>', '');
+    for (const [target, entry] of groupSuppressed(result.corpus.suppressed)) {
+      const where = entry.by === 'family' ? 'ignored family' : 'ignored reference';
+      const times = entry.count === 1 ? '' : ` (${entry.count} times)`;
+      lines.push(`- \`${cell(target)}\` - ${where}${times}, first at \`${cell(formatRef(entry.at))}\``);
+    }
+    lines.push('', '</details>', '');
+  }
+
+  return `${lines.join('\n').replace(/\n+$/, '')}\n`;
+}
+
+/**
+ * Makes one value safe to put in a table cell.
+ *
+ * A pipe would end the cell and a newline would end the row, and a diagnostic
+ * message is written by whoever wrote the rule - including a project rule,
+ * whose message is a template a repository controls.
+ */
+function cell(value: string): string {
+  return value.replace(/[|]/g, '&#124;').replace(/\s+/g, ' ').trim();
+}
+
+/* -------------------------------------------------------------------------- */
 /* JSON                                                                       */
 /* -------------------------------------------------------------------------- */
 

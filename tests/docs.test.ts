@@ -1,8 +1,8 @@
-import { readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 import { HELP } from '../src/cli.js';
-import { DEFAULT_SEVERITIES, RULE_IDS } from '../src/rules.js';
+import { DEFAULT_SEVERITIES, RULE_DECISIONS, RULE_IDS } from '../src/rules.js';
 import { attributesOf, SELECTOR_KEYS } from '../src/select.js';
 import { EDGE_KINDS, OPENNESS_OF, type Disposition, type DocumentNode, type ItemNode } from '../src/types.js';
 
@@ -79,6 +79,22 @@ describe('the README rule table', () => {
 
   it('documents no rule that does not exist', () => {
     for (const row of rows) expect(RULE_IDS, row.id).toContain(row.id);
+  });
+});
+
+describe('the ADR behind each rule', () => {
+  it('names a document that exists', () => {
+    // `rules --explain` prints these, and a pointer into nothing is worse than
+    // no pointer: the reader goes looking and concludes the reasoning is lost.
+    const missing = RULE_IDS.filter((id) => !existsSync(RULE_DECISIONS[id]));
+    expect(missing).toEqual([]);
+  });
+
+  it('names a document this corpus checks', () => {
+    // Which is what keeps the pointer honest. Every path here is an ADR, and
+    // `npm run selfcheck` reads every ADR - so a renamed file breaks the link
+    // in the same run that breaks the reference.
+    for (const id of RULE_IDS) expect(RULE_DECISIONS[id], id).toMatch(/^docs[/]adr[/]\d{4}-[a-z-]+[.]md$/);
   });
 });
 
