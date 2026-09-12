@@ -131,7 +131,7 @@ tool is pointed at.
 |---|---|
 | `npm run lint` | pass |
 | `npm test` | 748 passing, 20 files |
-| `npm run selfcheck` | pass, 60ms over 19 documents |
+| `npm run selfcheck` | pass, over 19 documents and 124 relations |
 | `npm run test:mutation` | **79.03%** over 8,589 mutants, 64m13s |
 | `break` | unchanged at 70 |
 

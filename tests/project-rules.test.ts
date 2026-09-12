@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { applyBaseline, formatBaseline, parseBaseline } from '../src/baseline.js';
 import { parseConfig } from '../src/config.js';
-import { compileProjectRules } from '../src/project-rules.js';
+import { compileProjectRules, renderTemplate } from '../src/project-rules.js';
 import { resolveStrict } from '../src/rules.js';
 import { analyseSources, type Source } from '../src/runner.js';
 import type { AnyRuleId, Diagnostic } from '../src/types.js';
@@ -50,8 +50,13 @@ describe('compiling a project rule', () => {
   });
 
   it('sorts by id, so one configuration always produces one order', () => {
-    const { rules } = compile({ zeta: RULE, alpha: RULE, mid: RULE });
-    expect(rules.map((rule) => rule.id)).toEqual(['project:alpha', 'project:mid', 'project:zeta']);
+    const { rules } = compile({ zeta: RULE, alpha: RULE, mid: RULE, beta: RULE });
+    expect(rules.map((rule) => rule.id)).toEqual([
+      'project:alpha',
+      'project:beta',
+      'project:mid',
+      'project:zeta',
+    ]);
   });
 
   it('reports a name that could not survive a report or a baseline key', () => {
@@ -61,11 +66,14 @@ describe('compiling a project rule', () => {
     expect(rules).toEqual([]);
     expect(problems).toHaveLength(3);
     expect(problems[0]).toContain('a rule name must be');
+    // Which key, not just that one of them is wrong. A file with nine rules in
+    // it needs to be told which line to go and look at.
+    expect(problems[0]).toContain('.spec-graph.json: rules.has space');
   });
 
-  it('reports a name longer than a report column', () => {
-    const { problems } = compile({ ['a'.repeat(65)]: RULE });
-    expect(problems).toHaveLength(1);
+  it('draws the length limit where it says it does', () => {
+    expect(compile({ ['a'.repeat(64)]: RULE }).problems).toEqual([]);
+    expect(compile({ ['a'.repeat(65)]: RULE }).problems).toHaveLength(1);
   });
 
   it('reports a selector that does not parse, and where', () => {
@@ -84,18 +92,54 @@ describe('compiling a project rule', () => {
     expect(compile({ bad: { message: 'x' } }).problems[0]).toContain('"query" must be');
     expect(compile({ bad: { query: [], message: 'x' } }).problems[0]).toContain('"query" must be');
     expect(compile({ bad: { query: [7], message: 'x' } }).problems[0]).toContain('"query" must be');
+    expect(compile({ bad: { query: 42, message: 'x' } }).problems[0]).toContain('"query" must be');
+    // One bad entry in a list of good ones is still a bad list. Checking that
+    // *every* entry is wrong instead of *any* would let this through.
+    expect(compile({ bad: { query: ['document', 7], message: 'x' } }).problems[0]).toContain('"query" must be');
+  });
+
+  it('accepts each of the four severities, "off" included', () => {
+    // `off` in particular: it is how a team parks a rule they are still
+    // calibrating without deleting the work, and rejecting it would make the
+    // only safe way to do that "comment the rule out".
+    for (const severity of ['error', 'warn', 'info', 'off'] as const) {
+      const { rules, problems } = compile({ probe: { ...RULE, severity } });
+      expect(problems, severity).toEqual([]);
+      expect(rules[0]?.severity, severity).toBe(severity);
+    }
   });
 
   it('reports a severity that is not one', () => {
     expect(compile({ bad: { ...RULE, severity: 'loud' } }).problems[0]).toContain('"severity" must be');
   });
 
-  it('reports a rule that is not an object', () => {
-    expect(compile({ bad: 'document' }).problems[0]).toContain('must be an object');
+  it('trims the message and the hint', () => {
+    // A JSON string keeps whatever whitespace was typed around it, and a
+    // finding that starts with three spaces breaks the alignment of a report.
+    const { rules } = compile({ probe: { ...RULE, message: '  spaced  ', hint: '\n padded \n' } });
+    expect(rules[0]?.message).toBe('spaced');
+    expect(rules[0]?.hint).toBe('padded');
   });
 
-  it('reports a rules section that is not an object', () => {
+  it('reports a rule that is not an object', () => {
+    expect(compile({ bad: 'document' }).problems[0]).toContain('must be an object');
+    // `typeof null === 'object'`, so null is the one value that reaches this
+    // check looking like a rule. Without the explicit test it reads as one and
+    // takes the whole run down on the next property access.
+    expect(compile({ bad: null }).problems[0]).toContain('must be an object');
+  });
+
+  it('reports a rules section that is not an object, and compiles nothing', () => {
     expect(compile(['document']).problems[0]).toContain('must be an object of name to rule');
+    expect(compile(['document']).rules).toEqual([]);
+    expect(compile(7).rules).toEqual([]);
+  });
+
+  it('reports a hint that is not a next action', () => {
+    // The default is always a string, so this only fires on one somebody wrote.
+    expect(compile({ bad: { ...RULE, hint: 7 } }).problems[0]).toContain('"hint" must be');
+    expect(compile({ bad: { ...RULE, hint: '   ' } }).problems[0]).toContain('"hint" must be');
+    expect(compile({ bad: { ...RULE, hint: 7 } }).rules).toEqual([]);
   });
 
   it('reports an unknown key without discarding the rule', () => {
@@ -124,6 +168,17 @@ describe('a message template', () => {
     expect(problems[0]).toContain('1 step (0 to 0)');
   });
 
+  it('counts the steps it has in the plural the reader expects', () => {
+    const { problems } = compile({ bad: { query: 'document -amends-> document', message: '{7} is wrong' } });
+    expect(problems[0]).toContain('2 steps (0 to 1)');
+  });
+
+  it('reads an index of more than one digit', () => {
+    // `{10}` has to be step ten, not step one followed by a stray `0}`.
+    const { problems } = compile({ bad: { query: 'document', message: '{10} is wrong' } });
+    expect(problems[0]).toContain('names step 10');
+  });
+
   it('measures against the shortest query, not the longest', () => {
     // A placeholder has to resolve for every selector behind the rule. Taking
     // the longest would leave `{1}` sitting in a sentence a human has to act on
@@ -134,9 +189,13 @@ describe('a message template', () => {
     expect(problems[0]).toContain('names step 1');
   });
 
-  it('rejects an attribute nothing answers to', () => {
+  it('rejects an attribute nothing answers to, and says what there is', () => {
     const { problems } = compile({ bad: { query: 'document', message: '{0.phse}' } });
     expect(problems[0]).toContain('asks for an attribute nothing has');
+    // The list is the actionable half of the message, and a run-together list
+    // is not a list.
+    expect(problems[0]).toContain('openness, path, phase, receptivity');
+    expect(problems[0]).toContain('fm.*');
   });
 
   it('accepts the open front-matter namespace', () => {
@@ -399,14 +458,16 @@ describe('a project rule on a corpus written to be hostile to one', () => {
     expect(Object.prototype).not.toHaveProperty('query');
   });
 
-  it('leaves a placeholder as written when a transitive path ends short', () => {
-    // `{1}` passes validation - the query has two steps - and a transitive
-    // traversal can still return a path of one. Ugly and honest beats a blank
-    // space where a document name should be.
-    const { rules, problems } = compile({
-      short: { query: 'document =depends-on=> document', message: '{1} was reached', severity: 'info' },
-    });
-    expect(problems).toEqual([]);
-    expect(rules).toHaveLength(1);
+  it('hands a placeholder back rather than crashing on a match it cannot index', () => {
+    // `renderTemplate` is exported, so it takes any `Match` - including one a
+    // caller assembled by hand that is shorter than the template expects.
+    // `execute` never produces one, which is why this is a unit test and not a
+    // rule: a path is always one node longer than the query has steps.
+    const { graph } = analyseSources(CORPUS);
+    const node = graph.document('ADR-0002');
+    expect(node).toBeDefined();
+    const match = { nodes: [node as NonNullable<typeof node>], edges: [] };
+    expect(renderTemplate('{0} and {1}', match, graph)).toBe('ADR-0002 and {1}');
+    expect(renderTemplate('{0.phase} and {4.title}', match, graph)).toBe('active and {4.title}');
   });
 });

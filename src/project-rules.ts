@@ -121,8 +121,10 @@ export function compileProjectRules(raw: unknown, source: string): CompiledProje
     if (rule !== null) rules.push(rule);
   }
   // Sorted by id, so two runs of one configuration produce findings in the same
-  // order however the JSON was keyed.
-  return { rules: rules.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)), problems };
+  // order however the JSON was keyed. Two ids are never equal - they are object
+  // keys - so there is no third case to write, and `<` against `<=` here is a
+  // genuinely equivalent mutant with no test behind it for that reason.
+  return { rules: rules.sort((a, b) => (a.id < b.id ? -1 : 1)), problems };
 }
 
 function compileOne(
@@ -246,9 +248,11 @@ function placeholderProblems(template: string, arity: number, where: string): st
  * `lastIndex` on entry and on exit. The hazard `CLAUDE.md` warns about is a
  * `/g` regex whose cursor survives a call, and neither of these keeps one.
  *
- * An index that survived validation can still miss at run time, because a
- * transitive step can end short. That leaves the placeholder as written, which
- * is ugly and honest, rather than an empty space in a sentence.
+ * The index cannot be out of range when `execute` produced the match - a path is
+ * always one node longer than the query has steps, which is what validation
+ * checks against. The guard is for the exported case: this takes any `Match`,
+ * and a caller assembling one by hand gets the placeholder back rather than a
+ * crash.
  */
 export function renderTemplate(template: string, match: Match, graph: SpecGraph): string {
   return template.replace(PLACEHOLDER, (whole, index: string, key: string | undefined) => {

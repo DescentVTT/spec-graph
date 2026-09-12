@@ -443,7 +443,16 @@ ${line}
   });
 
   it('suggests the document a mistyped slug is one edit from', () => {
+    // A letter too many, so the written key is longer than the spelling that
+    // resolves.
     expect(suggest('0001-shardingg', 'See [[0001-shardingg]].')).toEqual(['ADR-0001']);
+  });
+
+  it('suggests it when the typo dropped a letter rather than adding one', () => {
+    // And a letter too few, so the written key is *shorter*. The scan walks
+    // three length buckets for exactly this reason, and only one of them is
+    // reachable from the case above.
+    expect(suggest('0001-shardin', 'See [[0001-shardin]].')).toEqual(['ADR-0001']);
   });
 
   it('suggests nothing for a folded spelling too short to mean anything', () => {
