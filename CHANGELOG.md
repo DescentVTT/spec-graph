@@ -5,8 +5,9 @@ a patch fixes behaviour without asking anything of a repository that upgrades.
 
 ## 0.4.0
 
-Nine open questions across the ADR suite, answered. Five shipped, three declined
-with a reason, and one withdrawn because it turned out not to be true.
+Ten open questions across the ADR suite, answered. Five shipped, three declined
+with a reason, one settled by measuring it, and one withdrawn because it turned
+out not to be true.
 
 ### Added
 
@@ -111,6 +112,18 @@ of the suite, which is the practice [CLAUDE.md](CLAUDE.md) asks for:
   catches `(a+)+` and misses `(a|a)+`, and a guard that is incomplete and says it
   is safe is worse than no guard. Documented instead, with the alternatives
   weighed in ADR-0016.
+
+### Measured
+
+**The near-miss gate for front-matter keys stays at one edit**, and this is the
+first time anybody checked. Across 73 keys that Jekyll, Hugo, Docusaurus, Astro,
+MADR, KEP, the IETF datatracker and Obsidian actually write, one edit reads
+*none* of them as a near-miss and two edits reads exactly one: `rfc`, which it
+would tell an author to spell `refs`. [ADR-0014](docs/adr/0014-a-relation-is-spelled-both-ways.md)
+said two edits would catch `dependancies`; one edit already did, along with
+every other typo anybody produced to argue the case. Two buys nothing and costs
+a false positive on a key that carries citations in exactly the corpora this
+tool is pointed at.
 
 ### Withdrawn
 

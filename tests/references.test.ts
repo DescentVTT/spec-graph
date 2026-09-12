@@ -329,6 +329,16 @@ describe('front-matter keys that read as relations', () => {
     expect(found.map((d) => d.rule)).toEqual(['unknown-relation-key']);
   });
 
+  it('leaves "rfc" alone, which is what keeps the gate at one edit', () => {
+    // Measured rather than assumed (2026-09-12). Across 73 front-matter keys
+    // that Jekyll, Hugo, Docusaurus, MADR, KEP and the IETF datatracker
+    // actually write, a one-edit gate produces no near-misses at all and a
+    // two-edit gate produces exactly one: `rfc` reads as `refs`. That is a key
+    // carrying a citation, in precisely the corpora this tool is pointed at,
+    // and it would be told to spell itself `refs`. See ADR-0014.
+    expect(check('rfc: ADR-0001').diagnostics.map((d) => d.rule)).not.toContain('unknown-relation-key');
+  });
+
   it('names the key, so two misspellings in one document are two findings', () => {
     // The fingerprint a baseline and a SARIF consumer both key on. Without the
     // key in it, both of these collapse into one entry with a count of two.

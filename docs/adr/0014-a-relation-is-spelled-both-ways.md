@@ -117,9 +117,27 @@ no longer use in front matter for something else.
 - [ ] `assumed-by` and `referenced-by` were added for symmetry and have no prose
       counterpart, because no phrase reads naturally as either. If a corpus turns
       one up, the prose table is where it goes.
-- [ ] The near-miss gate uses one edit on the folded key. Two would catch
-      `dependancies` and would also start catching words; unmeasured either way,
-      and left at one until a corpus argues otherwise.
+- [x] The near-miss gate uses one edit on the folded key. Two would catch
+      `dependancies` and would also start catching words; unmeasured either way.
+      **Resolved (2026-09-12): measured, and it stays at one.**
+
+      Two things came out of the measurement, and the first is that this
+      question's own example was wrong. `dependancies` for `dependencies` is one
+      substitution, not two, and the gate has always caught it. So has every
+      other typo anybody produced to argue the case: `blokced-by`,
+      `superseeded-by`, `supercedeby`, `amendss`. Two edits catches nothing here
+      that one edit does not.
+
+      The second is what it costs. Across 73 front-matter keys that Jekyll,
+      Hugo, Docusaurus, Astro, MADR, KEP, the IETF datatracker and Obsidian
+      actually write, a one-edit gate reads **none** of them as a near-miss. A
+      two-edit gate reads exactly one: `rfc`, which it would tell an author to
+      spell `refs`. That is a key carrying a citation, in precisely the corpora
+      this tool is pointed at, and being wrong about it is the ADR-0006 failure
+      in its purest form - confidently correcting somebody's correct spelling.
+
+      One buys nothing and costs one false positive out of 73. A test pins
+      `rfc` so the finding cannot be lost.
 
 ## See also
 
