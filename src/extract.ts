@@ -254,6 +254,41 @@ const RELATION_INDEX: ReadonlyMap<string, { kind: EdgeKind; inverted: boolean; c
 );
 
 /**
+ * Keys a region must answer for itself, so the file's answer cannot shadow one.
+ *
+ * Identity and status and title are the three things a register exists to vary
+ * row by row. The rest of the file's front matter describes the file, and a
+ * decision inside the file is described by it too.
+ */
+const UNINHERITED: ReadonlySet<string> = new Set([...ID_KEYS, ...STATUS_KEYS, 'title', 'alias', 'aliases']);
+
+/**
+ * The front matter a region inherits from the file that contains it.
+ *
+ * [ADR-0009](../docs/adr/0009-a-specification-is-a-region.md) left this open,
+ * and [ADR-0016](../docs/adr/0016-a-query-needs-a-sentence.md) made leaving it
+ * open a defect. A repository can now write `document[fm.owner!=platform]` as a
+ * rule of its own, and on a register every region answered nothing - which
+ * `!=` reads as a mismatch, because an absent value is not the value. A file
+ * whose front matter said `owner: platform` was reported twice for not being
+ * owned by platform, and the message rendered `{0.fm.owner}` as the literal
+ * placeholder. Confident, wrong, and unanswerable: the ADR-0006 failure.
+ *
+ * Two kinds of key stay behind. A relation key is a claim the file made -
+ * `supersedes:` at the top of a register supersedes on behalf of the register,
+ * not on behalf of each decision in it, and the edges were built from the
+ * file's entries before this ran. And a key the region answers itself must not
+ * be shadowed, which is {@link UNINHERITED}.
+ */
+export function inheritableFrontMatter(
+  entries: readonly YamlEntry[],
+): Readonly<Record<string, string | readonly string[]>> {
+  return toRecord(
+    entries.filter((entry) => !UNINHERITED.has(entry.key) && !RELATION_INDEX.has(foldRelationKey(entry.key))),
+  );
+}
+
+/**
  * Phrases that give a link its meaning, longest-matching-nearest wins.
  *
  * Only phrases that genuinely commit the citing document are here. Vague ones
@@ -591,6 +626,7 @@ export function extractDocument(input: ExtractInput): ExtractedDocument | null {
   const entries = scanned.frontMatter ? parseFrontMatter(scanned.frontMatter.raw, scanned.frontMatter.start) : [];
   const byKey = new Map<string, YamlEntry>();
   for (const entry of entries) byKey.set(entry.key, entry);
+  const inherited = inheritableFrontMatter(entries);
 
   const h1 = scanned.headings.find((h) => h.level === 1) ?? null;
   const frontMatterId = firstValue(byKey, ID_KEYS) ?? null;
@@ -676,6 +712,7 @@ export function extractDocument(input: ExtractInput): ExtractedDocument | null {
         file,
         pathPhase,
         record,
+        inherited,
       }),
     );
 
@@ -755,6 +792,8 @@ interface RegionInput {
   readonly pathPhase: Phase;
   /** The whole file is a historical record, so every part of it is one too. */
   readonly record: boolean;
+  /** The file's front matter, minus the keys a region must answer itself. */
+  readonly inherited: Readonly<Record<string, string | readonly string[]>>;
 }
 
 interface BuiltRegion {
@@ -769,12 +808,13 @@ interface BuiltRegion {
  * It produces exactly the `DocumentNode` a whole file produces, which is the
  * reason every rule, query and reporter works on registers without knowing they
  * exist. The only deliberate differences: the node is anchored at its heading
- * rather than at line one, it carries no front matter of its own, and it does
- * not claim the file's path as an alias - the file already does, and two nodes
- * answering to one path would make every link to that file ambiguous.
+ * rather than at line one, it carries the file's front matter rather than front
+ * matter of its own, and it does not claim the file's path as an alias - the
+ * file already does, and two nodes answering to one path would make every link
+ * to that file ambiguous.
  */
 function buildRegion(context: RegionInput): BuiltRegion {
-  const { region, input, scanned, index, file, pathPhase, record } = context;
+  const { region, input, scanned, index, file, pathPhase, record, inherited } = context;
   const at = (start: number, end: number): SourceRef => refOf(file, index, start, end);
 
   const identity = identify({
@@ -808,7 +848,7 @@ function buildRegion(context: RegionInput): BuiltRegion {
     phase: record ? 'record' : declaredPhase !== 'unknown' ? declaredPhase : pathPhase,
     rawStatus,
     statusAt,
-    frontMatter: {},
+    frontMatter: inherited,
   };
 
   const anchors = new Set<string>(
@@ -835,7 +875,8 @@ function buildRegion(context: RegionInput): BuiltRegion {
       items: [],
       references,
       problems: [],
-      // A region has no front matter of its own to misread.
+      // The file has already reported anything misread at the top of it, and
+      // there is one file however many regions it holds.
       misreadKeys: [],
       anchors,
       identity,

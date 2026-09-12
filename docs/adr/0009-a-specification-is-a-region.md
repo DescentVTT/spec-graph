@@ -117,26 +117,57 @@ roadmap headings.
 
 ## Open Questions
 
-- [~] Should a region inherit its file's front matter? It does not today, so
-      `supersedes:` at the top of a register applies to the file rather than to
-      every decision in it - which is right - but it also means `fm.owner` is
-      not queryable on a section.
+- [x] Should a region inherit its file's front matter?
+      **Resolved (2026-09-13): yes, and it was a defect rather than a gap.**
 
-      **Narrowed (2026-09-12).** [ADR-0016](0016-a-query-needs-a-sentence.md)
-      raised the stakes: a repository can now write `document[fm.owner!=platform]`
-      as a rule, and on a register that rule sees the file and misses every
-      decision in it. The line to draw is already drawn elsewhere - a relation
-      key must not inherit, and a descriptive one arguably must - and
-      `RELATION_INDEX` in `extract.ts` is exactly that list. Still open because
-      nobody has asked, and because `status:` sits on the wrong side of an
-      obvious answer.
-- [ ] Definition lists and `<dl>` blocks are a third register form seen in
-      older documents. Nothing has asked for them yet, and looking at it
-      (2026-09-12) there are two unrelated syntaxes behind one name: raw `<dl>`
-      HTML, which the scanner already leaves alone as prose, and the
-      PHP-Markdown-Extra `Term` / `: definition` form, which is not CommonMark
-      and which no corpus here contains. Supporting "definition lists" without
-      saying which would be guessing at a convention rather than reading one.
+      The narrowing above was half right and too polite. It said a rule reading
+      `fm.owner` "sees the file and misses every decision in it", which sounds
+      like a false negative. It is a false *positive*, and the worst kind. A
+      region answered nothing at all, `!=` against an absent value is a
+      mismatch, and so a register whose front matter said `owner: platform` was
+      reported twice for not being owned by platform - with the message
+      rendering `{0.fm.owner}` as the literal placeholder, because there was no
+      value to put there. Confident, wrong, and unanswerable: exactly the
+      failure [ADR-0006](0006-false-positives-cost-more.md) exists to prevent,
+      shipped in the feature 0.4.0 led with. It was found by probing the binary
+      against a register, not by reading the code.
+
+      So a region carries its file's front matter, minus two kinds of key. A
+      **relation** key is a claim the file made - `supersedes:` at the top of a
+      register supersedes on behalf of the register, not on behalf of each
+      decision in it - and `RELATION_INDEX` was already that list. A key the
+      region **answers for itself** must not be shadowed: its identifier, its
+      status, its title, its aliases. That is the line `status:` looked awkward
+      against, and stating it this way settles it rather than special-casing it.
+      A register exists so that each row can differ; the keys that vary per row
+      are precisely the ones that stay behind.
+
+      Nothing about extraction moved. The inherited record is read only by the
+      `fm.` attribute lookup, so no edge, no phase and no item changed - which
+      is why the fix is fifteen lines and why the whole corpus reported
+      identically before and after.
+- [x] Definition lists and `<dl>` blocks are a third register form seen in
+      older documents. **Declined (2026-09-13),** and the analysis from
+      2026-09-12 is the reason rather than a preamble to it: there are two
+      unrelated syntaxes behind one name. Raw `<dl>` HTML, which the scanner
+      already leaves alone as prose - deliberately, because
+      [ADR-0001](0001-hand-written-markdown-scanner.md)'s masking guarantee
+      treats an HTML block as opaque and that guarantee is what keeps a code
+      fence from producing findings. And the PHP-Markdown-Extra
+      `Term` / `: definition` form, which is not CommonMark, which no corpus
+      here contains, and which nothing in the ecosystems this tool is pointed at
+      emits.
+
+      Either one would need a new parser for a register form that would then
+      have to clear the two-signal bar below - an identifier *and* a status - on
+      a syntax with no conventional place to put either. That is a heuristic
+      built on a guess about a convention nobody has written down, which is how
+      false positives get shipped.
+
+      What would reopen it: a corpus where `<dl>` rows carry identifiers and
+      statuses, at which point the convention is being read rather than
+      invented. A table or a heading register is the answer until then, and both
+      are already supported.
 
 ## See also
 
@@ -144,3 +175,5 @@ roadmap headings.
   unchanged from the one a file carries.
 - [ADR-0006](0006-false-positives-cost-more.md) - why both forms demand two
   signals rather than one.
+- [ADR-0016](0016-a-query-needs-a-sentence.md) - the feature that turned the
+  front-matter question from an ergonomic gap into a false positive.

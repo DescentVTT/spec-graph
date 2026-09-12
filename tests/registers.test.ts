@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import { scanMarkdown } from '../src/markdown.js';
+import { renderTemplate } from '../src/project-rules.js';
+import { query, type Match } from '../src/select.js';
 import { formatGraph } from '../src/report.js';
 import { analyseSources, type Source } from '../src/runner.js';
-import type { AnyRuleId } from '../src/types.js';
+import type { AnyRuleId, SpecNode } from '../src/types.js';
 
 /**
  * Registers: files that hold many specifications rather than one.
@@ -695,5 +697,100 @@ describe('a register does not answer to its file path', () => {
     };
     expect(rules(files)).toEqual([]);
     expect(analyse(files).graph.out('B').map((edge) => edge.to)).toEqual(['ADR-0007']);
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/* Front matter                                                               */
+/* -------------------------------------------------------------------------- */
+
+describe('the front matter a region inherits', () => {
+  const REGISTER_WITH_FRONT_MATTER = [
+    '---',
+    'id: REG-0001',
+    'title: The register itself',
+    'owner: platform',
+    'team: infra',
+    'status: superseded',
+    'supersedes: REG-0000',
+    'depends_on: DEC-0001',
+    '---',
+    '',
+    '# Decision register',
+    '',
+    '## DEC-0001 Use Postgres',
+    '',
+    'Status: accepted',
+    '',
+    'Postgres it is.',
+    '',
+    '## DEC-0002 Use Redis',
+    '',
+    'Status: proposed',
+    '',
+    'Redis it is.',
+  ].join('\n');
+
+  const files = { 'docs/register.md': REGISTER_WITH_FRONT_MATTER };
+  const matching = (selector: string): string[] =>
+    query(analyse(files).graph, selector)
+      .map((match) => (match.nodes[0] as SpecNode).id)
+      .sort();
+
+  it('finds all three specifications', () => {
+    expect(ids(files)).toEqual(['DEC-0001', 'DEC-0002', 'REG-0001']);
+  });
+
+  it('answers a descriptive key on every decision in the file', () => {
+    // The regression this fixed: `document[fm.owner!=platform]` is a rule a
+    // repository can write now that ADR-0016 shipped, and on a register it
+    // reported both decisions - because `!=` against an absent value is a
+    // mismatch, and a region answered nothing at all. A file saying
+    // `owner: platform` was told twice that it is not owned by platform.
+    expect(matching('document[fm.owner=platform]')).toEqual(['DEC-0001', 'DEC-0002', 'REG-0001']);
+    expect(matching('document[fm.owner!=platform]')).toEqual([]);
+    expect(matching('document[fm.team=infra]')).toHaveLength(3);
+  });
+
+  it('leaves behind every key the region answers for itself', () => {
+    // A register exists so that each row can differ. Inheriting the file's
+    // status, title or identifier would shadow the one thing that varies.
+    for (const key of ['fm.status', 'fm.title', 'fm.id']) {
+      expect(matching(`document[${key}]`)).toEqual(['REG-0001']);
+    }
+    expect(matching('document[status=accepted]')).toEqual(['DEC-0001']);
+    expect(matching('document[status=proposed]')).toEqual(['DEC-0002']);
+  });
+
+  it('leaves behind a relation key, however it was spelled', () => {
+    // `supersedes:` at the top of a register supersedes on behalf of the
+    // register, not on behalf of each decision in it - and the edges were built
+    // from the file's own entries before any of this ran.
+    expect(matching('document[fm.supersedes]')).toEqual(['REG-0001']);
+    expect(matching('document[fm.depends_on]')).toEqual(['REG-0001']);
+    const { graph } = analyse(files);
+    expect(graph.out('DEC-0001').map((edge) => edge.kind)).toEqual([]);
+    // The file's own edges: the two regions it contains, and the one relation
+    // it declared that resolves. `supersedes: REG-0000` names nothing in this
+    // corpus, so it is a dangling reference rather than an edge - which is the
+    // reason to assert the whole list rather than only what should be absent.
+    expect(graph.out('REG-0001').map((edge) => edge.kind).sort()).toEqual([
+      'contains',
+      'contains',
+      'depends-on',
+    ]);
+  });
+
+  it('renders an inherited key in a project rule message', () => {
+    // The other half of the same defect: the message read `{0.fm.owner}` as
+    // written, because there was no value to put there.
+    const { graph } = analyse(files);
+    const match = query(graph, 'document[id=DEC-0002]')[0] as Match;
+    expect(renderTemplate('{0} is owned by {0.fm.owner}', match, graph)).toBe('DEC-0002 is owned by platform');
+  });
+
+  it('gives a region with no front matter above it nothing to inherit', () => {
+    const plain = { 'docs/register.md': REGISTER };
+    expect(query(analyse(plain).graph, 'document[fm.owner]')).toEqual([]);
   });
 });
