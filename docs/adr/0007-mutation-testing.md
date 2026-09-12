@@ -94,6 +94,24 @@ seconds: change the line by hand and see whether the suite goes red. All nine
 mutants the 0.3.0 work was chasing were confirmed killed that way, while the
 score they belong to went *down* by a third of a point.
 
+0.4.0 reproduced the shape on a realistic change. Two full runs on one machine,
+`src/` differing only by a simplified comparator, 23 test cases added to two
+files. The total moved 79.03% → 79.41%; eight files nobody touched moved a point
+or more, and again in both directions - `source.ts` +4.55, `runner.ts` +3.08,
+`directives.ts` +2.60, against `state.ts` -2.14, `glob.ts` -2.08 and
+`baseline.ts` -1.99. This is weaker evidence than the run above, because adding
+tests genuinely does change which tests `perTest` believes cover which mutants.
+That is the point: **the ordinary act of writing a test moves the score of files
+you did not open**, so a per-file comparison across two runs is not a measurement
+of anything you did.
+
+The one number that meant something was the file the work was actually in.
+`project-rules.ts` went 86.89% → 99.50%, and that did not come from re-running
+anything. It came from reading its survivor list: a targeted
+`--coverageAnalysis all` pass agreed with `perTest` to within half a point, which
+said the gap was real, and sixteen of the survivors were tests nobody had
+written.
+
 `perTest` stays, because `coverageAnalysis: all` runs the whole suite per mutant
 and the hosted run already takes 80 minutes of its 90-minute cap. The cost is
 paid in honesty instead: **the hosted figure is the one that governs**, because

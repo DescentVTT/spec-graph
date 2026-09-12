@@ -130,23 +130,24 @@ tool is pointed at.
 | | |
 |---|---|
 | `npm run lint` | pass |
-| `npm test` | 748 passing, 20 files |
+| `npm test` | 754 passing, 20 files |
 | `npm run selfcheck` | pass, over 19 documents and 124 relations |
-| `npm run test:mutation` | **79.03%** over 8,589 mutants, 64m13s |
+| `npm run test:mutation` | **79.41%** over 8,585 mutants, 64m30s |
 | `break` | unchanged at 70 |
 
-79.69% over 8,126 mutants at 0.3.0 against 79.03% over 8,589 here, on the same
-machine: 0.66 points down on 463 more mutants, which is inside the band
-[ADR-0007](docs/adr/0007-mutation-testing.md) measured when two runs of
-*identical* source moved nine untouched files by more than a point each in both
-directions. The new module scores above the corpus: `project-rules.ts` at
-86.89%, `resolve.ts` at 84.74%.
+79.69% over 8,126 mutants at 0.3.0 against 79.41% over 8,585 here, on the same
+machine. The new code carries itself: `project-rules.ts` at **99.50%** with one
+survivor - a genuinely equivalent `<` against `<=` in a comparator whose inputs
+are object keys and therefore never equal.
 
-The figure is slightly conservative. The run started before the `rfc` test from
-the ADR-0014 measurement was written, and that test can only kill mutants, never
-create survivors. The hosted number - the one that actually governs, because it
-is where the build fails - comes from CI on push, and 75.14% from 0.3.0 stands
-until it does.
+That 99.50% is what reading the survivor list bought. The first full run put the
+module at 86.89%, a targeted re-measurement with `coverageAnalysis all` agreed at
+86.41% - so the gap was real and not `perTest` mis-attribution - and sixteen of
+those survivors turned out to be tests nobody had written. The whole-corpus
+figure moved 0.38 points for it.
+
+The hosted number - the one that actually governs, because it is where the build
+fails - comes from CI on push, and 75.14% from 0.3.0 stands until it does.
 
 ### Withdrawn
 
