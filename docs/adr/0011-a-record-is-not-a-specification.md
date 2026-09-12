@@ -129,10 +129,21 @@ the repository knows.
 - [ ] Should a record's items be extracted at all? They are today, so they stay
       queryable and the text is still honest about what it says. Nothing has
       asked to hide them.
-- [ ] A document that is partly a record - a specification with a changelog
-      section at the bottom - is one node with one phase. Regions
-      ([ADR-0009](0009-a-specification-is-a-region.md)) could express it, and
-      nothing has needed it yet.
+- [x] A document that is partly a record - a specification with a changelog
+      section at the bottom - is one node with one phase.
+      **Declined (2026-09-12),** and the premise turned out to be wrong on the
+      way. Regions cannot express it: a region is a row of a register, and
+      `record` is decided once for a file and inherited by everything inside it.
+      A `<!-- @spec-history -->` written in the changelog section marks the whole
+      document, which is the opposite of what somebody reaching for it wants.
+
+      Making it work means a second place `record` can come from - a section
+      flag as well as a file one - and `record` is currently a categorical
+      statement about what a file *is*, which is why the exemption in
+      `rules.ts` can be stated once and inherited by every rule written after
+      it. Trading that for a case with a free workaround is a bad trade: move
+      the changelog into its own file, which is where a changelog belongs
+      anyway, and `historyPatterns` already covers it.
 
 ## See also
 

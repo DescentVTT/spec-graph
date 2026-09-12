@@ -3,6 +3,131 @@
 Notable changes, newest first. Versions follow [semver](https://semver.org):
 a patch fixes behaviour without asking anything of a repository that upgrades.
 
+## 0.4.0
+
+Nine open questions across the ADR suite, answered. Five shipped, three declined
+with a reason, and one withdrawn because it turned out not to be true.
+
+### Added
+
+**A repository can write its own rules.** `rules` in `.spec-graph.json` takes a
+selector, a message, a hint and a severity, and runs it beside the built-ins:
+
+```json
+"rules": {
+  "no-draft-dependency": {
+    "query": "document[phase=active] -depends-on-> document[phase=draft]",
+    "message": "{0} depends on {1}, which is still a draft",
+    "hint": "wait for {1} to be accepted, or drop it from {0.path}",
+    "severity": "error"
+  }
+}
+```
+
+[ADR-0005](docs/adr/0005-rules-are-queries.md) claimed for three releases that
+the selector language was expressive enough for a team to write the equivalent
+of a built-in rule. It was only true at a prompt: `spec-graph query` could find
+the thing, and nothing could make finding it fail. Three ADRs recorded the same
+gap and stopped at the same sentence - a query needs a severity and a message
+before it is a rule.
+
+The id is the name with `project:` in front, and a built-in id can never contain
+a colon. That one fact is why `--rule`, `--strict`, `--record-baseline`, the
+severity table, the record exemption, the sort order and the SARIF `ruleId` all
+carry a user-defined rule without being taught what one is.
+
+Messages interpolate over the path the query already numbers: `{0}` and `{1}`
+for node ids, `{1.phase}` and `{0.fm.owner}` for anything a selector can read. A
+selector that does not parse, a `{2}` no query can reach, or an attribute
+nothing answers to is reported when the file is read - a rule that cannot work
+has to say so, because silence from a linter is indistinguishable from health.
+`query` also takes a list, read as a union.
+
+See [ADR-0016](docs/adr/0016-a-query-needs-a-sentence.md).
+
+**A broken reference suggests the document it was probably meant to name.**
+`ARD-0015` gets `did you mean ADR-0015?`; `0002-cacheing.md` gets its sibling
+one letter away. `ADR-0003` in a repository of two ADRs gets nothing, and that
+restraint is the design rather than a limitation of it: a family name is a word
+people misremember, a number *is* the identity, and every number sits one edit
+from its neighbours. Each gate ends the same way - exactly one candidate, or
+silence. See [ADR-0004](docs/adr/0004-reference-resolution.md).
+
+**A stale baseline entry says `paid` or `gone`.** `paid` is the ratchet working.
+`gone` means the document was not in this corpus at all, so nothing is known
+about the defect - and the ordinary way to produce one is to narrow an include
+pattern. Both still trip `--ratchet`, but the verdict now says how many entries
+name documents the run did not see and asks a team to check their patterns,
+rather than congratulating them for losing sight of a problem.
+
+**Stale entries are named in the JSON report**, under `baseline.entries`, each
+with its label. A count is enough to know the file has slack and never enough to
+strike it.
+
+**`--verbose` lists what configuration silenced.** Every reference
+`ignoreReferences` or `ignoreFamilies` suppressed, grouped by target and naming
+which of the two did it; the JSON report carries every site under `suppressed`
+without the flag. A single over-broad glob looks exactly like a clean repository
+from the outside, and nothing said otherwise. Not listed: a bare identifier
+spec-graph read as prose on its own - that was nobody's decision.
+
+**A NUL byte is reported as a parse problem.** Not a finding: nothing about the
+graph is wrong and it never fails a build. It earns the line because spec-graph
+is likely the only tool that read the file at all - grep, diff and every review
+interface treat it as binary - and the message names the usual cause, which is
+UTF-16 read as UTF-8 rather than anybody's keystroke.
+
+### Fixed
+
+Nothing that a corpus had hit. Two findings came out of probing rather than out
+of the suite, which is the practice [CLAUDE.md](CLAUDE.md) asks for:
+
+- A near-miss gate that suggested a file which had moved **never fired**.
+  Resolution already binds a path by its basename, so the suggestion had nothing
+  left to suggest. Removed before it shipped rather than after.
+- Hand-mutating each remaining gate found two that no test could kill. One was
+  genuinely equivalent code and is now one line shorter; the other was masked by
+  a length floor, and the test now writes a number long enough to clear it.
+
+### Not added
+
+- **SARIF `fixes`.** Counted the findings with a fix that is an edit rather than
+  a judgement, and there is one. Everything else has to be *inserted*, into front
+  matter that may not exist, at a position only a human can choose. The new
+  near-miss suggestions made the case weaker rather than stronger: they are
+  deliberately a guess, and promoting a guess to a machine-applicable edit throws
+  away the restraint that makes it worth printing.
+- **Hybrid documents** - a specification with a changelog section. The premise
+  turned out to be wrong: regions cannot express it, because `record` is decided
+  once per file and inherited by everything in it. Making it work means a second
+  source of truth for `record`, traded against a free workaround - put the
+  changelog in its own file, which is where it belongs.
+- **Cross-repository references.** Every way of doing it puts network or
+  discovery underneath a pipeline whose test strategy rests on being a pure
+  function of text.
+- **A guard for `~=`.** Probing confirmed `[title~=(a+)+$]` never returns. The
+  hang has been reachable from `query` since 0.1.0; what 0.4.0 changes is that it
+  now lives in a file that runs on every build. Rejecting nested quantifiers
+  catches `(a+)+` and misses `(a|a)+`, and a guard that is incomplete and says it
+  is safe is worse than no guard. Documented instead, with the alternatives
+  weighed in ADR-0016.
+
+### Withdrawn
+
+[ADR-0013](docs/adr/0013-the-scanner-hands-back-prose.md) said a lone `\r` was
+not treated as a line ending. It always was - `createLineIndex` has recognised
+all three terminators since 0.1.0 and says so in its own doc comment. The claim
+came from reading the scanner and not the table underneath it, and nobody had
+executed it. One corpus through `\n`, `\r\n` and `\r` now produces identical
+items, findings and line numbers, as a test.
+
+### Changed
+
+For anyone using the programmatic API: `Diagnostic.rule` is now `AnyRuleId`,
+which is `RuleId` plus the `project:` namespace. An exhaustive `switch` over the
+built-ins needs a default arm. `BaselineOutcome.stale` carries `reason`, and
+`ResolvedCorpus` carries `suppressed`.
+
 ## 0.3.0
 
 Found by writing a corpus designed to break the scanner and reading the edges it

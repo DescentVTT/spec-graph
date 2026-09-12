@@ -117,12 +117,26 @@ roadmap headings.
 
 ## Open Questions
 
-- [ ] Should a region inherit its file's front matter? It does not today, so
+- [~] Should a region inherit its file's front matter? It does not today, so
       `supersedes:` at the top of a register applies to the file rather than to
       every decision in it - which is right - but it also means `fm.owner` is
       not queryable on a section.
+
+      **Narrowed (2026-09-12).** [ADR-0016](0016-a-query-needs-a-sentence.md)
+      raised the stakes: a repository can now write `document[fm.owner!=platform]`
+      as a rule, and on a register that rule sees the file and misses every
+      decision in it. The line to draw is already drawn elsewhere - a relation
+      key must not inherit, and a descriptive one arguably must - and
+      `RELATION_INDEX` in `extract.ts` is exactly that list. Still open because
+      nobody has asked, and because `status:` sits on the wrong side of an
+      obvious answer.
 - [ ] Definition lists and `<dl>` blocks are a third register form seen in
-      older documents. Nothing has asked for them yet.
+      older documents. Nothing has asked for them yet, and looking at it
+      (2026-09-12) there are two unrelated syntaxes behind one name: raw `<dl>`
+      HTML, which the scanner already leaves alone as prose, and the
+      PHP-Markdown-Extra `Term` / `: definition` form, which is not CommonMark
+      and which no corpus here contains. Supporting "definition lists" without
+      saying which would be guessing at a convention rather than reading one.
 
 ## See also
 

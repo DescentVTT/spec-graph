@@ -104,7 +104,11 @@ whole mechanism off for one run.
 
 - [ ] Should configuration be discovered upward from the working directory
       rather than read from `--root`? A monorepo with per-package specs would
-      want that, and nothing has asked yet.
+      want that, and nothing has asked yet. Worth noting (2026-09-12) that
+      upward discovery is the one change here that could make a run depend on
+      where it was started from, which is the same property that makes
+      byte-determinism hard to reason about - so if it lands it should be a flag
+      rather than a default.
 - [x] Named queries from ADR-0005 still have no home.
       **Resolved (2026-09-12):** they live here, under `rules`. The larger
       design is [ADR-0016](0016-a-query-needs-a-sentence.md); what this file

@@ -106,10 +106,23 @@ so in practice the description is written once.
 
 ## Open Questions
 
-- [ ] SARIF's `fixes` field can carry a machine-applicable edit, and several
-      findings have exactly one - `superseded-by: ADR-0002` added to a named
-      file. Not attempted: a wrong automatic fix to a specification is a worse
-      failure than a missing one.
+- [x] SARIF's `fixes` field can carry a machine-applicable edit, and several
+      findings have exactly one. **Declined (2026-09-12).** Counted, and
+      "several" was generous: exactly one rule has a fix that is an edit rather
+      than a judgement. `unknown-relation-key` knows the key's span and the
+      spelling to put there. Everything else is a guess or a construction -
+      `superseded-by: ADR-0002` has to be *inserted*, into front matter that may
+      not exist yet, at a position only a human can choose.
+
+      [ADR-0004](0004-reference-resolution.md)'s near-miss suggestions made the
+      case weaker rather than stronger. There is now a "did you mean ADR-0015?"
+      to attach to a `broken-reference`, and it is deliberately a guess - one
+      candidate or silence, never certainty. Promoting a guess to a
+      machine-applicable edit would throw away the restraint that makes it
+      worth printing.
+
+      Shipping `fixes` for one rule out of twelve teaches an editor's user that
+      spec-graph findings are fixable, on a corpus where they mostly are not.
 - [x] The stale baseline entries are named in the human report and counted in
       JSON. **Resolved (2026-09-12):** they are in the note, as
       `baseline.entries`, each carrying the `paid` or `gone` label from

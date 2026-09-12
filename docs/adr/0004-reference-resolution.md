@@ -91,8 +91,13 @@ on the superseded one with no redirect, and that is a finding
 
 ## Open Questions
 
-- [ ] Should cross-repository references resolve? A monorepo can already pass
-      several roots, but two separate checkouts cannot see each other.
+- [x] Should cross-repository references resolve? **Declined (2026-09-12).**
+      Every way of doing it needs spec-graph to know about a second checkout it
+      was not pointed at - a lockfile of remotes, a fetch, a cache - and all
+      three put network or discovery underneath a pipeline whose whole test
+      strategy rests on being a pure function of text. A monorepo passes several
+      roots today. Two separate checkouts are two runs, and a reference between
+      them is what `ignoreReferences` is for.
 - [x] Should a near-miss suggest a correction (`did you mean ADR-0009?`) by edit
       distance? **Resolved (2026-09-12):** yes, under the fourth asymmetry above.
       Distance alone was the wrong question; what a suggestion needs is distance

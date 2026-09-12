@@ -30,7 +30,7 @@ export {
   BASELINE_VERSION,
   EMPTY_BASELINE,
 } from './baseline.js';
-export type { Baseline, BaselineEntry, BaselineOutcome, ParsedBaseline } from './baseline.js';
+export type { Baseline, BaselineEntry, BaselineOutcome, ParsedBaseline, StaleEntry } from './baseline.js';
 
 export { loadConfig, parseConfig, CONFIG_FILES, CONFIG_PACKAGE_KEY } from './config.js';
 export type { LoadedConfig, SpecGraphConfig } from './config.js';
@@ -61,6 +61,7 @@ export {
   renderMatch,
   QueryError,
   DEFAULT_MATCH_LIMIT,
+  SELECTOR_KEYS,
 } from './select.js';
 export type {
   ExecuteOptions,
@@ -82,6 +83,9 @@ export {
   RULE_QUERIES,
 } from './rules.js';
 export type { RuleOptions } from './rules.js';
+
+export { compileProjectRules, renderTemplate } from './project-rules.js';
+export type { CompiledProjectRules, ProjectRule } from './project-rules.js';
 
 export {
   createPainter,
@@ -174,9 +178,10 @@ export {
   toPosix,
 } from './paths.js';
 
-export { DISPOSITIONS, EDGE_KINDS, EDGE_TRAITS, OPENNESS_OF } from './types.js';
+export { isProjectRule, DISPOSITIONS, EDGE_KINDS, EDGE_TRAITS, OPENNESS_OF, PROJECT_RULE_PREFIX } from './types.js';
 export type {
   AnalysisSummary,
+  AnyRuleId,
   DanglingReason,
   DanglingRef,
   Diagnostic,
@@ -194,6 +199,7 @@ export type {
   Phase,
   Position,
   Receptivity,
+  ProjectRuleId,
   RelatedLocation,
   RuleId,
   Severity,
@@ -201,4 +207,5 @@ export type {
   Span,
   SpecNode,
   StateSignal,
+  SuppressedRef,
 } from './types.js';
