@@ -182,9 +182,17 @@ JavaScript regular expression run once per node. `^=`, `$=` and `*=` cover the
 cases most rules actually want and cannot backtrack at all.
 
 **A transitive project rule can produce ten thousand findings.** That is the
-engine's match limit doing its job - the ceiling is fixed rather than a function
-of the corpus - and `--max` is what makes the report readable. Measured at 120 ms
-over 300 documents and 2,955 edges, which is the shape a test now holds.
+engine's match limit doing its job — the ceiling is fixed rather than a function
+of the corpus — and `--max` is what makes the report readable. It takes about
+120 ms over 300 documents and 2,955 edges.
+
+The test that holds that shape asserts the ceiling, not the milliseconds. Its
+time budget is thirty times the measurement and is there to catch a blow-up — an
+accidental quadratic, a traversal that stopped being bounded — because the suite
+runs under Stryker with eight workers competing for the same cores, and a budget
+tight enough to be a benchmark fails there for reasons that have nothing to do
+with this code. The first version of it did exactly that, and took the mutation
+gate down with it.
 
 ## Open Questions
 
