@@ -169,6 +169,27 @@ after a wide change is a full run with extra bookkeeping, and it billed like one
 taking **110 minutes against the rebuild's 103**. The 36-second figure above is
 real and belongs to a narrow change; it is not what the gate costs on a release.
 
+**And the rebuild could not record having corrected anything.** The cache was
+keyed on the commit, with a comment saying that gave every run a fresh entry. Two
+runs share a commit: the branch push saved `stryker-Linux-6f398ee` at 11:00, and
+at 12:45 the tag's full run logged *"Cache hit occurred on the primary key ...,
+not saving cache"* and discarded its own report. The very next incremental run -
+a documentation commit, nothing mutable changed - restored the incremental
+lineage and reproduced it to within one mutant, 74.12 against 74.11, while the
+rebuild that was supposed to supersede it had measured 75.40.
+
+Which makes the paragraph above worse than it read. The claim was that a wrong
+inference is bounded because a full run is unconditional on a tag and on Mondays.
+The full run happened; its result was thrown away; the next inference started from
+the wrong report anyway. The bound held only through the Monday rebuild, whose
+commit usually has no earlier run to collide with.
+
+The key is `github.run_id` now, which is unique, so every run saves and the
+prefix restore picks up whichever finished last. Worth writing down for what it
+is: a declaration in a comment that had drifted from what the code did, in the
+CI of the tool built to find exactly that, found by reading a log instead of
+trusting the comment.
+
 This also corrects the headroom, in the useful direction for once. Against 73.32%
 with 305 timeouts - four percent of the corpus, and a timeout is a timing
 measurement - a bad run read 69.3%, which is *below* the guard. Against 0.3.0's

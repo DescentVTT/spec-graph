@@ -72,14 +72,28 @@ jobs:
 
       - run: npm ci
 
-      # Keyed on the commit so every run leaves a fresh entry, and restored from
-      # the most recent one by prefix. A miss is not a failure: it costs the
-      # full run, which is what used to happen every time.
+      # Keyed on the run, not the commit, and restored from the most recent
+      # entry by prefix. A miss is not a failure: it costs the full run, which
+      # is what used to happen every time.
+      #
+      # The commit was the obvious key and it was wrong, because two runs share
+      # one. At v0.4.0 the branch push and the tag were the same commit: the
+      # push's incremental run saved `stryker-Linux-6f398ee` first, and the
+      # tag's full run reported "Cache hit occurred on the primary key ..., not
+      # saving cache" and threw its own report away. The next incremental then
+      # restored the incremental lineage and reproduced its number to within one
+      # mutant - 74.12 against 74.11 - while the rebuild that was supposed to
+      # correct it had measured 75.40.
+      #
+      # So the one place a wrong inference was guaranteed to be caught could not
+      # record having caught it. A run id is unique, so every run saves, and the
+      # prefix restore picks up whichever finished last - which is the full one,
+      # on the tag and on the Monday rebuild. See ADR-0007.
       - name: Restore the incremental report
         uses: actions/cache@v4
         with:
           path: reports/stryker-incremental.json
-          key: stryker-${{ runner.os }}-${{ github.sha }}
+          key: stryker-${{ runner.os }}-${{ github.run_id }}
           restore-keys: |
             stryker-${{ runner.os }}-
 
