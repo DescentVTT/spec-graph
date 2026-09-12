@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { scanMarkdown, slugify } from '../src/markdown.js';
+import { analyseSources } from '../src/runner.js';
 import { compareRefs, createLineIndex } from '../src/source.js';
 
 /** Convenience: the targets of every extracted link, in document order. */
@@ -400,5 +401,75 @@ describe('slugify', () => {
 
   it('keeps non-latin letters', () => {
     expect(slugify('架構決策')).toBe('架構決策');
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+
+/**
+ * What the scanner does with input that is not quite text. See ADR-0013.
+ */
+describe('unusual line terminators and bytes', () => {
+  const NUL = String.fromCharCode(0);
+  const CR = String.fromCharCode(13);
+  const LF = String.fromCharCode(10);
+
+  const BODY = [
+    '---',
+    'status: accepted',
+    '---',
+    '',
+    '# ADR-0001: Probe',
+    '',
+    '## Open Questions',
+    '',
+    '- [ ] first',
+    '- [ ] second',
+    '',
+    'See [gone](docs/nope.md).',
+    '',
+  ];
+
+  it('reads a lone carriage return as a line ending, exactly as CommonMark says', () => {
+    // A classic-Mac file has to produce the same line numbers as a POSIX one,
+    // for the same reason a Windows one does: half a team otherwise gets
+    // diagnostics pointing at line 1 of everything.
+    const shape = (separator: string) => {
+      const result = analyseSources([{ path: 'docs/adr/0001-probe.md', text: BODY.join(separator) }]);
+      return {
+        items: result.corpus.items.map((item) => [item.at.span.start.line, item.text]),
+        findings: result.diagnostics.map((finding) => [finding.at.span.start.line, finding.rule]),
+      };
+    };
+    const posix = shape(LF);
+    expect(posix.items).toEqual([
+      [9, 'first'],
+      [10, 'second'],
+    ]);
+    expect(posix.findings).toEqual([[12, 'broken-reference']]);
+    expect(shape(CR)).toEqual(posix);
+    expect(shape(CR + LF)).toEqual(posix);
+  });
+
+  it('reports a NUL byte as a problem with the input, not as a finding', () => {
+    // spec-graph is likely the only tool that got this far: grep, diff and
+    // every review interface read the file as binary and show nothing.
+    const text = ['---', 'status: accepted', '---', '', `# ADR-0001: Pr${NUL}obe`, ''].join(LF);
+    const result = analyseSources([{ path: 'docs/adr/0001-probe.md', text }]);
+    expect(result.corpus.problems.map((problem) => problem.message)).toEqual([
+      'contains a NUL byte, so grep, diff and review tooling read this file as binary - check whether it was saved as UTF-16',
+    ]);
+    expect(result.corpus.problems[0]?.at.span.start.line).toBe(5);
+    // Not a finding, so it cannot fail a build over somebody else's encoding.
+    expect(result.diagnostics).toEqual([]);
+  });
+
+  it('says it once, however many NULs there are', () => {
+    const text = ['---', 'status: accepted', '---', '', `# A${NUL}${NUL}B${NUL}C`, ''].join(LF);
+    expect(analyseSources([{ path: 'a.md', text }]).corpus.problems).toHaveLength(1);
+  });
+
+  it('says nothing about a file that has none', () => {
+    expect(analyseSources([{ path: 'a.md', text: BODY.join(LF) }]).corpus.problems).toEqual([]);
   });
 });

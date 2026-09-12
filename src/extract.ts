@@ -549,6 +549,9 @@ export function extractSpecifications(input: ExtractInput): ExtractedDocument[] 
 }
 
 /** Reads a file's own specification. Returns `null` when it opts out. */
+/** The one character that makes a text file read as binary to other tools. */
+const NUL = '\u0000';
+
 export function extractDocument(input: ExtractInput): ExtractedDocument | null {
   const scanned = scanMarkdown(input.text);
   const directives = parseDirectives(scanned.comments);
@@ -558,6 +561,23 @@ export function extractDocument(input: ExtractInput): ExtractedDocument | null {
   const file = input.path;
   const problems: ParseProblem[] = [];
   const at = (start: number, end: number): SourceRef => refOf(file, index, start, end);
+
+  const nul = input.text.indexOf(NUL);
+  if (nul !== -1) {
+    // Not a finding. Nothing about the graph is wrong, and the text parsed - a
+    // NUL is whitespace to every rule here. It is a problem with the *input*,
+    // which is what a ParseProblem is for, and it is worth one line because
+    // spec-graph is likely the only tool that got this far: grep, diff and
+    // every review interface read the file as binary and show nothing at all.
+    //
+    // The cause is almost always an encoding, not a keystroke. UTF-16 read as
+    // UTF-8 puts a NUL between every character, and the document that produces
+    // looks plausible in some editors and is mojibake everywhere else.
+    problems.push({
+      message: `contains a NUL byte, so grep, diff and review tooling read this file as binary - check whether it was saved as UTF-16`,
+      at: at(nul, nul + 1),
+    });
+  }
 
   for (const directive of directives) {
     for (const unknown of directive.unknownAttributes) {
