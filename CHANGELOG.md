@@ -72,7 +72,7 @@ now a usage error rather than a pattern that silently matches nothing.
 Verified against the engine it replaces: **1.33 million pattern-subject pairs,
 zero disagreements**, 19,000 of them committed as a gate. It earned that twice
 over, on one clause of the language specification read backwards in two
-different places - the word characters `` recognises, and whether a character
+different places - the word characters `\b` recognises, and whether a character
 whose upper case is ASCII may match `[A-Z]`. The second was found by the
 mutation score pointing at a corpus with a blind spot in it rather than at a
 test. See [ADR-0017](docs/adr/0017-a-predicate-must-finish.md) and
