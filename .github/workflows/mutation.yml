@@ -1,10 +1,10 @@
 name: Mutation
 
-# Mutation testing runs on every push rather than on a schedule. A mutation
-# score is only useful if it is current, and the whole point of measuring it
-# here is that spec-graph is built out of heuristics: a vocabulary table or a
-# boundary condition can be weakened by an ordinary-looking refactor without a
-# single test going red.
+# Mutation testing runs on every push to `main` and every pull request rather
+# than on a schedule. A mutation score is only useful if it is current, and the
+# whole point of measuring it here is that spec-graph is built out of
+# heuristics: a vocabulary table or a boundary condition can be weakened by an
+# ordinary-looking refactor without a single test going red.
 #
 # There is no paths filter. A dependency bump can move the score as easily as a
 # source edit can, and filtering on src/** would miss it.
@@ -19,7 +19,13 @@ name: Mutation
 # affected, and a full run where the number has to be trustworthy rather than
 # fast - a tag, the weekly schedule, or a manual dispatch.
 on:
+  # A push to a branch with an open pull request would otherwise run twice, once
+  # per event. This comment used to say the concurrency key collapsed the two;
+  # it could not, because a push event carries no pull request number. Filtering
+  # the push the way ci.yml does is what actually leaves one run.
   push:
+    branches: [main]
+    tags: ['v*']
   pull_request:
   schedule:
     # Monday, 03:00 UTC. Incremental reuse is an inference about which mutants a
@@ -28,10 +34,16 @@ on:
     - cron: '0 3 * * 1'
   workflow_dispatch:
 
-# A push to a branch that also has an open pull request triggers both events.
-# Keying on the PR number when there is one collapses those into a single run.
+# A newer push supersedes an older push's incremental run, so those cancel.
+# Nothing a push does supersedes a full run, so the event is part of the key.
+# Without it a scheduled run and a push to `main` shared one group, and GitHub
+# cancels the older run in a group: a dispatch overtook a push run on 2026-09-07
+# and the push run's annotation reads "Canceling since a higher priority waiting
+# request for mutation-refs/heads/main exists". The weekly rebuild takes about
+# three hours, and any push inside them would have ended it with nothing
+# reported.
 concurrency:
-  group: mutation-${{ github.event.pull_request.number || github.ref }}
+  group: mutation-${{ github.event.pull_request.number || github.ref }}-${{ github.event_name }}
   cancel-in-progress: true
 
 jobs:
@@ -43,14 +55,13 @@ jobs:
     # that only fits the fast case is the cap that produced fourteen cancelled
     # runs.
     #
-    # A ceiling costs nothing unless it is reached, and this one was nearly
-    # reached. The full run measured 80 minutes at 0.3.0 and 103 at 0.4.0, on a
-    # corpus that grew 6% - so what moved was the runner, not the work. The
-    # incremental run on the same commit took 110, because a broad change leaves
-    # it nothing to reuse. At 120 the margin was seventeen minutes, which is the
-    # position that produced fourteen consecutive cancelled runs the last time,
-    # and a cancelled run reports nothing after burning the full budget.
-    timeout-minutes: 180
+    # A ceiling costs nothing unless it is reached, and this one keeps nearly
+    # being reached. The full run measured 80 minutes at 0.3.0, 103 at 0.4.0 and
+    # 168 at 0.5.0, the last against a cap of 180. The cause of that jump is not
+    # attributed (ADR-0007), and raising the cap does not pretend to attribute
+    # it: a slow run still reports its time, and a cancelled one is the only
+    # outcome that leaves nothing to attribute. A hosted job may run for 360.
+    timeout-minutes: 240
 
     # Decided once. Writing the condition twice and negating it by hand is how
     # the comment above came to promise a full run on manual dispatch while the
@@ -77,24 +88,15 @@ jobs:
       # is what used to happen every time.
       #
       # The commit was the obvious key and it was wrong, because two runs share
-      # one. At v0.4.0 the branch push and the tag were the same commit: the
-      # push's incremental run saved `stryker-Linux-6f398ee` first, and the
-      # tag's full run reported "Cache hit occurred on the primary key ..., not
-      # saving cache" and threw its own report away. The next incremental then
-      # restored the incremental lineage and reproduced its number to within one
-      # mutant - 74.12 against 74.11 - while the rebuild that was supposed to
-      # correct it had measured 75.40.
+      # one: at v0.4.0 the branch push and the tag were the same commit, and the
+      # tag's run reported "Cache hit occurred on the primary key ..., not saving
+      # cache". A run id is unique, so every run saves.
       #
-      # So the one place a wrong inference was guaranteed to be caught could not
-      # record having caught it. A run id is unique, so every run saves.
-      #
-      # What that does not do is carry a tag's rebuild into `main`. A run can
-      # restore only caches from its own ref or the default branch, so the entry
-      # a tag's full run saves lives under refs/tags/... where no later push can
-      # read it - at 0.5.0 the next push restored the incremental lineage and read
-      # 76.44 against the tag's 76.83. The prefix restore on `main` picks up the
-      # last run that saved on `main`, so the only full runs that correct it are
-      # the Monday schedule and a manual dispatch on `main`. See ADR-0007.
+      # A run can restore only caches from its own ref or the default branch, so
+      # an entry a tag saves lives under refs/tags/... where no later push can
+      # read it. The full runs that correct `main` are the Monday schedule and a
+      # manual dispatch on `main` - and only since the full step below writes a
+      # report at all. See ADR-0007.
       - name: Restore the incremental report
         uses: actions/cache@v4
         with:
@@ -110,9 +112,15 @@ jobs:
         if: env.FULL != 'true'
         run: npx stryker run --concurrency 4 --incremental
 
+      # `--incremental --force`, not a bare run. Stryker writes the incremental
+      # report only in incremental mode, so a bare full run left the file the
+      # restore step had just put there untouched, and the cache saved that copy.
+      # Every tag's rebuild did: 470,697 bytes restored and 470,702 saved at
+      # 0.2.3, 472,222 and 472,228 at 0.3.0, 636,632 and 636,640 at 0.5.0.
+      # `--force` retests every mutant and still writes what it measured.
       - name: Mutation test (full)
         if: env.FULL == 'true'
-        run: npx stryker run --concurrency 4
+        run: npx stryker run --concurrency 4 --incremental --force
 
       - uses: actions/upload-artifact@v7
         if: always()

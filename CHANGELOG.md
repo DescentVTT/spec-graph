@@ -245,8 +245,11 @@ points.
 The incremental run on the same commit read 0.40 points low - the third
 observation after 3.18 high at 0.3.0 and 1.29 low at 0.4.0, and the reason
 [ADR-0007](docs/adr/0007-mutation-testing.md) calls it a signal rather than a
-figure. The tag's run also saved its own report to the cache, which is the first
-time the cache-key fix from 0.4.0 has been seen doing its job.
+figure. The tag's run also logged a cache save, which this entry first read as
+the cache-key fix from 0.4.0 doing its job. *Corrected 2026-09-13:* it saved a
+copy of the stale report it had restored, because the full step never wrote one,
+and an entry saved under a tag cannot be restored on `main` in any case. See
+[ADR-0007](docs/adr/0007-mutation-testing.md).
 
 **The rebuild took 168 of its 180 minutes.** 13% more mutants than 0.4.0, and 63%
 longer on the hosted runner against 15% longer locally. At 0.4.0's old cap of

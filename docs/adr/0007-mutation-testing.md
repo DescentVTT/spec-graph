@@ -181,10 +181,11 @@ rebuild that was supposed to supersede it had measured 75.40.
 Which makes the paragraph above worse than it read. The claim was that a wrong
 inference is bounded because a full run is unconditional on a tag and on Mondays.
 The full run happened; its result was thrown away; the next inference started from
-the wrong report anyway. The bound held only through the Monday rebuild - and
-not for the reason first given here, that its commit has no earlier run to
-collide with. The real reason is the cache's scoping, found a release later and
-recorded below.
+the wrong report anyway. This paragraph then said the bound held through the
+Monday rebuild, because its commit has no earlier run to collide with. It did
+not hold there either, for two reasons found later and recorded below: the
+cache's scoping, and a full step that never wrote a report for anything to
+save.
 
 The key is `github.run_id` now, which is unique, so every run saves and the
 prefix restore picks up the most recent entry it is allowed to see - which, as
@@ -222,7 +223,7 @@ difference this ADR already describes. Worth recording because the wrong answer
 came with a plausible mechanism attached, and the only thing that separated them
 was running the full measurement rather than reasoning about the partial one.
 
-**The rebuild saved its report, and it still could not reach `main`.** The tag's
+**The rebuild saved an entry, and it still could not reach `main`.** The tag's
 run logged `Cache saved with key: stryker-Linux-34724969717`, and this ADR first
 read that as the correction arriving at last. The next push to `main` said
 otherwise. A documentation commit, reusing 9,696 of 9,697 results, restored from
@@ -244,7 +245,7 @@ primary-key hit and declined to save - and nothing on `main` can read a tag's. S
 keying on the run fixed the discard and not the lineage, and the lineage was never
 fixable from a tag at all. 0.3.0 had already shown it, unread: its tag *did* save,
 under `refs/tags/v0.3.0`, with no collision to stop it, and `main` never saw that
-report either.
+entry either.
 
 So a wrong incremental inference is bounded by exactly one thing: **a full run
 whose cache lands on `main`** - the Monday schedule, or a manual dispatch on
@@ -256,6 +257,47 @@ comment said keying on the commit gave every run a fresh entry; the fix for that
 said the prefix restore would pick up the tag's rebuild; and this ADR said the
 next incremental would start from a full report. Each was a mechanism described
 from its configuration and believed until a log was read.
+
+**And none of the rebuilds had a report to save.** *Found 2026-09-13.* The full
+step ran `stryker run` with no `--incremental`, and Stryker writes the
+incremental report only in incremental mode - `reportAll` in its
+`MutationTestReportHelper` guards the write with `if (this.options.incremental)`.
+So every full run left `reports/stryker-incremental.json` exactly as the restore
+step had put it, and the cache saved that copy. The sizes say so without the
+source:
+
+| full run | restored from | bytes | saved as | bytes |
+| --- | --- | ---: | --- | ---: |
+| v0.2.3 | `afe576b`, `main` | 470,697 | `38ac322`, tag | 470,702 |
+| v0.3.0 | `38ac322`, `main` | 472,222 | `84fa10d`, tag | 472,228 |
+| v0.5.0 | `34713469263`, `main` | 636,632 | `34724969717`, tag | 636,640 |
+
+A few bytes of archive metadata apart, every time, where the incremental run on
+`84fa10d`, which did re-measure, went from 472,222 to 523,247. The v0.3.0 log
+agrees: it says "Found 20 of 95 file(s) to be mutated" and never "using
+incremental report", which any run that read the file prints.
+
+So the 0.4.0 tag threw nothing away when it declined to save, and the scoping
+above, true as it is, was never the only thing between a rebuild and `main`. No
+full run in this workflow has produced a report since the cache was introduced,
+and a wrong incremental inference has been bounded by nothing. The Monday
+schedule, which this section named as the bound twice, had not run once.
+
+Checked by running it before changing it, on `src/paths.ts`: a bare run wrote no
+file; `--incremental` wrote one and then reused 74 of 74 results; `--incremental
+--force` logged "Force mode is activated, all mutants will be retested", reused 0
+of 74 and rewrote the file. The full step is `--incremental --force` now.
+
+**And a push would have cancelled the rebuild.** The concurrency group was the
+ref, so a scheduled run and a push to `main` shared `mutation-refs/heads/main`,
+and GitHub cancels the older run in a group. That is read from a log rather than
+from the configuration: on 2026-09-07 a manual dispatch overtook a push run on
+`bd254e2`, whose annotation reads "Canceling since a higher priority waiting
+request for mutation-refs/heads/main exists". A rebuild takes about three hours,
+and a push inside them would have ended it with nothing reported. The group
+carries the event name now. Two runs on `main` can then overlap, and the prefix
+restore takes whichever saved last, which is the rebuild unless a push that
+started during it also finishes after it.
 
 
 This also corrects the headroom, in the useful direction for once. Against 73.32%
@@ -437,12 +479,19 @@ changes are wrong.
       measures async modules honestly, and at roughly seven times the runtime
       it would not fit a per-push job. A nightly `all` run against a weekly
       `perTest` one would give both, at the cost of a second workflow.
-- [ ] The full hosted run took 168 of its 180 minutes at 0.5.0. Raise the cap
+- [x] The full hosted run took 168 of its 180 minutes at 0.5.0. Raise the cap
       again - a hosted job may run for 360 - or make the per-mutant test cost
-      smaller? Neither should be chosen before the time is attributed: runner
-      variance and the new differential test in `regex.test.ts` are both
-      plausible, and a cap raised to cover an unmeasured cause is the same
-      guess as a floor lowered to cover an unmeasured regression.
+      smaller? **The cap is resolved (2026-09-13): 240.** This entry used to say
+      a raised cap is the same guess as a lowered floor, and the comparison
+      does not survive a second look. A lowered floor lets a regression through
+      the gate unseen. A raised ceiling hides nothing - the time is still in the
+      log - and a ceiling that is hit cancels the run, which is the one outcome
+      that leaves no time to attribute.
+- [ ] Should the per-mutant test cost come down? Runner variance and the
+      differential test in `regex.test.ts` both explain 168 minutes, and one
+      sample cannot tell them apart. Identical source measured again on a
+      hosted runner can, because only the runner differs - so the samples are
+      worth taking before anything under `src/` or `tests/` changes.
 
 ## See also
 

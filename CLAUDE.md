@@ -57,9 +57,9 @@ accommodate a regression:
   when a broad change left nothing to reuse, 64 when half the corpus was reused.
   See ADR-0007. The guard stays at 70 because ~340 mutants are detected by
   timeout, and losing all of them takes the local figure to 77.00% and the
-  hosted one to 73.31%. The hosted full run took 168 of its job's 180 minutes at
-  0.5.0, cause not yet attributed; check that headroom before adding a slow
-  test.
+  hosted one to 73.31%. The hosted full run took 168 minutes at 0.5.0 against a
+  cap of 180, since raised to 240, and the cause is not yet attributed; check
+  the headroom before adding a slow test.
 - **Coverage floors** in `vitest.config.ts`. Branches sits lowest on purpose;
   the remainder is defensive fallbacks and platform paths of which only one can
   run per machine.
