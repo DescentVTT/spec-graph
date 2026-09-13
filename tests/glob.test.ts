@@ -1,11 +1,21 @@
 import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-import { createGlobMatcher, globBase, globToRegExp, isGlob, walkFiles } from '../src/glob.js';
+import {
+  compileGlob,
+  createGlobMatcher,
+  createReferenceFilter,
+  globBase,
+  globToRegExp,
+  isGlob,
+  walkFiles,
+} from '../src/glob.js';
 
 const ROOT = 'tests/fixtures/.tmp/glob';
 
-const matches = (pattern: string, path: string): boolean => globToRegExp(pattern).test(path);
+// The automaton, because that is what the walk runs. `globToRegExp` is the
+// oracle it is held to below, not the thing under test.
+const matches = (pattern: string, path: string): boolean => compileGlob(pattern).test(path);
 
 describe('glob compilation', () => {
   it('matches a single segment with *', () => {
@@ -50,11 +60,104 @@ describe('glob compilation', () => {
     expect(isGlob('docs/a.md')).toBe(false);
   });
 
+  it('respects case where the host filesystem does, unless told otherwise', () => {
+    expect(compileGlob('Docs/*.md', { ignoreCase: false }).test('docs/a.md')).toBe(false);
+    expect(compileGlob('Docs/*.md', { ignoreCase: true }).test('docs/a.md')).toBe(true);
+    expect(compileGlob('Docs/*.md').test('docs/a.md')).toBe(process.platform === 'win32');
+  });
+
+  it('names the glob, not the expression it became, when one does not compile', () => {
+    // Before, this printed `Invalid regular expression: /^docs\/(?:a$/i:
+    // Unterminated group` - a parenthesis the user never typed, in a language
+    // they never wrote.
+    expect(() => compileGlob('docs/{a')).toThrow('invalid glob "docs/{a": unclosed "{"');
+    expect(() => compileGlob('docs/[z-a].md')).toThrow(
+      'invalid glob "docs/[z-a].md": characters out of order in a character class',
+    );
+    expect(() => createGlobMatcher(['docs/{a'])).toThrow('invalid glob "docs/{a"');
+  });
+
   it('finds the literal prefix so the walk can be pruned', () => {
     expect(globBase('docs/adr/**/*.md')).toBe('docs/adr');
     expect(globBase('**/*.md')).toBe('');
     expect(globBase('docs/adr/0007.md')).toBe('docs/adr');
     expect(globBase('!docs/drafts/**')).toBe('docs/drafts');
+  });
+});
+
+describe('the automaton against the RegExp it replaced', () => {
+  const backslash = String.fromCharCode(92);
+  const GLOBS = [
+    '*', '**', '?', '**/*', 'docs/*.md', 'docs/**/*.md', '**/*.md', 'a/**/b', 'a/**', '**/b', 'a/**/',
+    'docs/**/drafts/**/*-*.md', '**/*-*-*-*.md', '*.{md,mdx}', '{docs,rfcs}/**/*.{md,markdown}',
+    '{a,{b,c}}d', '{,a}b', '{a,}b', '{}', '[abc]*', '[!abc]*', '[a-c]?', '[!a-c]', '[]', '[!]', '[a-]',
+    '[-a]', '[]a]', '[!]a]', '[^a]', 'a[b', 'a]b', 'a}b', 'a,b', 'a.b', 'a+b', 'a(b)', 'a|b', 'a^b',
+    'a$b', `a${backslash}b`, `[${backslash}]`, 'Docs/ADR/*.MD', 'DOCS/**', '*.MD', '[A-Z]*',
+    'a**b', '***', '*?*', '?*?', '**?', 'a/*/b', 'a/*/*/b', '.*', '*.', '/**', '**/', '{a', '[z-a]',
+  ];
+  const PATHS = [
+    '', 'a', 'b', 'c', 'd', 'ab', 'bd', 'cd', 'ad', 'a/b', 'a/x/b', 'a/x/y/b', 'a/', 'a//b', '/a',
+    'docs/a.md', 'docs/adr/a.md', 'DOCS/A.MD', 'Docs/ADR/x.md', 'docs/adr/0001.mdx', 'docs/x/drafts/y/a-b.md',
+    'docs/drafts/a-b.md', 'docs/drafts/ab.md', 'rfcs/a.markdown', 'rfcs/deep/a.md', 'a[b', 'a]b', 'a}b',
+    'a,b', 'a.b', 'aXb', 'a+b', 'a(b)', 'a|b', 'a^b', 'a$b', `a${backslash}b`, backslash, '-', ']', '!',
+    '^', 'x-y-z-w.md', 'dir/x-y-z-w.md', 'x-y.md', '.md', 'a.', 'axxb', 'a/xb', 'Z', 'zed',
+  ];
+
+  // An invalid glob must be invalid to both, so refusal is compared too.
+  const outcome = (run: () => boolean): string => {
+    try {
+      return String(run());
+    } catch {
+      return 'refused';
+    }
+  };
+
+  for (const flags of ['', 'i'] as const) {
+    it(`gives the same answer on every glob and path${flags === 'i' ? ', case folded' : ''}`, () => {
+      const disagreements: string[] = [];
+      for (const glob of GLOBS) {
+        for (const path of PATHS) {
+          const mine = outcome(() => compileGlob(glob, { ignoreCase: flags === 'i' }).test(path));
+          const theirs = outcome(() => new RegExp(globToRegExp(glob).source, flags).test(path));
+          if (mine !== theirs) disagreements.push(`${glob} against ${JSON.stringify(path)}: ${mine} vs ${theirs}`);
+        }
+      }
+      expect(disagreements).toEqual([]);
+    });
+  }
+});
+
+describe('termination', () => {
+  // A blow-up detector, not a benchmark, with the same bound as the one in
+  // regex.test.ts. Each of these took `RegExp` between two and nine seconds and
+  // takes the automaton well under a millisecond: stars that are not nested
+  // still multiply the ways a failing subject can be divided between them.
+  const BLOW_UP = 2000;
+
+  it('finishes on globs whose stars a backtracking engine divides a subject between', () => {
+    const name = `${Array.from({ length: 321 }, () => 'x').join('-')}.txt`;
+    const started = performance.now();
+    expect(createGlobMatcher(['**/*-*-*-*.md'])(`docs/${name}`)).toBe(false);
+    expect(createGlobMatcher(['*a*a*a*a*a*a*b'])('a'.repeat(80))).toBe(false);
+    expect(performance.now() - started).toBeLessThan(BLOW_UP);
+  });
+
+  it('finishes on a reference target, which no filesystem limits the length of', () => {
+    const started = performance.now();
+    expect(createReferenceFilter(['*-*-*-x'])('a-'.repeat(2000))).toBe(false);
+    expect(performance.now() - started).toBeLessThan(BLOW_UP);
+  });
+});
+
+describe('reference filter', () => {
+  it('ignores case the same way on every platform', () => {
+    expect(createReferenceFilter(['ADR-*'])('adr-0001')).toBe(true);
+    expect(createReferenceFilter(['adr-*'])('ADR-0001')).toBe(true);
+    expect(createReferenceFilter(['adr-*'])('rfc-0001')).toBe(false);
+    // U+00B5 (micro sign) and U+03BC (mu) are different characters that the `i`
+    // flag folds together. Lower-casing does not, and the filter used to add the
+    // flag on Windows alone.
+    expect(createReferenceFilter([String.fromCharCode(0xb5)])(String.fromCharCode(0x3bc))).toBe(false);
   });
 });
 

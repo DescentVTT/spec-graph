@@ -36,6 +36,30 @@ describe('matching', () => {
     expect(test('[^a-z]', 'ADR')).toBe(false);
   });
 
+  it('respects case when told to, which a path on most filesystems needs', () => {
+    const exact = (pattern: string, subject: string): boolean =>
+      compilePattern(pattern, { ignoreCase: false }).test(subject);
+    expect(exact('ADR', 'docs/adr/0001.md')).toBe(false);
+    expect(exact('adr', 'docs/adr/0001.md')).toBe(true);
+    expect(exact('[a-z]+', 'ADR')).toBe(false);
+    expect(exact('[^a-z]', 'ADR')).toBe(true);
+    // Only `false` turns folding off. Options that say nothing about case keep
+    // what `~=` has always had.
+    expect(compilePattern('ADR', {}).test('adr')).toBe(true);
+    expect(compilePattern('ADR', { ignoreCase: undefined }).test('adr')).toBe(true);
+  });
+
+  it('answers each subject on its own when one matcher is reused', () => {
+    // The matcher keeps its buffers between subjects. A long subject that dies
+    // late followed by a short one that must not inherit its visited states is
+    // the order that would show it.
+    const matcher = compilePattern('^(a|b)*c$', { ignoreCase: false });
+    expect(matcher.test('abababababababababd')).toBe(false);
+    expect(matcher.test('c')).toBe(true);
+    expect(matcher.test('abc')).toBe(true);
+    expect(matcher.test('ab')).toBe(false);
+  });
+
   it('reads the empty pattern as matching everything', () => {
     expect(test('', '')).toBe(true);
     expect(test('', 'anything')).toBe(true);
@@ -466,15 +490,15 @@ describe('agrees with RegExp', () => {
    * Disagreements are collected rather than asserted one at a time, so a
    * failure names every pattern and subject that differ instead of the first.
    */
-  const compare = (patterns: readonly string[], subjects: readonly string[]): string[] => {
+  const compare = (patterns: readonly string[], subjects: readonly string[], flags: 'i' | '' = 'i'): string[] => {
     const disagreements: string[] = [];
     for (const pattern of patterns) {
-      const mine = compilePattern(pattern);
-      const theirs = new RegExp(pattern, 'i');
+      const mine = compilePattern(pattern, { ignoreCase: flags === 'i' });
+      const theirs = new RegExp(pattern, flags);
       for (const subject of subjects) {
         const a = mine.test(subject);
         const b = theirs.test(subject);
-        if (a !== b) disagreements.push(`/${pattern}/i against ${JSON.stringify(subject)}: ${a} vs ${b}`);
+        if (a !== b) disagreements.push(`/${pattern}/${flags} against ${JSON.stringify(subject)}: ${a} vs ${b}`);
       }
     }
     return disagreements;
@@ -482,6 +506,12 @@ describe('agrees with RegExp', () => {
 
   it('on a corpus written to be awkward', () => {
     expect(compare(PATTERNS, SUBJECTS)).toEqual([]);
+  });
+
+  it('on the same corpus with case respected', () => {
+    // Folding is where the divergence below lives, so the reading without it is
+    // checked over the corpus written to provoke folding, not assumed from it.
+    expect(compare(PATTERNS, SUBJECTS, '')).toEqual([]);
   });
 
   it('on every pattern V8 also accepts', () => {
@@ -576,6 +606,10 @@ describe('the one divergence', () => {
     // Markdown corpus has ever asked. Pinned here so it stays a decision.
     expect(test('[\u00b4-\u00b6]', '\u03bc')).toBe(false);
     expect(new RegExp('[\u00b4-\u00b6]', 'i').test('\u03bc')).toBe(true);
+
+    // With case respected there is nothing to fold, and so nothing to diverge.
+    expect(compilePattern('[\u00b4-\u00b6]', { ignoreCase: false }).test('\u03bc')).toBe(false);
+    expect(new RegExp('[\u00b4-\u00b6]').test('\u03bc')).toBe(false);
   });
 
   it('keeps the specification rule that upper-casing must not reach into ASCII', () => {

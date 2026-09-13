@@ -12,9 +12,11 @@ These are not preferences. Breaking one is a decision that needs an ADR.
   written here. A documentation linter a security team has to audit is one that
   never gets installed.
 - **Nothing in the pipeline may take longer than its input.** Every stage has a
-  stated cost in the size of what it reads. `~=` used to be the exception - a
-  call into `RegExp`, which a plausible pattern makes exponential - and
-  [ADR-0017](docs/adr/0017-a-predicate-must-finish.md) is why it is not.
+  stated cost in the size of what it reads. `~=` and globs used to be the
+  exceptions - calls into `RegExp`, which a plausible `~=` pattern makes
+  exponential and a glob with a few stars makes take minutes over a long
+  reference target - and [ADR-0017](docs/adr/0017-a-predicate-must-finish.md)
+  is why neither is.
 - **Native ESM, TypeScript 7, Node >= 22.** No CommonJS, no transpile step
   beyond `tsc`, no bundler.
 - **Strict types.** `strict`, plus `noUncheckedIndexedAccess`,

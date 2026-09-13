@@ -35,10 +35,12 @@
  * whole trade: a predicate that finishes, against a short list of constructs
  * that a documentation selector never needed.
  *
- * Matching is case-insensitive and unanchored because that is what `~=` has
- * always been - `new RegExp(source, 'i')` and `.test()`. There are no capture
- * groups at all: nothing asks where the match was, only whether there was one,
- * which is why this is a plain NFA simulation rather than a Pike VM.
+ * Matching is unanchored and, by default, case-insensitive, because that is
+ * what `~=` has always been - `new RegExp(source, 'i')` and `.test()`. Globs
+ * compile to this as well, and a path on a case-sensitive filesystem needs the
+ * case respected, which is the one option. There are no capture groups at all:
+ * nothing asks where the match was, only whether there was one, which is why
+ * this is a plain NFA simulation rather than a Pike VM.
  *
  * See ADR-0017.
  */
@@ -126,6 +128,8 @@ const SPACE: readonly Range[] = [
  * the reason U+017F (long s) does not match `s`.
  */
 function canonical(code: number): number {
+  // Every subject a glob sees is mostly ASCII, where the answer needs no string.
+  if (code < 128) return code >= 97 && code <= 122 ? code - 32 : code;
   const upper = String.fromCharCode(code).toUpperCase();
   if (upper.length !== 1) return code;
   const folded = upper.charCodeAt(0);
@@ -147,7 +151,8 @@ function canonical(code: number): number {
 function accepts(set: CharSet, code: number): boolean {
   const folded = canonical(code);
   let hit = false;
-  for (const [low, high] of set.ranges) {
+  for (let i = 0; i < set.ranges.length; i += 1) {
+    const [low, high] = set.ranges[i] as Range;
     if (low === high ? low === code || canonical(low) === folded : inRange(low, high, code)) {
       hit = true;
       break;
@@ -168,6 +173,12 @@ function accepts(set: CharSet, code: number): boolean {
  */
 function inRange(low: number, high: number, code: number): boolean {
   if (code >= low && code <= high) return true;
+  // An ASCII character's only other case form is its ASCII letter twin, and the
+  // two always fold together - so the loop below would ask exactly this.
+  if (code < 128) {
+    const twin = code >= 65 && code <= 90 ? code + 32 : code >= 97 && code <= 122 ? code - 32 : -1;
+    return twin >= low && twin <= high;
+  }
   const folded = canonical(code);
   const char = String.fromCharCode(code);
   for (const variant of [char.toLowerCase(), char.toUpperCase()]) {
@@ -178,9 +189,20 @@ function inRange(low: number, high: number, code: number): boolean {
   return false;
 }
 
+/**
+ * Whether a set accepts a code unit as written.
+ *
+ * What `RegExp` does without the `i` flag, and so none of the folding above
+ * applies - which also means none of its one divergence does.
+ */
+function acceptsExactly(set: CharSet, code: number): boolean {
+  return within(set.ranges, code) !== set.negated;
+}
+
 function within(ranges: readonly Range[], code: number): boolean {
-  for (const [low, high] of ranges) {
-    if (code >= low && code <= high) return true;
+  for (let i = 0; i < ranges.length; i += 1) {
+    const range = ranges[i] as Range;
+    if (code >= range[0] && code <= range[1]) return true;
   }
   return false;
 }
@@ -677,12 +699,23 @@ class Compiler {
 /* Simulation                                                                 */
 /* -------------------------------------------------------------------------- */
 
-/** A compiled pattern. Immutable, reusable, and safe to cache. */
+/**
+ * A compiled pattern. Reusable and safe to cache.
+ *
+ * Not reentrant, which nothing can ask of it: `test` is synchronous and calls
+ * out to nothing, and the buffers it keeps between subjects are what make it
+ * cheap enough to run against every path a walk visits.
+ */
 export interface Matcher {
   /** True when the pattern matches anywhere in the subject. */
   test(subject: string): boolean;
   /** State count. Published for the size test, and for nothing else. */
   readonly size: number;
+}
+
+export interface PatternOptions {
+  /** Fold case the way the `i` flag does. On unless set to `false`. */
+  readonly ignoreCase?: boolean | undefined;
 }
 
 /**
@@ -691,21 +724,19 @@ export interface Matcher {
  * Throws {@link PatternError} on anything it cannot run in linear time, which
  * is the point: the alternative to a message here is a build that stops.
  */
-export function compilePattern(source: string): Matcher {
+export function compilePattern(source: string, options: PatternOptions = {}): Matcher {
   const tree = new PatternParser(source).parse();
   const compiler = new Compiler();
   compiler.compile(tree);
   compiler.emitMatch();
-  const code: readonly Instruction[] = compiler.code;
   // A pattern that begins by asserting the start of the subject cannot match
   // anywhere else, so the simulation stops seeding new threads at every
   // position. Nothing depends on this being noticed - it is the difference
   // between one pass and two over a long body.
-  const anchored = startsAnchored(tree);
-
+  const machine = new Machine(compiler.code, startsAnchored(tree), options.ignoreCase !== false);
   return {
-    size: code.length,
-    test: (subject: string): boolean => run(code, subject, anchored),
+    size: compiler.code.length,
+    test: (subject: string): boolean => machine.test(subject),
   };
 }
 
@@ -727,74 +758,159 @@ function startsAnchored(node: Node): boolean {
   }
 }
 
-function run(code: readonly Instruction[], subject: string, anchored: boolean): boolean {
-  const length = subject.length;
-  // The position each state was last reached at. One visit per state per
-  // position is exactly what turns the exponent into a product.
-  const visited = new Int32Array(code.length).fill(-1);
-  let live: number[] = [];
+const OP_CHAR = 0;
+const OP_SPLIT = 1;
+const OP_JUMP = 2;
+const OP_ASSERT = 3;
+const OP_MATCH = 4;
 
-  for (let position = 0; position <= length; position += 1) {
-    if (position === 0 || !anchored) {
-      if (seedFrom(code, visited, live, 0, subject, position)) return true;
-    } else if (live.length === 0) {
-      // An anchored pattern gets one chance, and every thread from it has died.
-      return false;
-    }
-
-    if (position === length) return false;
-    const char = subject.charCodeAt(position);
-    const next: number[] = [];
-    for (const pc of live) {
-      const instruction = code[pc] as Instruction;
-      if (instruction.op !== 'char' || !accepts(instruction.set, char)) continue;
-      if (seedFrom(code, visited, next, pc + 1, subject, position + 1)) return true;
-    }
-    live = next;
-  }
-
-  return false;
-}
+const NOTHING: CharSet = { negated: false, ranges: [] };
 
 /**
- * Follows every zero-width transition out of one state.
+ * The simulation, over the program flattened into typed arrays.
  *
- * Returns true the moment a thread reaches the end of the pattern: the only
- * question is whether a match exists, so there is no leftmost-longest to settle
- * and no captures to keep, and the first thread to arrive is the answer.
+ * The compiler's instructions are objects of five shapes, and one loop reading
+ * `op` off all five is a megamorphic property read on every step. Simulated that
+ * way, with a fresh visited table per subject, a glob cost about 3.5
+ * microseconds a path and a path that failed on its first character still paid
+ * half a microsecond for the allocation. Flat arrays and buffers kept between
+ * subjects bring those to 0.6 and 0.04 - `RegExp` takes 0.06 - which matters
+ * because a walk tests every path it visits against every pattern.
  */
-function seedFrom(
-  code: readonly Instruction[],
-  visited: Int32Array,
-  list: number[],
-  start: number,
-  subject: string,
-  position: number,
-): boolean {
-  const stack: number[] = [start];
-  while (stack.length > 0) {
-    const pc = stack.pop() as number;
-    if (visited[pc] === position) continue;
-    visited[pc] = position;
-    const instruction = code[pc] as Instruction;
-    switch (instruction.op) {
-      case 'match':
-        return true;
-      case 'jump':
-        stack.push(instruction.to);
-        break;
-      case 'split':
-        stack.push(instruction.y, instruction.x);
-        break;
-      case 'assert':
-        if (holds(instruction.assertion, subject, position)) stack.push(pc + 1);
-        break;
-      case 'char':
-        list.push(pc);
-        break;
-    }
+class Machine {
+  private readonly ops: Uint8Array;
+  /** A split's first branch, or a jump's target. */
+  private readonly first: Int32Array;
+  /** A split's second branch. */
+  private readonly second: Int32Array;
+  private readonly sets: CharSet[];
+  private readonly assertions: Assertion[];
+  private readonly anchored: boolean;
+  private readonly ignoreCase: boolean;
+
+  /**
+   * The position each state was last reached at. One visit per state per
+   * position is exactly what turns the exponent into a product.
+   */
+  private readonly visited: Int32Array;
+  /** Each visit pushes at most two states, so this cannot overflow. */
+  private readonly stack: Int32Array;
+  private live: Int32Array;
+  private next: Int32Array;
+
+  constructor(code: readonly Instruction[], anchored: boolean, ignoreCase: boolean) {
+    const size = code.length;
+    this.ops = new Uint8Array(size);
+    this.first = new Int32Array(size);
+    this.second = new Int32Array(size);
+    this.sets = new Array<CharSet>(size).fill(NOTHING);
+    this.assertions = new Array<Assertion>(size).fill('start');
+    this.anchored = anchored;
+    this.ignoreCase = ignoreCase;
+    this.visited = new Int32Array(size).fill(-1);
+    this.stack = new Int32Array(2 * size + 1);
+    this.live = new Int32Array(size);
+    this.next = new Int32Array(size);
+
+    code.forEach((instruction, pc) => {
+      switch (instruction.op) {
+        case 'char':
+          this.ops[pc] = OP_CHAR;
+          this.sets[pc] = instruction.set;
+          break;
+        case 'split':
+          this.ops[pc] = OP_SPLIT;
+          this.first[pc] = instruction.x;
+          this.second[pc] = instruction.y;
+          break;
+        case 'jump':
+          this.ops[pc] = OP_JUMP;
+          this.first[pc] = instruction.to;
+          break;
+        case 'assert':
+          this.ops[pc] = OP_ASSERT;
+          this.assertions[pc] = instruction.assertion;
+          break;
+        case 'match':
+          this.ops[pc] = OP_MATCH;
+          break;
+      }
+    });
   }
-  return false;
+
+  test(subject: string): boolean {
+    const length = subject.length;
+    this.visited.fill(-1);
+
+    let live = this.live;
+    let next = this.next;
+    let alive = 0;
+
+    for (let position = 0; position <= length; position += 1) {
+      if (position === 0 || !this.anchored) {
+        alive = this.seed(live, alive, 0, subject, position);
+        if (alive < 0) return true;
+      } else if (alive === 0) {
+        // An anchored pattern gets one chance, and every thread from it has died.
+        return false;
+      }
+
+      if (position === length) return false;
+      const char = subject.charCodeAt(position);
+      let arriving = 0;
+      for (let i = 0; i < alive; i += 1) {
+        const pc = live[i] as number;
+        const set = this.sets[pc] as CharSet;
+        if (!(this.ignoreCase ? accepts(set, char) : acceptsExactly(set, char))) continue;
+        arriving = this.seed(next, arriving, pc + 1, subject, position + 1);
+        if (arriving < 0) return true;
+      }
+      const spent = live;
+      live = next;
+      next = spent;
+      alive = arriving;
+    }
+
+    return false;
+  }
+
+  /**
+   * Follows every zero-width transition out of one state, appending the
+   * character states it reaches to `list`.
+   *
+   * Returns the new length of the list, or -1 the moment a thread reaches the
+   * end of the pattern: the only question is whether a match exists, so there
+   * is no leftmost-longest to settle and no captures to keep, and the first
+   * thread to arrive is the answer.
+   */
+  private seed(list: Int32Array, length: number, start: number, subject: string, position: number): number {
+    const { ops, first, second, visited, stack } = this;
+    let count = length;
+    let top = 0;
+    stack[top++] = start;
+    while (top > 0) {
+      const pc = stack[--top] as number;
+      if (visited[pc] === position) continue;
+      visited[pc] = position;
+      switch (ops[pc]) {
+        case OP_MATCH:
+          return -1;
+        case OP_JUMP:
+          stack[top++] = first[pc] as number;
+          break;
+        case OP_SPLIT:
+          stack[top++] = second[pc] as number;
+          stack[top++] = first[pc] as number;
+          break;
+        case OP_ASSERT:
+          if (holds(this.assertions[pc] as Assertion, subject, position)) stack[top++] = pc + 1;
+          break;
+        default:
+          list[count++] = pc;
+      }
+    }
+    return count;
+  }
 }
 
 function holds(assertion: Assertion, subject: string, position: number): boolean {

@@ -3,6 +3,41 @@
 Notable changes, newest first. Versions follow [semver](https://semver.org):
 a patch fixes behaviour without asking anything of a repository that upgrades.
 
+## Unreleased
+
+### Fixed
+
+**A glob can no longer keep a run busy for minutes.** 0.5.0 moved `~=` onto an
+automaton that cannot backtrack and left globs on `RegExp`, on the argument
+that a glob has no nested quantifiers. Nobody had timed it. Stars that are not
+nested still divide a failing subject between them every possible way:
+
+| glob | subject | `RegExp` | now |
+| --- | --- | ---: | ---: |
+| `**/*-*-*-*.md` | a 643-character hyphenated file name | 2.3s | 0.2ms |
+| `*-*-*-x` | a 10,000-character reference target | 120s | 0.9ms |
+
+The second is the one that matters: `--ignore-ref` and `ignoreReferences` are
+matched against targets read out of documents, which nothing limits the length
+of. Every glob - the patterns to check, `--ignore`, `--ignore-ref`, `--history` -
+now runs on the same automaton as `~=`, verified against the `RegExp` it
+replaces on every glob and path in a differential corpus. See
+[ADR-0017](docs/adr/0017-a-predicate-must-finish.md).
+
+- **An invalid glob names itself.** `docs/{a` used to report
+  `Invalid regular expression: /^docs\/(?:a$/i: Unterminated group`, about a
+  parenthesis nobody typed. It now reports `invalid glob "docs/{a": unclosed "{"`.
+- **`--ignore-ref` reads case the same way on every platform.** It lower-cased
+  both sides, and on Windows alone also folded case the way the `i` flag does,
+  which made a handful of distinct characters - the micro sign and the Greek
+  mu - one target there and two everywhere else.
+
+### Added
+
+- `compileGlob(pattern, { ignoreCase })`, the matcher the walk uses, and an
+  `ignoreCase` option on `compilePattern` for a pattern that must respect case.
+  `globToRegExp` is unchanged and still exported.
+
 ## 0.5.0
 
 One shipped feature turned out to have shipped a false positive, and the

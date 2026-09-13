@@ -11,6 +11,7 @@
 import { readdir, stat } from 'node:fs/promises';
 
 import { joinPosix, normalisePosix, toPosix } from './paths.js';
+import { compilePattern, type Matcher } from './regex.js';
 
 /** Directories skipped unless a pattern explicitly names them. */
 export const DEFAULT_IGNORED_DIRECTORIES: readonly string[] = Object.freeze([
@@ -64,8 +65,52 @@ export function isGlob(pattern: string): boolean {
  * `**` crosses directory separators; `*` and `?` do not. A trailing `/` or a
  * bare directory name matches everything beneath it, which is what people mean
  * when they write `--ignore drafts`.
+ *
+ * Nothing in the pipeline matches with this any more - see {@link compileGlob},
+ * which gives the same answers without the backtracking. It stays for callers
+ * who want a `RegExp`, and as the oracle the tests hold the automaton to.
  */
 export function globToRegExp(pattern: string): RegExp {
+  return new RegExp(`^${globSource(pattern)}$`, process.platform === 'win32' ? 'i' : '');
+}
+
+export interface GlobOptions {
+  /** Fold case. Defaults to the host's convention: on for Windows, off elsewhere. */
+  readonly ignoreCase?: boolean | undefined;
+}
+
+/**
+ * Compiles a glob to the automaton every matcher here uses.
+ *
+ * A glob has no nested quantifiers, and ADR-0017 took that to mean there was no
+ * backtracking hazard in handing one to `RegExp`. Nobody had timed it. Each
+ * `*` is a `[^/]*`, and against a subject that fails to match, a backtracking
+ * engine tries every way of dividing it between them - the subject's length to
+ * the power of the stars:
+ *
+ * ```text
+ *                                                              RegExp      here
+ * **\/*-*-*-*.md   a 643-character hyphenated file name          2.3s     0.2ms
+ * *-*-*-x          a 10,000-character reference target            120s     0.9ms
+ * ```
+ *
+ * The first is bounded by the filesystem, which caps a name at 255 bytes. The
+ * second is not: `--ignore-ref` patterns are matched against targets read out
+ * of documents, and a document is whatever somebody wrote.
+ */
+export function compileGlob(pattern: string, options: GlobOptions = {}): Matcher {
+  const source = globSource(pattern);
+  try {
+    return compilePattern(`^${source}$`, { ignoreCase: options.ignoreCase ?? process.platform === 'win32' });
+  } catch (error) {
+    // The message describes an expression the user never wrote, so it is told
+    // against the glob they did.
+    throw new Error(`invalid glob "${pattern}": ${(error as Error).message}`);
+  }
+}
+
+/** The expression a glob stands for, before anchors and flags. */
+function globSource(pattern: string): string {
   let source = '';
   let i = 0;
   const braces: number[] = [];
@@ -128,7 +173,9 @@ export function globToRegExp(pattern: string): RegExp {
     i += 1;
   }
 
-  return new RegExp(`^${source}$`, process.platform === 'win32' ? 'i' : '');
+  // Otherwise reported as an unmatched parenthesis, in a glob that has none.
+  if (braces.length > 0) throw new Error(`invalid glob "${pattern}": unclosed "{"`);
+  return source;
 }
 
 function escapeClass(body: string): string {
@@ -155,8 +202,8 @@ export function createGlobMatcher(patterns: readonly string[]): GlobMatcher {
     return {
       negated,
       exact: isGlob(normalised) ? null : normalised.toLowerCase(),
-      expression: globToRegExp(expanded),
-      direct: globToRegExp(normalised),
+      expression: compileGlob(expanded),
+      direct: compileGlob(normalised),
     };
   });
 
@@ -185,12 +232,17 @@ export function createGlobMatcher(patterns: readonly string[]): GlobMatcher {
  * Matching is case-insensitive on every platform. Path matching inherits the
  * host filesystem's case rules, which is right for paths and wrong here: a
  * repository's findings must not depend on which machine ran the check.
+ *
+ * Both sides are lower-cased, and that is the whole of the case rule. Folding
+ * as well used to happen on Windows only, where it made U+00B5 (micro sign)
+ * and U+03BC (mu) the same target - one machine's answer, which is what this
+ * function exists not to give.
  */
 export function createReferenceFilter(patterns: readonly string[]): (target: string) => boolean {
   if (patterns.length === 0) return () => false;
   const compiled = patterns
     .filter((pattern) => pattern.trim().length > 0)
-    .map((pattern) => globToRegExp(pattern.trim().toLowerCase()));
+    .map((pattern) => compileGlob(pattern.trim().toLowerCase(), { ignoreCase: false }));
   if (compiled.length === 0) return () => false;
   return (target: string): boolean => {
     const value = target.trim().toLowerCase();

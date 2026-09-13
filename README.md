@@ -391,7 +391,11 @@ predicate is linear in the subject whatever the pattern — `^([A-Za-z0-9_]+[ ]?
 against a fifty-four-character title takes `RegExp` 103 seconds and this 13
 microseconds. It reads the usual syntax minus backreferences and lookaround,
 which are not regular; both are refused when the selector is read, with the
-character pointed at. See [ADR-0017](docs/adr/0017-a-predicate-must-finish.md).
+character pointed at. Globs - the patterns to check, `--ignore`, `--ignore-ref`,
+`--history` - are matched by the same automaton, because a glob with three stars
+in it is
+enough to keep `RegExp` busy for two minutes over a long reference target. See
+[ADR-0017](docs/adr/0017-a-predicate-must-finish.md).
 
 On a register, a region answers its file's front matter for every descriptive
 key — `fm.owner` on a decision inside a register is the register's owner — while

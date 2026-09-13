@@ -42,7 +42,7 @@ files ─▶ markdown.ts ─▶ extract.ts ─▶ resolve.ts ─▶ graph.ts ─
 | `resolve.ts` | References → edges, or reportable foreign-key failures. |
 | `graph.ts` | Indexed, immutable graph. Adjacency, reachability, Tarjan. |
 | `select.ts` | The selector language: parser and execution engine. |
-| `regex.ts` | The matcher behind `~=`: an automaton that cannot backtrack. |
+| `regex.ts` | The matcher behind `~=` and every glob: an automaton that cannot backtrack. |
 | `rules.ts` | The diagnostics. Two of them are selector queries. |
 | `project-rules.ts` | Selectors a repository declared, compiled and checked. |
 | `report.ts` | Terminal, JSON, Graphviz and Mermaid output. |
@@ -110,6 +110,7 @@ its tests do not assert what its author believed about regular expressions —
 they run both engines over the same patterns and subjects and compare. That is
 what caught a clause of the language specification being read backwards, and it
 is the pattern to copy for anything else that re-implements something standard.
+`glob.ts` holds its automaton to the `RegExp` it replaced the same way.
 
 ## Style
 
