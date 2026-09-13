@@ -21,6 +21,10 @@ describe('the source tree', () => {
   function* walk(directory: string): Generator<string> {
     for (const entry of readdirSync(directory, { withFileTypes: true })) {
       const path = `${directory}/${entry.name}`;
+      // `.tmp` holds what other test files write and delete while this one
+      // runs, so a file listed here can be gone before it is read. None of it
+      // is committed, which is what these checks are about.
+      if (entry.isDirectory() && entry.name === '.tmp') continue;
       if (entry.isDirectory()) yield* walk(path);
       else if (/\.(ts|js|mjs|json|md)$/.test(entry.name)) yield path;
     }
@@ -36,6 +40,21 @@ describe('the source tree', () => {
     // kind of thing that gets mangled on its way into a file.
     const NUL = String.fromCharCode(0);
     const offenders = files.filter((file) => readFileSync(file, 'utf8').includes(NUL));
+    expect(offenders).toEqual([]);
+  });
+
+  it('contains no other control characters, in the prose as well as the code', () => {
+    // A backspace reached the 0.5.0 changelog where a shell had collapsed the
+    // escape for a word boundary, and it shipped: an empty code span, in the
+    // repository and in the published package. The check above looks for one
+    // character, and never at the changelog or the ADRs.
+    const prose = [...walk('docs'), 'CHANGELOG.md', 'CLAUDE.md'];
+    const control = (code: number): boolean => (code < 32 && code !== 9 && code !== 10) || code === 127;
+    const offenders = [...files, ...prose].filter((file) => {
+      const text = readFileSync(file, 'utf8');
+      for (let i = 0; i < text.length; i += 1) if (control(text.charCodeAt(i))) return true;
+      return false;
+    });
     expect(offenders).toEqual([]);
   });
 

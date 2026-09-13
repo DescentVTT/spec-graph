@@ -20,8 +20,9 @@ These are not preferences. Breaking one is a decision that needs an ADR.
 - **Strict types.** `strict`, plus `noUncheckedIndexedAccess`,
   `exactOptionalPropertyTypes`, `noUnusedLocals`, `noUnusedParameters`.
 - **Vitest 4** for tests, **Stryker** for mutation testing.
-- **LF line endings, no NUL bytes.** Enforced by `tests/docs.test.ts`; a stray
-  NUL makes a file read as binary to grep, diff and review tooling.
+- **LF line endings, no control characters.** Enforced by `tests/docs.test.ts`;
+  a stray NUL makes a file read as binary to grep, diff and review tooling, and
+  an escape a shell collapsed into its character renders as nothing at all.
 - **I/O stays at the edges.** `glob.ts` walks, `runner.ts` reads, `config.ts`
   loads configuration, `cli.ts` looks up its own version. Everything between -
   the scanner, extraction, resolution, the graph, the rules, the reporters - is
