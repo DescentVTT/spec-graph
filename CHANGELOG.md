@@ -211,7 +211,9 @@ function of text. See
 | `npm run lint` | pass |
 | `npm test` | 833 passing, 21 files |
 | `npm run selfcheck` | pass, over 21 documents and 159 relations |
-| `npm run test:mutation` | **80.54%** over 9,697 mutants, 74m27s |
+| `npm run test:mutation` | 80.54% over 9,697 mutants, 74m27s |
+| hosted full run, which governs | **76.83%**, 168m06s |
+| hosted incremental run, same commit | 76.43%, 64m27s |
 | `break` | unchanged at 70 |
 
 79.41% over 8,585 mutants at 0.4.0 against 80.54% over 9,697 here, on the same
@@ -235,8 +237,23 @@ in between changed which tests `perTest` believes cover which mutants.
 [ADR-0007](docs/adr/0007-mutation-testing.md) has recorded that shape for two
 releases, and it is why a per-file drop is a question and not an answer.
 
-The hosted number is the one that governs, because it is where the build fails,
-and it comes from CI on push. 75.40% from 0.4.0 stands until it does.
+The hosted number is the one that governs, because it is where the build fails:
+**76.83%**, up from 75.40% at 0.4.0. Lose every timeout and it reads 73.31%, the
+first time the pessimistic figure has cleared the guard by more than three
+points.
+
+The incremental run on the same commit read 0.40 points low - the third
+observation after 3.18 high at 0.3.0 and 1.29 low at 0.4.0, and the reason
+[ADR-0007](docs/adr/0007-mutation-testing.md) calls it a signal rather than a
+figure. The tag's run also saved its own report to the cache, which is the first
+time the cache-key fix from 0.4.0 has been seen doing its job.
+
+**The rebuild took 168 of its 180 minutes.** 13% more mutants than 0.4.0, and 63%
+longer on the hosted runner against 15% longer locally. At 0.4.0's old cap of
+120 it would have been cancelled with nothing reported. The cause is not yet
+attributed - runner variance and the new differential test are both candidates -
+and the choice between raising the cap again and cutting per-mutant cost is left
+open in ADR-0007 until it is.
 
 ## 0.4.0
 

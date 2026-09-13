@@ -37,7 +37,7 @@ All four must pass before anything is called done.
 npm run lint            # tsc --noEmit
 npm test                # vitest
 npm run selfcheck       # spec-graph validates its own ADRs
-npm run test:mutation   # stryker; ~30 minutes
+npm run test:mutation   # stryker; about 75 minutes locally
 ```
 
 Two thresholds are regression guards, set below the last measurement. They move
@@ -45,19 +45,21 @@ Two thresholds are regression guards, set below the last measurement. They move
 accommodate a regression:
 
 - **Mutation score >= 70** (`break` in `stryker.config.mjs`). Two numbers, and
-  the difference matters: **75.40% on the hosted runner** at 0.4.0, and 80.54%
-  over 9,697 mutants on a developer machine at 0.5.0. The hosted one governs -
+  the difference matters: **76.83% on the hosted runner** at 0.5.0, and 80.54%
+  over the same 9,697 mutants on a developer machine. The hosted one governs -
   it is where the build fails. `perTest` attribution moves with worker count,
   with how many files are mutated, and with the platform, by up to sixteen
   points on a single file - and two runs of *identical source* on one machine
   moved nine untouched files by more than a point each, in both directions. An
   incremental run is a fast signal and not a verdict, in **either** direction:
-  at 0.3.0 it read 3.18 points high against a full rebuild of the same commit,
-  and at 0.4.0 it read 1.29 points low against one. It also stops being fast -
-  after a broad change it has nothing to reuse, and 0.4.0's incremental run
-  billed 110 minutes against the rebuild's 103. See ADR-0007. The guard stays at
-  70 because ~300 mutants are detected by timeout, and losing all of them takes
-  the local figure to 77.00% and the hosted one to 71.76%.
+  against a full rebuild of the same commit it read 3.18 points high at 0.3.0,
+  1.29 low at 0.4.0 and 0.40 low at 0.5.0. Its cost varies as much - 110 minutes
+  when a broad change left nothing to reuse, 64 when half the corpus was reused.
+  See ADR-0007. The guard stays at 70 because ~340 mutants are detected by
+  timeout, and losing all of them takes the local figure to 77.00% and the
+  hosted one to 73.31%. The hosted full run took 168 of its job's 180 minutes at
+  0.5.0, cause not yet attributed; check that headroom before adding a slow
+  test.
 - **Coverage floors** in `vitest.config.ts`. Branches sits lowest on purpose;
   the remainder is defensive fallbacks and platform paths of which only one can
   run per machine.

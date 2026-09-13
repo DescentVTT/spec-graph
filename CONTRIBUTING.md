@@ -97,7 +97,7 @@ for the case that must *not* match — those are the ones that matter.
 
 ```bash
 npm run test:coverage   # thresholds are floors, not targets
-npm run test:mutation   # stryker; takes ~25 minutes
+npm run test:mutation   # stryker; about 75 minutes locally
 ```
 
 Mutation testing matters here more than coverage does. This codebase is built out

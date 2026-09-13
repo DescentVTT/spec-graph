@@ -190,6 +190,41 @@ is: a declaration in a comment that had drifted from what the code did, in the
 CI of the tool built to find exactly that, found by reading a log instead of
 trusting the comment.
 
+*Confirmed again 2026-09-13.* 0.5.0 gives the third observation, again the
+`main` push against the tag on one commit, `940f8e2`, on the hosted runner:
+
+| | score | mutants | killed | timeout | survived | minutes |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| full rebuild | 76.83 | 9,697 | 7,109 | 341 | 2,023 | 168 |
+| incremental | 76.43 | 9,697 | 7,064 | 347 | 2,062 | 64 |
+
+**0.40 points low.** Three releases, three readings - 3.18 high, 1.29 low, 0.40
+low - and the spread is the whole finding: incremental is a signal about the
+direction of a change, and never a figure to quote.
+
+This time it did reuse something: 4,465 of the 9,697 results came from the cache,
+and the run took 64 minutes to the rebuild's 168. So the cost of the gate on a
+release is not a constant either - it depends on how much of the corpus the
+change leaves alone.
+
+**A per-file gap in an incremental run looked like staleness, and mostly was
+not.** Against the local full run, the incremental one read `lifecycle.ts` 18
+points low, `directives.ts` 7 and `yaml.ts` 8, all files 0.5.0 never touched. The
+tempting reading was that those were cached results from an older lineage, and
+the first reading of the incremental result said so, as a question. The rebuild answered it:
+`directives.ts` and `yaml.ts` scored identically in both hosted runs, and only
+`lifecycle.ts` moved much (53.88 to 62.40, still nine points under local). Most
+of that gap is the hosted-against-local attribution difference this ADR already
+describes. Worth recording because the wrong answer came with a plausible
+mechanism attached, and the only thing that separated them was running the full
+measurement rather than reasoning about the partial one.
+
+**And the rebuild recorded itself.** The tag's run logged `Cache saved with key:
+stryker-Linux-34724969717`, which is the correction the cache-key change above was
+made for, observed for the first time: the next incremental starts from a full
+report rather than from a lineage of inferences.
+
+
 This also corrects the headroom, in the useful direction for once. Against 73.32%
 with 305 timeouts - four percent of the corpus, and a timeout is a timing
 measurement - a bad run read 69.3%, which is *below* the guard. Against 0.3.0's
@@ -202,6 +237,32 @@ enough margin to justify moving it.
 case reads 71.76% - half a point better again. Three releases of the guard
 holding while the pessimistic reading climbed from below it to a point and three
 quarters above it is an argument for leaving it exactly where it is.
+
+0.5.0's hosted figure is 76.83% with 341 timeouts of 9,697, so the worst case
+reads 73.31%, the first time it has cleared the guard by more than three points.
+Four releases of the same argument, and it still does not justify moving the
+floor: the local figure over the same mutants is 80.54%, 3.71 higher, and that
+gap has been about four points for two releases.
+
+**The run nearly did not finish.** The rebuild took **168 minutes against a
+job cap of 180.** 0.4.0's took 103 minutes on 8,585 mutants; 0.5.0 has 13% more
+mutants and took 63% longer, while the local full run grew only 15%, from 64m30s
+to 74m27s. The cap was raised from 120 at 0.4.0 on the argument that a ceiling
+costs nothing unless it is reached; at 120 this run would have been cancelled at
+two hours and reported nothing, and the release would have had no governing
+figure at all.
+
+The cause is not established, and two candidates are on the table without
+either being measured. Hosted runner speed has moved this number before - 80
+minutes to 103 on a 6% larger corpus between 0.3.0 and 0.4.0. And `regex.ts`
+arrived with a differential test that compares two engines over roughly 19,000
+pattern-subject pairs, which `perTest` re-runs for every one of that module's
+~770 mutants it covers; locally that suite takes about 130 ms, which accounts for
+minutes of worker time rather than an hour, but the hosted multiplier is
+unknown. Twelve minutes of headroom is the position that once produced fourteen
+consecutive cancelled runs, so this is recorded as an open question rather than
+as a comfortable margin.
+
 
 **Read "no coverage" before reading the score.** The v0.2.0 modules landed at
 74.61% and 83.08%, and the number worth acting on was neither: it was that 42 of
@@ -343,6 +404,12 @@ changes are wrong.
       measures async modules honestly, and at roughly seven times the runtime
       it would not fit a per-push job. A nightly `all` run against a weekly
       `perTest` one would give both, at the cost of a second workflow.
+- [ ] The full hosted run took 168 of its 180 minutes at 0.5.0. Raise the cap
+      again - a hosted job may run for 360 - or make the per-mutant test cost
+      smaller? Neither should be chosen before the time is attributed: runner
+      variance and the new differential test in `regex.test.ts` are both
+      plausible, and a cap raised to cover an unmeasured cause is the same
+      guess as a floor lowered to cover an unmeasured regression.
 
 ## See also
 
