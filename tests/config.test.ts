@@ -285,6 +285,30 @@ describe('discovering a configuration upward', () => {
     // discovery off - so the useful property is that the walk terminates.
     expect(discoverConfig('docs/adr', tree({})).root).toBe('docs/adr');
   });
+
+  it("stops at a linked worktree's .git file, which is not a directory", async () => {
+    // The injected tree cannot tell a file from a directory, and this is where
+    // the difference matters. A linked worktree has a `.git` file pointing at its
+    // main checkout, and one nested inside that checkout is common. A boundary
+    // that asked for a directory would walk out of the worktree and read the
+    // main checkout's configuration - another branch's rules, silently.
+    const base = 'tests/fixtures/.tmp/worktree';
+    await rm(base, { recursive: true, force: true });
+    await mkdir(`${base}/nested/docs`, { recursive: true });
+    await writeFile(`${base}/${CONFIG}`, '{"strict":true}');
+    await writeFile(`${base}/nested/.git`, 'gitdir: ../.git/worktrees/nested\n');
+    try {
+      const found = discoverConfig(`${base}/nested/docs`);
+      expect(found.source).toBeNull();
+      expect(found.root).toBe(`${base}/nested/docs`);
+
+      // And the file is what stopped it: without one, the same walk escapes.
+      await rm(`${base}/nested/.git`);
+      expect(discoverConfig(`${base}/nested/docs`).root).toBe(base);
+    } finally {
+      await rm(base, { recursive: true, force: true });
+    }
+  });
 });
 
 /* -------------------------------------------------------------------------- */

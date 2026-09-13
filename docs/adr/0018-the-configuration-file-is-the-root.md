@@ -115,10 +115,21 @@ root.
 
 ## Open Questions
 
-- [ ] Should the walk look inside `.git/..` for a worktree's real root? A
+- [x] Should the walk look inside `.git/..` for a worktree's real root? A
       linked worktree has a `.git` *file* rather than a directory, which
       `existsSync` already stops at, so the boundary holds. Following it to the
       main checkout would be a different and worse answer.
+      **Resolved (2026-09-13): no - and the boundary is tested now, not only
+      stated.** Run against a real linked worktree nested inside its main
+      checkout, discovery stopped at the worktree's `.git` file and found no
+      configuration. With that file moved aside, the same run printed
+      `configuration: ../../../.spec-graph.json`: the main checkout's file,
+      describing another branch. So the file is load-bearing, and the claim
+      above rested on nothing a test would notice losing - the injected tree
+      the other discovery tests use cannot tell a file from a directory. The
+      test for this one writes both to disk. A submodule has the same kind of
+      `.git` file and gets the same answer, which is right: it is a repository
+      of its own.
 - [ ] Should a monorepo be able to declare several roots in one run? Several
       roots is several runs today, and the one thing that would make it worth
       changing - a shared graph across packages - is the cross-repository
