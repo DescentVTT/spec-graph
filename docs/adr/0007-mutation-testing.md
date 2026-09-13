@@ -299,6 +299,41 @@ carries the event name now. Two runs on `main` can then overlap, and the prefix
 restore takes whichever saved last, which is the rebuild unless a push that
 started during it also finishes after it.
 
+**The first rebuild that wrote a report, and what it measured.** *2026-09-13.* A
+manual dispatch on `main` at `5d0bfa3`, whose `src/` and `tests/` are
+byte-identical to the `v0.5.0` tag's, ran the full step with the new flags. It
+logged "Force mode is activated, all mutants will be retested" and reused 0 of
+9,697 results. It restored 608,492 bytes and saved 620,579 - twelve thousand
+bytes apart, where every rebuild before it saved within eight bytes of what it
+had restored.
+
+The same mutants, the same tests, two hosted full runs:
+
+| | score | killed | timeout | survived | minutes |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `v0.5.0` tag | 76.83 | 7,109 | 341 | 2,023 | 168 |
+| dispatch on `main` | 76.39 | 7,062 | 346 | 2,065 | 171 |
+
+Two things follow. **A full run is a sample too.** 0.44 points separate two
+rebuilds of one source, and nearly all of it is one file: `markdown.ts` read
+74.36 and then 71.43, 33 more survivors on code nobody touched. The per-file
+attribution noise this ADR describes for incremental runs is in the rebuild as
+well, so a release's figure carries about half a point of it.
+
+**And the time is the work, not the runner.** 168 minutes reproduced as 171, so
+the jump from 103 at 0.4.0 is not runner variance. The same log names the cost:
+"Detected 5304 static mutants (55% of total) that are estimated to take 95% of
+the time running the tests". A static mutant is one whose code runs outside any
+test, which `perTest` cannot attribute to a test, so Stryker runs the whole suite
+for it. The local 0.5.0 report agrees: of 1,198,095 tests executed, 1,172,141
+were for static mutants. 5,304 is far more than the module-level tables in `src/`
+could account for, and several test files analyse a corpus while they are being
+collected rather than inside a test - at module scope in `pathological.test.ts`
+and `select.test.ts`, in `describe` bodies in `ecosystems.test.ts`,
+`select.test.ts` and `report.test.ts`. Everything those analyses execute is
+static. That is the likely cause and not yet a confirmed one: confirming it means
+moving one and counting again, which is a change under `tests/`.
+
 
 This also corrects the headroom, in the useful direction for once. Against 73.32%
 with 305 timeouts - four percent of the corpus, and a timeout is a timing
@@ -492,6 +527,12 @@ changes are wrong.
       sample cannot tell them apart. Identical source measured again on a
       hosted runner can, because only the runner differs - so the samples are
       worth taking before anything under `src/` or `tests/` changes.
+      *Partly answered (2026-09-13):* the second sample took 171 minutes, so
+      it is not the runner, and the cost is in static mutants rather than in
+      any one test - see above. The Monday schedule on the same source is the
+      third sample. After it, the experiment is to move the collection-time
+      analyses into the tests that use them and count the static mutants
+      again.
 
 ## See also
 

@@ -50,16 +50,20 @@ accommodate a regression:
   it is where the build fails. `perTest` attribution moves with worker count,
   with how many files are mutated, and with the platform, by up to sixteen
   points on a single file - and two runs of *identical source* on one machine
-  moved nine untouched files by more than a point each, in both directions. An
-  incremental run is a fast signal and not a verdict, in **either** direction:
+  moved nine untouched files by more than a point each, in both directions. Two
+  hosted *full* runs of one source read 76.83 and 76.39, so a release figure
+  carries about half a point of noise. An incremental run is a fast signal and
+  not a verdict, in **either** direction:
   against a full rebuild of the same commit it read 3.18 points high at 0.3.0,
   1.29 low at 0.4.0 and 0.40 low at 0.5.0. Its cost varies as much - 110 minutes
   when a broad change left nothing to reuse, 64 when half the corpus was reused.
   See ADR-0007. The guard stays at 70 because ~340 mutants are detected by
   timeout, and losing all of them takes the local figure to 77.00% and the
-  hosted one to 73.31%. The hosted full run took 168 minutes at 0.5.0 against a
-  cap of 180, since raised to 240, and the cause is not yet attributed; check
-  the headroom before adding a slow test.
+  hosted one to 73.31%. The hosted full run took 168 minutes at 0.5.0 and 171
+  on a second run of the same source, against a cap now raised to 240. The time
+  is the work: 55% of mutants are static, and a static mutant that survives
+  runs the whole suite, so a slow test can cost its duration thousands of times
+  over. Check the headroom before adding one.
 - **Coverage floors** in `vitest.config.ts`. Branches sits lowest on purpose;
   the remainder is defensive fallbacks and platform paths of which only one can
   run per machine.
