@@ -181,11 +181,14 @@ rebuild that was supposed to supersede it had measured 75.40.
 Which makes the paragraph above worse than it read. The claim was that a wrong
 inference is bounded because a full run is unconditional on a tag and on Mondays.
 The full run happened; its result was thrown away; the next inference started from
-the wrong report anyway. The bound held only through the Monday rebuild, whose
-commit usually has no earlier run to collide with.
+the wrong report anyway. The bound held only through the Monday rebuild - and
+not for the reason first given here, that its commit has no earlier run to
+collide with. The real reason is the cache's scoping, found a release later and
+recorded below.
 
 The key is `github.run_id` now, which is unique, so every run saves and the
-prefix restore picks up whichever finished last. Worth writing down for what it
+prefix restore picks up the most recent entry it is allowed to see - which, as
+0.5.0 showed, never includes a tag's. Worth writing down for what it
 is: a declaration in a comment that had drifted from what the code did, in the
 CI of the tool built to find exactly that, found by reading a log instead of
 trusting the comment.
@@ -209,20 +212,50 @@ change leaves alone.
 
 **A per-file gap in an incremental run looked like staleness, and mostly was
 not.** Against the local full run, the incremental one read `lifecycle.ts` 18
-points low, `directives.ts` 7 and `yaml.ts` 8, all files 0.5.0 never touched. The
-tempting reading was that those were cached results from an older lineage, and
-the first reading of the incremental result said so, as a question. The rebuild answered it:
-`directives.ts` and `yaml.ts` scored identically in both hosted runs, and only
-`lifecycle.ts` moved much (53.88 to 62.40, still nine points under local). Most
-of that gap is the hosted-against-local attribution difference this ADR already
-describes. Worth recording because the wrong answer came with a plausible
-mechanism attached, and the only thing that separated them was running the full
-measurement rather than reasoning about the partial one.
+points low, `directives.ts` 7 and `yaml.ts` 8, all files 0.5.0 never touched.
+The tempting reading was that those were cached results from an older lineage,
+and the first reading of the incremental result said so, as a question. The
+rebuild answered it: `directives.ts` and `yaml.ts` scored identically in both
+hosted runs, and only `lifecycle.ts` moved much (53.88 to 62.40, still nine
+points under local). Most of that gap is the hosted-against-local attribution
+difference this ADR already describes. Worth recording because the wrong answer
+came with a plausible mechanism attached, and the only thing that separated them
+was running the full measurement rather than reasoning about the partial one.
 
-**And the rebuild recorded itself.** The tag's run logged `Cache saved with key:
-stryker-Linux-34724969717`, which is the correction the cache-key change above was
-made for, observed for the first time: the next incremental starts from a full
-report rather than from a lineage of inferences.
+**The rebuild saved its report, and it still could not reach `main`.** The tag's
+run logged `Cache saved with key: stryker-Linux-34724969717`, and this ADR first
+read that as the correction arriving at last. The next push to `main` said
+otherwise. A documentation commit, reusing 9,696 of 9,697 results, restored from
+`stryker-Linux-34713469263` - the previous *incremental* run on `main` - and read
+76.44: the incremental lineage to within a hundredth, not the rebuild's 76.83.
+
+The reason is a rule of the cache rather than of this workflow. A run can restore
+only caches created on its own ref or on the default branch, and the cache list
+shows where each entry lives:
+
+```text
+stryker-Linux-34735515258   refs/heads/main     push, the docs commit after the tag
+stryker-Linux-34724969717   refs/tags/v0.5.0    the tag's full rebuild
+stryker-Linux-34713469263   refs/heads/main     push, the release commit, incremental
+```
+
+A tag's run can read `main`'s entries - which is exactly how 0.4.0's tag found a
+primary-key hit and declined to save - and nothing on `main` can read a tag's. So
+keying on the run fixed the discard and not the lineage, and the lineage was never
+fixable from a tag at all. 0.3.0 had already shown it, unread: its tag *did* save,
+under `refs/tags/v0.3.0`, with no collision to stop it, and `main` never saw that
+report either.
+
+So a wrong incremental inference is bounded by exactly one thing: **a full run
+whose cache lands on `main`** - the Monday schedule, or a manual dispatch on
+`main`. The tag's rebuild is still the figure a release quotes, because it
+measures the tagged commit from nothing. It corrects nothing that runs after it.
+
+This is the failure this section already records, one layer further down. A
+comment said keying on the commit gave every run a fresh entry; the fix for that
+said the prefix restore would pick up the tag's rebuild; and this ADR said the
+next incremental would start from a full report. Each was a mechanism described
+from its configuration and believed until a log was read.
 
 
 This also corrects the headroom, in the useful direction for once. Against 73.32%

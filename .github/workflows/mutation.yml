@@ -86,9 +86,15 @@ jobs:
       # correct it had measured 75.40.
       #
       # So the one place a wrong inference was guaranteed to be caught could not
-      # record having caught it. A run id is unique, so every run saves, and the
-      # prefix restore picks up whichever finished last - which is the full one,
-      # on the tag and on the Monday rebuild. See ADR-0007.
+      # record having caught it. A run id is unique, so every run saves.
+      #
+      # What that does not do is carry a tag's rebuild into `main`. A run can
+      # restore only caches from its own ref or the default branch, so the entry
+      # a tag's full run saves lives under refs/tags/... where no later push can
+      # read it - at 0.5.0 the next push restored the incremental lineage and read
+      # 76.44 against the tag's 76.83. The prefix restore on `main` picks up the
+      # last run that saved on `main`, so the only full runs that correct it are
+      # the Monday schedule and a manual dispatch on `main`. See ADR-0007.
       - name: Restore the incremental report
         uses: actions/cache@v4
         with:
