@@ -66,7 +66,7 @@ export {
 } from './select.js';
 
 export { compilePattern, PatternError } from './regex.js';
-export type { Matcher } from './regex.js';
+export type { Matcher, PatternOptions } from './regex.js';
 export type {
   ExecuteOptions,
   Match,
@@ -166,6 +166,7 @@ export {
 export type { DocumentIdentity, IdentityInput } from './identity.js';
 
 export {
+  compileGlob,
   createGlobMatcher,
   createReferenceFilter,
   globBase,
@@ -175,7 +176,7 @@ export {
   DEFAULT_IGNORED_DIRECTORIES,
   MAX_FILE_SIZE,
 } from './glob.js';
-export type { GlobMatcher, WalkedFile, WalkOptions } from './glob.js';
+export type { GlobMatcher, GlobOptions, WalkedFile, WalkOptions } from './glob.js';
 
 export { compareRefs, createLineIndex, formatRef, refOf, spanOf } from './source.js';
 export type { LineIndex } from './source.js';
