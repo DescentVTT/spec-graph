@@ -202,8 +202,8 @@ describe('human report', () => {
   });
 
   it('colours the output only when asked', () => {
-    expect(formatReport(result(), { color: true })).toContain('[');
-    expect(formatReport(result(), { color: false })).not.toContain('[');
+    expect(formatReport(result(), { color: true })).toContain('\u001b[');
+    expect(formatReport(result(), { color: false })).not.toContain('\u001b[');
   });
 
   it('lists parse problems only in verbose mode', () => {
