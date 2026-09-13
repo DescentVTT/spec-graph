@@ -28,6 +28,8 @@ describe('glob compilation', () => {
     expect(matches('docs/**/*.md', 'docs/adr/deep/a.md')).toBe(true);
     // `a/**/b` must also match `a/b`, which is what people expect from the form.
     expect(matches('docs/**/*.md', 'docs/a.md')).toBe(true);
+    // Folding the separator in does not make it optional inside a name.
+    expect(matches('a/**/b', 'a/xb')).toBe(false);
   });
 
   it('matches one character with ?', () => {
@@ -44,10 +46,17 @@ describe('glob compilation', () => {
     expect(matches('adr/[01]*.md', 'adr/0007.md')).toBe(true);
     expect(matches('adr/[!0]*.md', 'adr/0007.md')).toBe(false);
     expect(matches('adr/[!0]*.md', 'adr/x.md')).toBe(true);
+    // `!` negates and is not itself a member; `^` is only a character.
+    expect(matches('[!a]', '!')).toBe(true);
+    expect(matches('[^a]', '^')).toBe(true);
+    expect(matches('[^a]', 'b')).toBe(false);
   });
 
-  it('treats an unmatched bracket as a literal', () => {
+  it('treats an unmatched bracket, brace or comma as a literal', () => {
     expect(matches('a[b.md', 'a[b.md')).toBe(true);
+    expect(matches('a][b]', 'a]b')).toBe(true);
+    expect(matches('a}b', 'a}b')).toBe(true);
+    expect(matches('a,b', 'a,b')).toBe(true);
   });
 
   it('escapes regex metacharacters in literal text', () => {
@@ -64,6 +73,8 @@ describe('glob compilation', () => {
     expect(compileGlob('Docs/*.md', { ignoreCase: false }).test('docs/a.md')).toBe(false);
     expect(compileGlob('Docs/*.md', { ignoreCase: true }).test('docs/a.md')).toBe(true);
     expect(compileGlob('Docs/*.md').test('docs/a.md')).toBe(process.platform === 'win32');
+    // The RegExp kept for callers reads case the same way by default.
+    expect(globToRegExp('Docs/*.md').test('docs/a.md')).toBe(process.platform === 'win32');
   });
 
   it('names the glob, not the expression it became, when one does not compile', () => {

@@ -129,6 +129,7 @@ const SPACE: readonly Range[] = [
  */
 function canonical(code: number): number {
   // Every subject a glob sees is mostly ASCII, where the answer needs no string.
+  // The general path below gives the same answer here, only slower.
   if (code < 128) return code >= 97 && code <= 122 ? code - 32 : code;
   const upper = String.fromCharCode(code).toUpperCase();
   if (upper.length !== 1) return code;
@@ -764,6 +765,7 @@ const OP_JUMP = 2;
 const OP_ASSERT = 3;
 const OP_MATCH = 4;
 
+/** Fills the slots of states that are not characters, where nothing reads it. */
 const NOTHING: CharSet = { negated: false, ranges: [] };
 
 /**
@@ -882,6 +884,12 @@ class Machine {
    * end of the pattern: the only question is whether a match exists, so there
    * is no leftmost-longest to settle and no captures to keep, and the first
    * thread to arrive is the answer.
+   *
+   * A stray thread at state 0 changes no answer: an unanchored pattern seeds it
+   * at every position anyway, and an anchored one opens by asserting the start.
+   * That makes two mutants here equivalent, with no test to write - the loop
+   * running once past an empty stack, and a jump read as a split, both of which
+   * add exactly that thread.
    */
   private seed(list: Int32Array, length: number, start: number, subject: string, position: number): number {
     const { ops, first, second, visited, stack } = this;
