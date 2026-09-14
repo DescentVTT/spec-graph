@@ -250,12 +250,16 @@ const CORPUS: Record<string, string> = {
 };
 
 const sources = (): Source[] => Object.entries(CORPUS).map(([path, text]): Source => ({ path, text }));
-const analysed = analyseSources(sources());
+// Analysed inside each test that reads it, never once when this file is
+// collected: Stryker counts work done before any test is named as static, and
+// every mutant it reaches reruns the whole suite (ADR-0007).
+const analyse = () => analyseSources(sources());
 
 /* -------------------------------------------------------------------------- */
 
 describe('a corpus written to break the scanner', () => {
   it('answers, for every file it was handed', () => {
+    const analysed = analyse();
     // Reaching this line at all is most of the assertion: a scanner that
     // backtracked without bound or recursed without a floor would never return.
     for (const path of Object.keys(CORPUS)) {
@@ -267,6 +271,7 @@ describe('a corpus written to break the scanner', () => {
   });
 
   it('gives every node an id that is a name', () => {
+    const analysed = analyse();
     // A directive inside a JavaScript string parses its bare value as a lone
     // backslash, and a document called `\` collides with every other one that
     // made the same mistake.
@@ -276,6 +281,7 @@ describe('a corpus written to break the scanner', () => {
   });
 
   it('leaves no edge pointing at a node that is not there', () => {
+    const analysed = analyse();
     for (const edge of analysed.graph.edges) {
       expect(analysed.graph.node(edge.from), edge.from).toBeDefined();
       expect(analysed.graph.node(edge.to), edge.to).toBeDefined();
@@ -283,6 +289,7 @@ describe('a corpus written to break the scanner', () => {
   });
 
   it('puts every finding somewhere a reader can go', () => {
+    const analysed = analyse();
     for (const diagnostic of analysed.diagnostics) {
       expect(Object.keys(CORPUS)).toContain(diagnostic.at.file);
       expect(diagnostic.at.span.start.line).toBeGreaterThan(0);
@@ -293,6 +300,7 @@ describe('a corpus written to break the scanner', () => {
   });
 
   it('does not lose the real relations among the wreckage', () => {
+    const analysed = analyse();
     // The corpus is hostile, not empty. Most files above cite ADR-0001 in some
     // form, and degrading gracefully must not mean degrading to nothing.
     const reaching = new Set(analysed.graph.in('ADR-0001').map((edge) => edge.from));

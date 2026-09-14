@@ -599,9 +599,11 @@ describe('markdown report', () => {
 });
 
 describe('graph export', () => {
-  const { graph } = analyseSources(SOURCES);
-
+  // Each test analyses the corpus itself. Work done in a describe body runs before
+  // any test is named, and Stryker counts every mutant it reaches as static -
+  // one that reruns the whole suite (ADR-0007).
   it('emits valid Graphviz with a node per document', () => {
+    const { graph } = analyseSources(SOURCES);
     const dot = formatGraph(graph, 'dot');
     expect(dot).toContain('digraph spec {');
     expect(dot.trimEnd().endsWith('}')).toBe(true);
@@ -610,6 +612,7 @@ describe('graph export', () => {
   });
 
   it('colours documents by phase', () => {
+    const { graph } = analyseSources(SOURCES);
     const dot = formatGraph(graph, 'dot');
     // Retired and active must not look the same.
     expect(dot).toMatch(/"ADR-0002".*fillcolor="#fce8e6"/);
@@ -617,6 +620,7 @@ describe('graph export', () => {
   });
 
   it('draws items differently from documents', () => {
+    const { graph } = analyseSources(SOURCES);
     // An obligation is not a decision, and a reader scanning the graph should
     // not have to read the label to tell them apart.
     const dot = formatGraph(graph, 'dot');
@@ -633,12 +637,14 @@ describe('graph export', () => {
   });
 
   it('draws contains edges differently from relations', () => {
+    const { graph } = analyseSources(SOURCES);
     const dot = formatGraph(graph, 'dot');
     expect(dot).toMatch(/label="contains", style=dotted/);
     expect(dot).toMatch(/label="delegates-to"\]/);
   });
 
   it('emits Mermaid with safe identifiers', () => {
+    const { graph } = analyseSources(SOURCES);
     const mermaid = formatGraph(graph, 'mermaid');
     expect(mermaid).toMatch(/^graph LR/);
     expect(mermaid).toContain('classDef retired');
@@ -655,6 +661,7 @@ describe('graph export', () => {
   });
 
   it('emits JSON with declaration sites intact', () => {
+    const { graph } = analyseSources(SOURCES);
     const parsed: { nodes: unknown[]; edges: { declaredIn: string[] }[] } = JSON.parse(formatGraph(graph, 'json'));
     expect(parsed.nodes.length).toBe(graph.nodes.size);
     expect(parsed.edges.every((edge) => edge.declaredIn.length > 0)).toBe(true);

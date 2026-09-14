@@ -34,9 +34,13 @@ const SOURCES: Source[] = [
   },
 ];
 
-const graph: SpecGraph = analyseSources(SOURCES).graph;
+// Analysed inside each test that reads it, never once when this file is
+// collected. Work done before any test is named is counted by Stryker as static,
+// and every mutant it reaches reruns the whole suite (ADR-0007). The corpus is
+// four documents, so analysing it again costs a millisecond.
+const corpus = (): SpecGraph => analyseSources(SOURCES).graph;
 const ids = (selector: string): string[] =>
-  query(graph, selector).map((match) => match.nodes[match.nodes.length - 1]?.id ?? '');
+  query(corpus(), selector).map((match) => match.nodes[match.nodes.length - 1]?.id ?? '');
 
 /* -------------------------------------------------------------------------- */
 
@@ -142,10 +146,13 @@ describe('parsing', () => {
 });
 
 describe('attributes', () => {
-  const base = graph.document('ADR-0001');
-  const item = graph.items.find((node) => node.disposition === 'narrowed');
+  const nodes = () => {
+    const graph = corpus();
+    return { graph, base: graph.document('ADR-0001'), item: graph.items.find((node) => node.disposition === 'narrowed') };
+  };
 
   it('exposes shared attributes on both node kinds', () => {
+    const { base, item } = nodes();
     expect(attributesOf(base!, 'id')).toEqual(['ADR-0001']);
     expect(attributesOf(base!, 'kind')).toEqual(['document']);
     expect(attributesOf(item!, 'kind')).toEqual(['item']);
@@ -154,6 +161,7 @@ describe('attributes', () => {
   });
 
   it('exposes document attributes', () => {
+    const { base } = nodes();
     expect(attributesOf(base!, 'phase')).toEqual(['active']);
     expect(attributesOf(base!, 'receptivity')).toEqual(['receptive']);
     expect(attributesOf(base!, 'status')).toEqual(['accepted']);
@@ -164,6 +172,7 @@ describe('attributes', () => {
   });
 
   it('exposes item attributes', () => {
+    const { item } = nodes();
     expect(attributesOf(item!, 'state')).toEqual(['narrowed']);
     expect(attributesOf(item!, 'disposition')).toEqual(['narrowed']);
     expect(attributesOf(item!, 'openness')).toEqual(['partial']);
@@ -174,6 +183,7 @@ describe('attributes', () => {
   });
 
   it('lets an item inherit lifecycle attributes from its document', () => {
+    const { graph, item } = nodes();
     expect(attributesOf(item!, 'phase', graph)).toEqual(['active']);
     expect(attributesOf(item!, 'receptivity', graph)).toEqual(['receptive']);
     // Without a graph there is no owner to inherit from, and it says so rather
@@ -184,9 +194,8 @@ describe('attributes', () => {
 });
 
 describe('matching', () => {
-  const base = graph.document('ADR-0001');
-
   it('matches on node kind', () => {
+    const base = corpus().document('ADR-0001');
     expect(matches(base!, { kind: 'document', predicates: [] })).toBe(true);
     expect(matches(base!, { kind: 'item', predicates: [] })).toBe(false);
     expect(matches(base!, { kind: null, predicates: [] })).toBe(true);
@@ -251,6 +260,7 @@ describe('traversal', () => {
   });
 
   it('walks transitively, and reports the whole path', () => {
+    const graph = corpus();
     const found = query(graph, 'document[id=ADR-0004] =supersedes=> document');
     expect(found.map((m) => m.nodes[m.nodes.length - 1]?.id).sort()).toEqual(['ADR-0002', 'ADR-0003']);
     const deep = found.find((m) => m.nodes[m.nodes.length - 1]?.id === 'ADR-0002');
@@ -274,6 +284,7 @@ describe('traversal', () => {
   });
 
   it('caps expansion but not the initial selection', () => {
+    const graph = corpus();
     // Truncating the start set would silently drop rule findings; truncating a
     // runaway expansion only drops paths nobody was going to read.
     expect(execute(graph, parseQuery('*'), { limit: 2 })).toHaveLength(graph.nodes.size);
@@ -281,6 +292,7 @@ describe('traversal', () => {
   });
 
   it('renders a path the way a report shows it', () => {
+    const graph = corpus();
     const [match] = query(graph, 'document[id=ADR-0004] -contains-> item -delegates-to-> document');
     expect(renderMatch(match!)).toBe('ADR-0004 -contains-> ADR-0004#open-questions.1 -delegates-to-> ADR-0002');
     expect(renderMatch({ nodes: [graph.document('ADR-0001')!], edges: [] })).toBe('ADR-0001');
@@ -288,21 +300,22 @@ describe('traversal', () => {
 });
 
 describe('reflexive edges', () => {
-  const selfLinking = analyseSources([
-    {
-      path: 'docs/adr/0001-a.md',
-      text: ['---', 'status: accepted', '---', '', '# A', '', 'Depends on [ADR-0001](0001-a.md).'].join('\n'),
-    },
-  ]).graph;
+  const selfLinking = () =>
+    analyseSources([
+      {
+        path: 'docs/adr/0001-a.md',
+        text: ['---', 'status: accepted', '---', '', '# A', '', 'Depends on [ADR-0001](0001-a.md).'].join('\n'),
+      },
+    ]).graph;
 
   it('are excluded from traversal by default', () => {
     // A document that links to itself is a formatting quirk. Traversing it
     // would turn every table of contents into a relationship.
-    expect(query(selfLinking, 'document -depends-on-> document')).toHaveLength(0);
+    expect(query(selfLinking(), 'document -depends-on-> document')).toHaveLength(0);
   });
 
   it('can be opted into', () => {
-    const found = execute(selfLinking, parseQuery('document -depends-on-> document'), { allowReflexive: true });
+    const found = execute(selfLinking(), parseQuery('document -depends-on-> document'), { allowReflexive: true });
     expect(found).toHaveLength(1);
   });
 });

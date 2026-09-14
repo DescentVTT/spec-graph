@@ -248,7 +248,11 @@ describe('historical documents', () => {
 /* -------------------------------------------------------------------------- */
 
 describe('cycle detection', () => {
-  const pingPong = analyse({
+  // Each test builds its graph itself. Work done in a describe body runs before
+  // any test is named, and Stryker counts every mutant it reaches as static -
+  // one that reruns the whole suite (ADR-0007).
+  const pingPong = () =>
+    analyse({
     'docs/adr/0001-a.md': [
       '---',
       'status: accepted',
@@ -273,24 +277,25 @@ describe('cycle detection', () => {
     ].join('\n'),
   }).graph;
 
-  const direct = analyse({
+  const direct = () =>
+    analyse({
     'docs/adr/0001-a.md': '---\nstatus: accepted\ndelegates-to: ADR-0002\n---\n\n# A\n',
     'docs/adr/0002-b.md': '---\nstatus: accepted\ndelegates-to: ADR-0001\n---\n\n# B\n',
   }).graph;
 
   it('finds a document-to-document cycle in the raw graph', () => {
-    expect(direct.cycles(['delegates-to']).map((c) => [...c].sort())).toEqual([['ADR-0001', 'ADR-0002']]);
+    expect(direct().cycles(['delegates-to']).map((c) => [...c].sort())).toEqual([['ADR-0001', 'ADR-0002']]);
   });
 
   it('misses an item-to-document cycle in the raw graph, by construction', () => {
     // Each delegation runs item -> document, so there is genuinely no cycle
     // among the raw nodes. This is why the projected mode exists, and asserting
     // it keeps the two modes from quietly collapsing into one.
-    expect(pingPong.cycles(['delegates-to'])).toEqual([]);
+    expect(pingPong().cycles(['delegates-to'])).toEqual([]);
   });
 
   it('finds it once relations are projected onto their documents', () => {
-    expect(pingPong.cycles(['delegates-to'], { byDocument: true }).map((c) => [...c].sort())).toEqual([
+    expect(pingPong().cycles(['delegates-to'], { byDocument: true }).map((c) => [...c].sort())).toEqual([
       ['ADR-0001', 'ADR-0002'],
     ]);
   });

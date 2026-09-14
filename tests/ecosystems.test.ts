@@ -104,9 +104,11 @@ const MADR: Source[] = [
 ];
 
 describe('MADR', () => {
-  const { graph, diagnostics } = analyseSources(MADR);
-
+  // Each test analyses the corpus itself. Work done in a describe body runs before
+  // any test is named, and Stryker counts every mutant it reaches as static -
+  // one that reruns the whole suite (ADR-0007).
   it('identifies decisions from a decisions/ directory', () => {
+    const { graph } = analyseSources(MADR);
     expect([...graph.nodes.keys()].filter((id) => id.startsWith('ADR')).sort()).toEqual([
       'ADR-0001',
       'ADR-0002',
@@ -115,12 +117,14 @@ describe('MADR', () => {
   });
 
   it('reads the MADR status vocabulary, quoted values included', () => {
+    const { graph } = analyseSources(MADR);
     expect(graph.document('ADR-0001')?.phase).toBe('retired');
     expect(graph.document('ADR-0002')?.phase).toBe('active');
     expect(graph.document('ADR-0003')?.phase).toBe('active');
   });
 
   it('records the supersession from both the status field and the prose', () => {
+    const { graph } = analyseSources(MADR);
     const edges = graph.in('ADR-0001', ['supersedes']);
     expect(edges).toHaveLength(1);
     expect(edges[0]?.from).toBe('ADR-0003');
@@ -131,16 +135,19 @@ describe('MADR', () => {
   });
 
   it('does not mistake Decision Drivers or Considered Options for obligations', () => {
+    const { graph } = analyseSources(MADR);
     // MADR uses `*` bullets throughout. Promoting them would bury real findings
     // under every option any decision ever considered.
     expect(graph.items).toHaveLength(0);
   });
 
   it('treats a More Information link as bookkeeping, not a dependency', () => {
+    const { graph } = analyseSources(MADR);
     expect(graph.out('ADR-0001', ['relates-to']).map((e) => e.to)).toEqual(['ADR-0002']);
   });
 
   it('reports nothing, because nothing is wrong', () => {
+    const { diagnostics } = analyseSources(MADR);
     expect(diagnostics).toEqual([]);
   });
 });
@@ -222,25 +229,27 @@ const KEP: Source[] = [
 ];
 
 describe('Kubernetes KEPs', () => {
-  const { graph, diagnostics } = analyseSources(KEP);
-
   it('identifies a KEP from its directory-style layout and kep-number', () => {
+    const { graph } = analyseSources(KEP);
     expect(graph.document('KEP-1234')).toBeDefined();
     expect(graph.document('KEP-2000')).toBeDefined();
   });
 
   it('reads the KEP status vocabulary', () => {
+    const { graph } = analyseSources(KEP);
     expect(graph.document('KEP-1234')?.phase).toBe('active');
     expect(graph.document('KEP-2000')?.phase).toBe('retired');
   });
 
   it('reads nested and sequence front matter without tripping over it', () => {
+    const { graph } = analyseSources(KEP);
     expect(graph.document('KEP-1234')?.frontMatter['owning-sig']).toBe('sig-node');
     expect(graph.document('KEP-1234')?.frontMatter['authors']).toEqual(['@alice', '@bob']);
     expect(graph.document('KEP-1234')?.frontMatter['latest-milestone']).toBe('v1.31');
   });
 
   it('finds obligations in the Test Plan and Unresolved Questions', () => {
+    const { graph } = analyseSources(KEP);
     const open = graph.items.filter((item) => item.openness !== 'closed');
     expect(open.map((item) => item.text)).toEqual([
       'e2e coverage for eviction',
@@ -249,17 +258,20 @@ describe('Kubernetes KEPs', () => {
   });
 
   it('closes a question answered on its continuation line', () => {
+    const { graph } = analyseSources(KEP);
     const resolved = graph.items.find((item) => item.text.includes('kubectl describe'));
     expect(resolved?.disposition).toBe('satisfied');
   });
 
   it('catches the handover into the withdrawn KEP', () => {
+    const { diagnostics } = analyseSources(KEP);
     const found = diagnostics.filter((d) => d.rule === 'ghost-handover');
     expect(found).toHaveLength(1);
     expect(found[0]?.nodes).toContain('KEP-2000');
   });
 
   it('flags the unchecked box that its own body answered', () => {
+    const { diagnostics } = analyseSources(KEP);
     expect(diagnostics.some((d) => d.rule === 'state-conflict')).toBe(true);
   });
 });
@@ -309,9 +321,8 @@ const RUST_RFC: Source[] = [
 ];
 
 describe('Rust RFCs', () => {
-  const { graph, corpus, diagnostics } = analyseSources(RUST_RFC);
-
   it('identifies an RFC by its file stem when the directory names no family', () => {
+    const { graph } = analyseSources(RUST_RFC);
     // `text/` is not a family name, and a bare "1" would be a useless id.
     expect([...graph.nodes.keys()].filter((id) => !id.includes('#')).sort()).toEqual([
       '0001-private-fields',
@@ -320,6 +331,7 @@ describe('Rust RFCs', () => {
   });
 
   it('resolves a bare number, which is unambiguous with only one number space', () => {
+    const { graph, corpus } = analyseSources(RUST_RFC);
     expect(corpus.dangling).toHaveLength(0);
     // The handover belongs to the question, not to the whole RFC.
     const matches = query(graph, 'item -delegates-to-> document');
@@ -329,20 +341,24 @@ describe('Rust RFCs', () => {
   });
 
   it('finds obligations under Unresolved questions without any checkboxes', () => {
+    const { graph } = analyseSources(RUST_RFC);
     expect(graph.items.map((item) => item.openness)).toEqual(['open', 'open']);
   });
 
   it('never harvests a reference out of a GitHub URL', () => {
+    const { graph, corpus } = analyseSources(RUST_RFC);
     // `rust-lang/rfcs#0001` inside a URL is a pull request, not a citation.
     expect(corpus.dangling).toHaveLength(0);
     expect(graph.edges.filter((edge) => edge.reflexive)).toHaveLength(0);
   });
 
   it('does not treat the link-definition footers as references', () => {
+    const { graph } = analyseSources(RUST_RFC);
     expect(graph.edges.every((edge) => edge.kind !== 'references' || edge.to !== edge.from)).toBe(true);
   });
 
   it('has no status, and says unknown rather than guessing', () => {
+    const { graph, diagnostics } = analyseSources(RUST_RFC);
     expect(graph.document('0001-private-fields')?.phase).toBe('unknown');
     // A document with no declared phase must not trigger lifecycle rules.
     expect(diagnostics.map((d) => d.rule)).not.toContain('ghost-handover');
