@@ -353,6 +353,30 @@ cost is the union of all of them and there is no single file to move. A grep for
 the pattern finds at least `baseline.test.ts:73` and two in `edge-cases.test.ts`
 besides the five above.
 
+**And then all of them were moved.** Grep had already missed one, so the list was
+measured instead. A temporary V8 coverage probe recorded every `src/` function each
+test file ran before its first test. Six files ran the whole pipeline - 158 to 187
+functions each: `pathological`, `ecosystems`, `select`, `report`, `baseline` and
+`edge-cases`. Every other file ran about 15, the tables modules build at import.
+Each of the six now analyses inside its tests. Nothing is memoised: a cached result
+would be attributed to whichever test computed it first, and the tests that only
+read it would not be run for the mutants they catch.
+
+A sharded sweep of the result, against three of the tests before it:
+
+| | static mutants | score | shard 1 (`extract.ts`) | shards 2 to 4 |
+| --- | ---: | ---: | ---: | --- |
+| before, three sweeps | 5,307 | 73.32 to 73.41 | 32 to 34m | 26 to 40m |
+| after | **1,405** | 73.35 | 30m | 22 to 24m |
+
+The score did not move, which is the check that no kill was lost with the static
+flag. What is left is not the tests. 448 of `extract.ts`'s static mutants sit in
+its vocabulary tables - `RELATION_KEYS` 163, `VERB_RULES` 138, `NOT_A_FAMILY` 51,
+`OBLIGATION_SECTIONS` 31 - which are built when the module is imported, before any
+test exists. No change to a test can attribute them, and building the tables
+lazily would only move the problem into whichever test happened to load them
+first. So they stay static, and they are what keeps shard 1 the slowest.
+
 The schedule is also not a time. It is set for 03:00 UTC, and on 2026-09-14
 GitHub did not create the run until 08:31. A rebuild that has to finish before
 something else happens needs a dispatch, not the cron line.

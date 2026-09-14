@@ -66,9 +66,11 @@ accommodate a regression:
   reason to strengthen tests, never to move the floor. One runner took 166 to
   171 minutes for the sweep. CI splits it into four shards of 26 to 36 minutes,
   and the gate is applied to their merged report, never to a shard (ADR-0019).
-  The time is the work: 55% of mutants are static, and a static mutant that
-  survives runs the whole suite, so a slow test can cost its duration thousands
-  of times over. Check the headroom before adding one.
+  The time is the work: a static mutant runs the whole suite, so a slow test can
+  cost its duration once for each of them. There are 1,405, most of them
+  vocabulary tables built at import. A test that analyses a corpus in a
+  `describe` body or at module scope turns everything that corpus reaches static
+  too - analyse inside the test (ADR-0007). Check the headroom before adding one.
 - **Coverage floors** in `vitest.config.ts`. Branches sits lowest on purpose;
   the remainder is defensive fallbacks and platform paths of which only one can
   run per machine.
