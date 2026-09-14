@@ -307,25 +307,29 @@ logged "Force mode is activated, all mutants will be retested" and reused 0 of
 bytes apart, where every rebuild before it saved within eight bytes of what it
 had restored.
 
-The same mutants, the same tests, two hosted full runs:
+The same mutants, the same tests, three hosted full runs - the third the Monday
+schedule, on 2026-09-14:
 
 | | score | killed | timeout | survived | minutes |
 | --- | ---: | ---: | ---: | ---: | ---: |
 | `v0.5.0` tag | 76.83 | 7,109 | 341 | 2,023 | 168 |
 | dispatch on `main` | 76.39 | 7,062 | 346 | 2,065 | 171 |
+| schedule on `main` | 76.46 | 7,069 | 345 | 2,059 | 166 |
 
-Two things follow. **A full run is a sample too.** 0.44 points separate two
-rebuilds of one source, and nearly all of it is one file: `markdown.ts` read
-74.36 and then 71.43, 33 more survivors on code nobody touched. The per-file
-attribution noise this ADR describes for incremental runs is in the rebuild as
-well, so a release's figure carries about half a point of it.
+Two things follow. **A full run is a sample too.** Three rebuilds of one source
+span 0.44 points, on code nobody touched between them, and the noise does not
+stay in one file. Between the first two it was nearly all `markdown.ts`, which
+read 74.36 and then 71.43. In the third, `markdown.ts` landed between the two
+and `lifecycle.ts` fell four points, to 58.91. The per-file attribution noise
+this ADR describes for incremental runs is in the rebuild as well, so a
+release's figure carries about half a point of it.
 
-**And the time is the work, not the runner.** 168 minutes reproduced as 171, so
-the jump from 103 at 0.4.0 is not runner variance. The same log names the cost:
+**And the time is the work, not the runner.** 168 minutes reproduced as 171 and
+166, so the jump from 103 at 0.4.0 is not runner variance. The same log names the cost:
 "Detected 5304 static mutants (55% of total) that are estimated to take 95% of
 the time running the tests". A static mutant is one whose code runs outside any
 test, which `perTest` cannot attribute to a test, so Stryker runs the whole suite
-for it. The local 0.5.0 report agrees: of 1,198,095 tests executed, 1,172,141
+for it. All three logs give the same count. The local 0.5.0 report agrees: of 1,198,095 tests executed, 1,172,141
 were for static mutants. 5,304 is far more than the module-level tables in `src/`
 could account for, and several test files analyse a corpus while they are being
 collected rather than inside a test - at module scope in `pathological.test.ts`
@@ -333,6 +337,10 @@ and `select.test.ts`, in `describe` bodies in `ecosystems.test.ts`,
 `select.test.ts` and `report.test.ts`. Everything those analyses execute is
 static. That is the likely cause and not yet a confirmed one: confirming it means
 moving one and counting again, which is a change under `tests/`.
+
+The schedule is also not a time. It is set for 03:00 UTC, and on 2026-09-14
+GitHub did not create the run until 08:31. A rebuild that has to finish before something else
+happens needs a dispatch, not the cron line.
 
 
 This also corrects the headroom, in the useful direction for once. Against 73.32%
@@ -529,10 +537,10 @@ changes are wrong.
       worth taking before anything under `src/` or `tests/` changes.
       *Partly answered (2026-09-13):* the second sample took 171 minutes, so
       it is not the runner, and the cost is in static mutants rather than in
-      any one test - see above. The Monday schedule on the same source is the
-      third sample. After it, the experiment is to move the collection-time
-      analyses into the tests that use them and count the static mutants
-      again.
+      any one test - see above. The Monday schedule on the same source was
+      the third sample, at 166 minutes. The experiment now is to move the
+      collection-time analyses into the tests that use them, and count the
+      static mutants again.
 
 ## See also
 
