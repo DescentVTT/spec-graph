@@ -19,7 +19,14 @@ export default {
   packageManager: 'npm',
   testRunner: 'vitest',
 
-  vitest: { configFile: 'vitest.mutation.config.ts' },
+  // `related` is on by default, and limits the initial test run to test files
+  // that import a mutated file. With every file mutated that is the whole suite.
+  // CI mutates a quarter of the files at a time (scripts/mutation-shards.mjs),
+  // and then which tests ran would depend on which files a shard holds - a test
+  // that reaches a file other than through an import would drop out of one shard
+  // and not out of a run over everything. Off, every shard runs every test, and
+  // perTest coverage still narrows each mutant to the tests that reach it.
+  vitest: { configFile: 'vitest.mutation.config.ts', related: false },
 
   // perTest is what makes this practical: only the handful of tests that
   // actually touched a mutated line get re-run for it.
