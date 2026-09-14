@@ -47,29 +47,28 @@ Two thresholds are regression guards, set below the last measurement. They move
 **up** when the measurement moves further than the noise, and **never** down to
 accommodate a regression:
 
-- **Mutation score >= 70** (`break` in `stryker.config.mjs`). Two numbers, and
-  the difference matters: **76.83% on the hosted runner** at 0.5.0, and 80.54%
-  over the same 9,697 mutants on a developer machine. The hosted one governs -
-  it is where the build fails. `perTest` attribution moves with worker count,
-  with how many files are mutated, and with the platform, by up to sixteen
-  points on a single file - and two runs of *identical source* on one machine
-  moved nine untouched files by more than a point each, in both directions. Three
-  hosted *full* runs of one source read 76.83, 76.39 and 76.46, so a release
-  figure carries about half a point of noise. An incremental run is a fast signal and
-  not a verdict, in **either** direction:
-  against a full rebuild of the same commit it read 3.18 points high at 0.3.0,
-  1.29 low at 0.4.0 and 0.40 low at 0.5.0. Its cost varies as much - 110 minutes
-  when a broad change left nothing to reuse, 64 when half the corpus was reused.
-  See ADR-0007. The guard stays at 70 because ~340 mutants are detected by
-  timeout, and losing all of them takes the local figure to 77.00% and the
-  hosted one to 73.31%. Those figures include at least 77 false kills from
-  tests racing each other on disk, since fixed, so the next sweep reads lower.
-  One runner took 168, 171 and 166 minutes over the 0.5.0 source. CI now splits
-  the sweep into four shards of about 42 minutes, and the gate is applied to
-  their merged report, never to a shard (ADR-0019). The time is the work: 55% of
-  mutants are static, and a static mutant that survives runs the whole suite, so
-  a slow test can cost its duration thousands of times over. Check the headroom
-  before adding one.
+- **Mutation score >= 70** (`break` in `stryker.config.mjs`). **73.41% on the
+  hosted runner** governs - it is where the build fails - measured once the
+  tests stopped racing each other on disk. Every earlier hosted figure, 76.83%
+  at 0.5.0 among them, carried about three points of false kills from those
+  races (ADR-0007), and so did the local 80.54%. `perTest` attribution moves
+  with worker count, with how many files are mutated, and with the platform, by
+  up to sixteen points on a single file - and two runs of *identical source* on
+  one machine moved nine untouched files by more than a point each, in both
+  directions. The racing rebuilds of one source spread over 0.44 points; two
+  race-free sweeps read 73.41 and 73.39. An incremental run is a fast signal and
+  not a verdict, in **either** direction: against a full rebuild of the same
+  commit it read 3.18 points high at 0.3.0, 1.29 low at 0.4.0 and 0.40 low at
+  0.5.0. Its cost varies as much - 110 minutes when a broad change left nothing
+  to reuse, 64 when half the corpus was reused. See ADR-0007. The guard stays at
+  70, and the margin is thinner than it looked: 346 mutants are detected by
+  timeout, and losing all of them takes 73.41 to 69.88, under it. That is a
+  reason to strengthen tests, never to move the floor. One runner took 166 to
+  171 minutes for the sweep. CI splits it into four shards of 26 to 36 minutes,
+  and the gate is applied to their merged report, never to a shard (ADR-0019).
+  The time is the work: 55% of mutants are static, and a static mutant that
+  survives runs the whole suite, so a slow test can cost its duration thousands
+  of times over. Check the headroom before adding one.
 - **Coverage floors** in `vitest.config.ts`. Branches sits lowest on purpose;
   the remainder is defensive fallbacks and platform paths of which only one can
   run per machine.
@@ -131,7 +130,7 @@ Read the survivor list, not just the score. It is the more useful output:
 **A test that writes to disk writes to a path named for its process**, and never
 changes a shared fixture. Stryker runs the same test file in several workers at
 once, in one sandbox, and a fixed path is one they write and delete under each
-other - the 2026-09-14 sweep counted at least 77 mutants killed that way, by no
+other - about 300 mutants in the 2026-09-14 sweep were killed that way, by no
 assertion (ADR-0007). `tests/fixtures/.tmp/<name>-${process.pid}` is the
 pattern.
 

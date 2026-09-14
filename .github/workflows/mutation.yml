@@ -53,12 +53,12 @@ jobs:
   shard:
     name: stryker (shard ${{ matrix.shard }} of ${{ strategy.job-total }})
     runs-on: ubuntu-latest
-    # Headroom for a bad runner, not a budget. The shards are balanced to about
-    # 42 minutes each on the runner that took 166 for the whole sweep, and
-    # runners have differed by more than a fifth on identical work. A shard that
-    # keeps passing 55 means the table in scripts/mutation-shards.mjs needs
-    # re-measuring, not this number raising.
-    timeout-minutes: 75
+    # Headroom for a bad runner, not a budget. The first two sharded sweeps took
+    # 26 to 36 minutes a shard, and the same shard moved by up to six minutes
+    # between runners on identical work. A shard that keeps passing 45 means the
+    # table in scripts/mutation-shards.mjs needs re-measuring, not this number
+    # raising.
+    timeout-minutes: 60
 
     strategy:
       # One broken shard should not hide what the others found. The merge

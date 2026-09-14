@@ -158,9 +158,33 @@ Checked on real output before the first sharded sweep:
   reported `source.ts` as well, and the merge refused it: "src/source.ts belongs
   to shard 2, but shard 1 reported it."
 
+And then on hosted runners:
+
+| sweep | score | killed | timeout | survived | shards | dispatch to score |
+| --- | ---: | ---: | ---: | ---: | --- | ---: |
+| dispatch, 09f16ad | 73.41 | 6,849 | 346 | 2,382 | 34m19s, 26m07s, 33m10s, 35m24s | 36m |
+| pull request, 09f16ad | 73.39 | 6,849 | 344 | 2,384 | 33m47s, 32m03s, 29m29s, 28m31s | 34m |
+
+The pull request's run found no published file, logged "shard 2 tests every
+mutant", and so was a second full sweep. The two agree to 0.02 points. Each
+shard's minutes moved by up to six between runners on identical work, which is
+the variance the job's cap is headroom for.
+
+Read shard by shard, the same log gives per-file minutes on hosted runners, with
+the timeout check again exact where it matters (103 of 103 in `extract.ts`, 88
+of 88 in `state.ts`, 57 of 57 in `markdown.ts`): `extract.ts` 34.0; `markdown.ts`
+20.2 and `identity.ts` 5.6; `state.ts` 13.5 and eight small files 19.4; `rules.ts`
+10.0, `lifecycle.ts` 7.1, `select.ts` 6.7 and seven more 11.3. Shard 2 is light by
+eight minutes, and moving files into it would even the shards without moving the
+wall time, which is still shard 1's.
+
+**It is also the figure that corrected the ones before it.** Two sweeps of
+race-free tests at 73.4%, against 76.46% the day before, is ADR-0007's race
+measured at full size: about 300 kills that no assertion earned.
+
 ## Consequences
 
-**A push to `main` costs four jobs of about 43 minutes and one short one**,
+**A push to `main` costs four jobs of 26 to 36 minutes and one short one**,
 where it used to cost one incremental job. On a public repository that is free,
 and it buys a governing figure for every push, not every tag. With CI's seven
 jobs a push runs about a dozen at once, under the twenty a free account gets.

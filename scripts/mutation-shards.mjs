@@ -39,6 +39,9 @@ import { calculateMutationTestMetrics } from 'mutation-testing-metrics';
 //   lifecycle 8.9   yaml 7.7   select 6.9   sections 6.3   resolve 6.1
 //   the other twelve files 17.6 between them
 //
+// Split this way, the first two sweeps (09f16ad) took 26 to 36 minutes a shard,
+// and shard 1 - extract.ts alone - was among the slowest both times.
+//
 // 166 minutes in all, and nearly all of extract.ts and markdown.ts is static
 // mutants, each of which runs the whole suite. A shard cannot be smaller than
 // its largest file, so no number of shards gets under extract.ts's 42.5; four is
