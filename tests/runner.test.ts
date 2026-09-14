@@ -19,7 +19,10 @@ import type { AnyRuleId } from '../src/types.js';
  * the comment says so.
  */
 
-const ROOT = 'tests/fixtures/.tmp/runner';
+// Named for the process. Stryker runs this file in several workers at once, all
+// in one sandbox, and a fixed path is one they write and delete under each other:
+// the 2026-09-14 sweep counted dozens of mutants killed by ENOENT alone.
+const ROOT = `tests/fixtures/.tmp/runner-${process.pid}`;
 
 const write = async (path: string, lines: readonly string[]): Promise<void> => {
   await writeFile(`${ROOT}/${path}`, `${lines.join('\n')}\n`);

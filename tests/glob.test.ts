@@ -11,7 +11,10 @@ import {
   walkFiles,
 } from '../src/glob.js';
 
-const ROOT = 'tests/fixtures/.tmp/glob';
+// Named for the process. Stryker runs this file in several workers at once, all
+// in one sandbox, and a fixed path is one they write and delete under each other:
+// the 2026-09-14 sweep counted dozens of mutants killed by ENOENT alone.
+const ROOT = `tests/fixtures/.tmp/glob-${process.pid}`;
 
 // The automaton, because that is what the walk runs. `globToRegExp` is the
 // oracle it is held to below, not the thing under test.

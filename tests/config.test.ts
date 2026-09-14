@@ -12,7 +12,10 @@ import type { AnyRuleId } from '../src/types.js';
  * file that has not admitted what it is. See ADR-0010.
  */
 
-const ROOT = 'tests/fixtures/.tmp/config';
+// Named for the process. Stryker runs this file in several workers at once, all
+// in one sandbox, and a fixed path is one they write and delete under each other:
+// the 2026-09-14 sweep counted dozens of mutants killed by ENOENT alone.
+const ROOT = `tests/fixtures/.tmp/config-${process.pid}`;
 
 afterEach(async () => {
   await rm(ROOT, { recursive: true, force: true });
@@ -292,7 +295,7 @@ describe('discovering a configuration upward', () => {
     // main checkout, and one nested inside that checkout is common. A boundary
     // that asked for a directory would walk out of the worktree and read the
     // main checkout's configuration - another branch's rules, silently.
-    const base = 'tests/fixtures/.tmp/worktree';
+    const base = `tests/fixtures/.tmp/worktree-${process.pid}`;
     await rm(base, { recursive: true, force: true });
     await mkdir(`${base}/nested/docs`, { recursive: true });
     await writeFile(`${base}/${CONFIG}`, '{"strict":true}');

@@ -125,6 +125,13 @@ assertions that restate the implementation is worse than a lower number.
 Read the survivor list, not just the score. It is the more useful output:
 `reports/mutation/index.html` after a run.
 
+**A test that writes to disk writes to a path named for its process**, and never
+changes a shared fixture. Stryker runs the same test file in several workers at
+once, in one sandbox, and a fixed path is one they write and delete under each
+other - the 2026-09-14 sweep counted at least 77 mutants killed that way, by no
+assertion (ADR-0007). `tests/fixtures/.tmp/<name>-${process.pid}` is the
+pattern.
+
 Mutation testing measures what the tests assert. It cannot find a case nobody
 thought of, so **probe new parsing code against a corpus written to break it**
 before trusting the score. Where the thing being written already exists

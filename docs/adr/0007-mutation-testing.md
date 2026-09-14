@@ -339,8 +339,35 @@ static. That is the likely cause and not yet a confirmed one: confirming it mean
 moving one and counting again, which is a change under `tests/`.
 
 The schedule is also not a time. It is set for 03:00 UTC, and on 2026-09-14
-GitHub did not create the run until 08:31. A rebuild that has to finish before something else
-happens needs a dispatch, not the cron line.
+GitHub did not create the run until 08:31. A rebuild that has to finish before
+something else happens needs a dispatch, not the cron line.
+
+**Some of the kills were the tests racing each other.** *Found 2026-09-14.*
+Stryker's workers share one sandbox, and a static mutant runs the whole suite,
+so the same test file runs in several workers at once. Four test files wrote to
+fixed paths - `tests/fixtures/.tmp/config`, `glob`, `runner`, and a baseline and
+a ratchet file inside the legacy fixture corpus - and one added a document to
+that corpus for the length of a test. A worker running a mutant could read
+another worker's half-written file, lose it to another worker's cleanup, or
+count its extra document. The test then failed, and the mutant was reported
+killed.
+
+The 2026-09-14 sweep's own report shows it. **60 kills have a filesystem error as
+their reason**: `ENOENT` on `tests/fixtures/legacy/.tmp-ratchet.json` alone is
+22, and `ENOTEMPTY` on the config directory another 5. **17 more fail an
+assertion that names a shared temp file.** A race that only changes what a file
+contains leaves no such trace, so those 77 are a floor. They are 0.8 points of
+76.46 that no assertion earned, and the half-point spread between the three
+rebuilds above is likely partly this.
+
+It surfaced while checking that a sweep split across parallel jobs is the same
+sweep. Two files run as two shards,
+against one run over both, disagreed on 8 of 206 verdicts: 93.69% as one run and
+91.26% as two. Every test now writes to a path named for its process, and the
+test that adds a document works on its own copy of the corpus. Run again, the
+two agreed on all 206, at **88.83%** - lower than either run before, as removing
+false kills would make it. **Expect the next full sweep to read lower than the
+figures recorded here, for this reason and no regression.**
 
 
 This also corrects the headroom, in the useful direction for once. Against 73.32%

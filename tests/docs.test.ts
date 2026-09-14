@@ -21,10 +21,11 @@ describe('the source tree', () => {
   function* walk(directory: string): Generator<string> {
     for (const entry of readdirSync(directory, { withFileTypes: true })) {
       const path = `${directory}/${entry.name}`;
-      // `.tmp` holds what other test files write and delete while this one
-      // runs, so a file listed here can be gone before it is read. None of it
-      // is committed, which is what these checks are about.
-      if (entry.isDirectory() && entry.name === '.tmp') continue;
+      // Anything named `.tmp` is what other tests write and delete while this
+      // one runs - in this process, or in a mutation worker beside it - so it
+      // can be gone before it is read. None of it is committed, and committed
+      // files are what these checks are about.
+      if (entry.name.startsWith('.tmp')) continue;
       if (entry.isDirectory()) yield* walk(path);
       else if (/\.(ts|js|mjs|json|md)$/.test(entry.name)) yield path;
     }
