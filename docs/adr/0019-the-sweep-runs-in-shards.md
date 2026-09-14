@@ -201,11 +201,19 @@ one process, and its figure is still the local one ADR-0007 describes.
 
 ## Open Questions
 
-- [ ] Is a sharded sweep's figure the single runner's figure on hosted
+- [x] Is a sharded sweep's figure the single runner's figure on hosted
       runners? At two files it is, exactly, once the race is gone. But the
       instrumented files around a shard change how long its tests take, and a
       timeout is a timing measurement. The answer is a sharded sweep and an
       unsplit one of the same source, both after the race fix.
+      **Resolved (2026-09-14): yes.** The unsplit sweep of the race-free source
+      (7094ead, one runner) read **73.39%**: 6,847 killed, 346 timeouts, 2,384
+      survived. The sharded sweeps of the same tests read 73.41, 73.39 and 73.32.
+      That is a spread of 0.09 points, where the racing single-runner rebuilds
+      spread over 0.44. The one runner took 191m53s, longer than the 166 to 171
+      it took with the races, because a false kill had let a mutant stop at the
+      first failing test and a survivor runs them all. The shards did the same
+      work in 34 to 36 minutes.
 - [ ] When the static mutants are dealt with, how many shards? The floor is the
       largest file, and it is the static mutants that set it.
 
