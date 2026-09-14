@@ -70,10 +70,13 @@ describe('recording what is already wrong', () => {
 });
 
 describe('the fingerprint outlives ordinary edits', () => {
-  const baseline = recorded(CORPUS);
+  // The baseline is recorded inside each test, never once in this describe
+  // body. Work done while a file is collected runs before any test is named, and
+  // Stryker counts every mutant it reaches as static - rerunning the whole suite
+  // for each of them, which was most of the sweep's time (ADR-0007).
   const clean = (files: Record<string, string>): number => {
     const { graph, diagnostics } = analyse(files);
-    return applyBaseline(graph, diagnostics, baseline).kept.length;
+    return applyBaseline(graph, diagnostics, recorded(CORPUS)).kept.length;
   };
 
   it('survives lines inserted above the finding', () => {
@@ -95,7 +98,7 @@ describe('the fingerprint outlives ordinary edits', () => {
   it('does not survive a genuinely new finding', () => {
     const worse = { ...CORPUS, 'docs/adr/0005-new.md': ['# ADR-0005: New', '', '## Status', '', 'accepted', '', 'See [gone](docs/nope.md).'].join('\n') };
     const { graph, diagnostics } = analyse(worse);
-    const outcome = applyBaseline(graph, diagnostics, baseline);
+    const outcome = applyBaseline(graph, diagnostics, recorded(CORPUS));
     expect(outcome.kept.map((finding) => finding.target)).toEqual(['docs/nope.md']);
     expect(outcome.suppressed).toBe(2);
   });
