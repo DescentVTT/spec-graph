@@ -215,7 +215,12 @@ one process, and its figure is still the local one ADR-0007 describes.
       first failing test and a survivor runs them all. The shards did the same
       work in 34 to 36 minutes.
 - [ ] When the static mutants are dealt with, how many shards? The floor is the
-      largest file, and it is the static mutants that set it.
+      largest file, and it is the static mutants that set it. *Partly answered
+      (2026-09-14):* moving every analysis out of collection took them from
+      5,307 to 1,405 and shards 2 to 4 to 22-24 minutes, but `extract.ts` still
+      takes 30. Its remaining 448 are vocabulary tables built at import, which
+      no test can attribute, so four whole-file shards remain the floor until
+      someone decides those tables are worth splitting the file over.
 
 ## See also
 
