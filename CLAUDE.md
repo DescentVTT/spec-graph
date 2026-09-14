@@ -62,11 +62,14 @@ accommodate a regression:
   when a broad change left nothing to reuse, 64 when half the corpus was reused.
   See ADR-0007. The guard stays at 70 because ~340 mutants are detected by
   timeout, and losing all of them takes the local figure to 77.00% and the
-  hosted one to 73.31%. The hosted full run took 168, 171 and 166 minutes on
-  three runs of the 0.5.0 source, against a cap now raised to 240. The time
-  is the work: 55% of mutants are static, and a static mutant that survives
-  runs the whole suite, so a slow test can cost its duration thousands of times
-  over. Check the headroom before adding one.
+  hosted one to 73.31%. Those figures include at least 77 false kills from
+  tests racing each other on disk, since fixed, so the next sweep reads lower.
+  One runner took 168, 171 and 166 minutes over the 0.5.0 source. CI now splits
+  the sweep into four shards of about 42 minutes, and the gate is applied to
+  their merged report, never to a shard (ADR-0019). The time is the work: 55% of
+  mutants are static, and a static mutant that survives runs the whole suite, so
+  a slow test can cost its duration thousands of times over. Check the headroom
+  before adding one.
 - **Coverage floors** in `vitest.config.ts`. Branches sits lowest on purpose;
   the remainder is defensive fallbacks and platform paths of which only one can
   run per machine.

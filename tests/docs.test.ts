@@ -31,7 +31,16 @@ describe('the source tree', () => {
     }
   }
 
-  const files = [...walk('src'), ...walk('tests'), ...walk('bin'), 'README.md', 'CONTRIBUTING.md'];
+  const files = [
+    ...walk('src'),
+    ...walk('tests'),
+    ...walk('bin'),
+    ...walk('scripts'),
+    'stryker.config.mjs',
+    'stryker.shard.config.mjs',
+    'README.md',
+    'CONTRIBUTING.md',
+  ];
 
   it('contains no NUL bytes', () => {
     // A stray NUL makes a file "binary" to grep, diff and review tooling, and

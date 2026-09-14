@@ -9,69 +9,67 @@ name: Mutation
 # There is no paths filter. A dependency bump can move the score as easily as a
 # source edit can, and filtering on src/** would miss it.
 #
-# That policy was unenforceable as written. A full run took 45 minutes on a
-# hosted runner against the 45-minute cap, so it passed once and then never
-# again as the corpus grew from 6,232 mutants to 7,720 - fourteen consecutive
-# runs cancelled at the limit, each burning three quarters of an hour to report
-# nothing. The score has not been checked in CI since v0.1.2.
+# Two tiers. A push to `main`, a tag, the weekly schedule and a manual dispatch
+# run the full sweep, which re-derives every verdict from the code. A pull
+# request runs incrementally, from the incremental file the last full sweep on
+# `main` published, and only a full sweep publishes one: an incremental run's
+# file is derived from a cache rather than from the code, and feeding it back is
+# how ADR-0007 came to record an incremental lineage drifting from every rebuild
+# for a week at a time.
 #
-# So: incremental on a push, which re-tests only what the change can have
-# affected, and a full run where the number has to be trustworthy rather than
-# fast - a tag, the weekly schedule, or a manual dispatch.
+# Both tiers run in shards. The sweep took 166 to 171 minutes on one runner, on
+# identical source, three times. Each shard mutates its own files
+# (scripts/mutation-shards.mjs) with every test, and a final job merges the
+# reports, refuses anything that is not exactly one sweep, and applies the gate
+# to the merged score. ADR-0019 has the measurements.
 on:
   # A push to a branch with an open pull request would otherwise run twice, once
-  # per event. This comment used to say the concurrency key collapsed the two;
-  # it could not, because a push event carries no pull request number. Filtering
-  # the push the way ci.yml does is what actually leaves one run.
+  # per event. Filtering the push the way ci.yml does leaves one run.
   push:
     branches: [main]
     tags: ['v*']
   pull_request:
   schedule:
-    # Monday, 03:00 UTC. Incremental reuse is an inference about which mutants a
-    # change could reach; once a week the whole corpus is measured from scratch
-    # so a wrong inference cannot accumulate unnoticed.
+    # Monday, 03:00 UTC - nominally. GitHub created the 2026-09-14 run at 08:31.
+    # A sweep that must be finished by a particular time needs a dispatch.
     - cron: '0 3 * * 1'
   workflow_dispatch:
 
-# A newer push supersedes an older push's incremental run, so those cancel.
-# Nothing a push does supersedes a full run, so the event is part of the key.
-# Without it a scheduled run and a push to `main` shared one group, and GitHub
-# cancels the older run in a group: a dispatch overtook a push run on 2026-09-07
-# and the push run's annotation reads "Canceling since a higher priority waiting
-# request for mutation-refs/heads/main exists". The weekly rebuild takes about
-# three hours, and any push inside them would have ended it with nothing
-# reported.
+# A newer push supersedes an older push's run, so those cancel. Nothing a push
+# does supersedes a schedule or a dispatch, so the event is part of the key:
+# without it a push to `main` cancelled a scheduled sweep on the same ref, and a
+# run log from 2026-09-07 shows GitHub doing exactly that.
 concurrency:
   group: mutation-${{ github.event.pull_request.number || github.ref }}-${{ github.event_name }}
   cancel-in-progress: true
 
-jobs:
-  stryker:
-    name: stryker
-    runs-on: ubuntu-latest
-    # Sized for the full run, not the incremental one. A cold cache, a
-    # dependency bump or the weekly rebuild all take the long path, and a cap
-    # that only fits the fast case is the cap that produced fourteen cancelled
-    # runs.
-    #
-    # A ceiling costs nothing unless it is reached, and this one keeps nearly
-    # being reached. The full run measured 80 minutes at 0.3.0, 103 at 0.4.0 and
-    # 168 at 0.5.0, the last against a cap of 180. The cause of that jump is not
-    # attributed (ADR-0007), and raising the cap does not pretend to attribute
-    # it: a slow run still reports its time, and a cancelled one is the only
-    # outcome that leaves nothing to attribute. A hosted job may run for 360.
-    timeout-minutes: 240
+# Decided once, for both jobs. Writing the condition twice and negating it by
+# hand is how this file once promised a full run on manual dispatch while its
+# steps gave an incremental one.
+env:
+  FULL: ${{ github.event_name != 'pull_request' }}
 
-    # Decided once. Writing the condition twice and negating it by hand is how
-    # the comment above came to promise a full run on manual dispatch while the
-    # steps below gave an incremental one - a declaration that had drifted from
-    # what runs, in the CI of the tool built to find those.
+jobs:
+  shard:
+    name: stryker (shard ${{ matrix.shard }} of ${{ strategy.job-total }})
+    runs-on: ubuntu-latest
+    # Headroom for a bad runner, not a budget. The shards are balanced to about
+    # 42 minutes each on the runner that took 166 for the whole sweep, and
+    # runners have differed by more than a fifth on identical work. A shard that
+    # keeps passing 55 means the table in scripts/mutation-shards.mjs needs
+    # re-measuring, not this number raising.
+    timeout-minutes: 75
+
+    strategy:
+      # One broken shard should not hide what the others found. The merge
+      # refuses to score a sweep with a shard missing either way.
+      fail-fast: false
+      matrix:
+        # One entry per shard in scripts/mutation-shards.mjs; a test checks.
+        shard: [1, 2, 3, 4]
+
     env:
-      FULL: >-
-        ${{ github.event_name == 'schedule'
-            || github.event_name == 'workflow_dispatch'
-            || github.ref_type == 'tag' }}
+      MUTATION_SHARD: ${{ matrix.shard }}
 
     steps:
       - uses: actions/checkout@v5
@@ -83,48 +81,102 @@ jobs:
 
       - run: npm ci
 
-      # Keyed on the run, not the commit, and restored from the most recent
-      # entry by prefix. A miss is not a failure: it costs the full run, which
-      # is what used to happen every time.
-      #
-      # The commit was the obvious key and it was wrong, because two runs share
-      # one: at v0.4.0 the branch push and the tag were the same commit, and the
-      # tag's run reported "Cache hit occurred on the primary key ..., not saving
-      # cache". A run id is unique, so every run saves.
-      #
-      # A run can restore only caches from its own ref or the default branch, so
-      # an entry a tag saves lives under refs/tags/... where no later push can
-      # read it. The full runs that correct `main` are the Monday schedule and a
-      # manual dispatch on `main` - and only since the full step below writes a
-      # report at all. See ADR-0007.
-      - name: Restore the incremental report
-        uses: actions/cache@v4
+      # A pull request starts from whatever `main` last published, by prefix. A
+      # run can restore only caches from its own ref or the default branch, so a
+      # file published anywhere but `main` would be one nothing could read. A
+      # miss is not a failure: it costs the whole sweep, and the result is the
+      # same. A full sweep restores nothing at all, so no verdict can be carried
+      # into it.
+      - name: Restore the incremental file
+        if: env.FULL != 'true'
+        uses: actions/cache/restore@v4
         with:
           path: reports/stryker-incremental.json
-          key: stryker-${{ runner.os }}-${{ github.run_id }}
+          key: stryker-sweep-${{ github.run_id }}
           restore-keys: |
-            stryker-${{ runner.os }}-
+            stryker-sweep-
+
+      # The file holds the whole sweep, and Stryker reports the verdicts it holds
+      # for files a run does not mutate as though the run had produced them. So
+      # each shard keeps only its own files, and every test.
+      - name: Keep this shard's part of the incremental file
+        if: env.FULL != 'true'
+        run: node scripts/mutation-shards.mjs cache "$MUTATION_SHARD"
 
       # The config's concurrency of 8 is tuned for a developer machine. Hosted
       # runners have 4 vCPUs and each Stryker worker drives a vitest process of
       # its own, so oversubscribing here makes the run slower, not faster.
-      - name: Mutation test (incremental)
-        if: env.FULL != 'true'
-        run: npx stryker run --concurrency 4 --incremental
+      - name: Mutation test
+        run: |
+          started=$SECONDS
+          if [ "$FULL" = "true" ]; then
+            npx stryker run stryker.shard.config.mjs --concurrency 4
+          else
+            npx stryker run stryker.shard.config.mjs --concurrency 4 --incremental
+          fi
+          echo "{\"seconds\": $((SECONDS - started))}" > "reports/mutation/shard-$MUTATION_SHARD.timing.json"
 
-      # `--incremental --force`, not a bare run. Stryker writes the incremental
-      # report only in incremental mode, so a bare full run left the file the
-      # restore step had just put there untouched, and the cache saved that copy.
-      # Every tag's rebuild did: 470,697 bytes restored and 470,702 saved at
-      # 0.2.3, 472,222 and 472,228 at 0.3.0, 636,632 and 636,640 at 0.5.0.
-      # `--force` retests every mutant and still writes what it measured.
-      - name: Mutation test (full)
-        if: env.FULL == 'true'
-        run: npx stryker run --concurrency 4 --incremental --force
+      - uses: actions/upload-artifact@v7
+        with:
+          name: mutation-shard-${{ matrix.shard }}
+          path: reports/mutation/shard-${{ matrix.shard }}*.json
+          if-no-files-found: error
+          retention-days: 14
+
+  score:
+    name: mutation score
+    needs: shard
+    # Runs when a shard failed too, so the failure is reported as an incomplete
+    # sweep rather than as a skipped check.
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: npm
+
+      # The merge scores with Stryker's own metrics library.
+      - run: npm ci
+
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: mutation-shard-*
+          path: reports/shards
+
+      - name: Merge the shards and apply the gate
+        run: node scripts/mutation-shards.mjs merge reports/shards
+
+      # Keyed on the run, not the commit: a tag and the push it came with share a
+      # commit, and ADR-0007 records a cache keyed that way discarding the very
+      # rebuild meant to correct it. Only `main` publishes, because a tag's or a
+      # dispatch's entry on another ref is one no pull request can restore.
+      - name: Publish the incremental file
+        if: env.FULL == 'true' && github.ref == 'refs/heads/main'
+        uses: actions/cache/save@v4
+        with:
+          path: reports/stryker-incremental.json
+          key: stryker-sweep-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Say which tier ran
+        if: always()
+        run: |
+          if [ "$FULL" = "true" ]; then
+            echo "Full sweep: every mutant was tested from the code. This score governs." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Incremental: mutants whose source and covering tests were unchanged kept the last full sweep's verdict." >> "$GITHUB_STEP_SUMMARY"
+            echo "It is a signal, not the figure. The full sweep on main is." >> "$GITHUB_STEP_SUMMARY"
+          fi
 
       - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: mutation-report
-          path: reports/mutation/
+          path: |
+            reports/mutation/index.html
+            reports/mutation/mutation.json
           if-no-files-found: ignore

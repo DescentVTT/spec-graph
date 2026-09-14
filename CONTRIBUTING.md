@@ -105,6 +105,12 @@ of vocabularies and boundary conditions, and either can be weakened by an
 ordinary-looking refactor without a single test going red. If you are adding a
 heuristic, check that a mutant of it dies.
 
+CI runs the same sweep in four shards and merges them into one report and one
+score (`scripts/mutation-shards.mjs`, ADR-0019). A new file under `src/` lands
+in the last shard. When the shards' times drift apart,
+`node scripts/mutation-timeline.mjs <report> <log>` reads per-file minutes off a
+sweep's log to rebalance them.
+
 **Where an oracle exists, use it.** `regex.ts` replaces a built-in engine, so
 its tests do not assert what its author believed about regular expressions —
 they run both engines over the same patterns and subjects and compare. That is

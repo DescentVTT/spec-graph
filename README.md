@@ -787,7 +787,7 @@ exported. Reporters, editor extensions and custom rules are all first-class.
 
 ## Design
 
-Eighteen ADRs, which `spec-graph` validates on every CI run:
+Nineteen ADRs, which `spec-graph` validates on every CI run:
 
 - [ADR-0001 — A hand-written Markdown scanner](docs/adr/0001-hand-written-markdown-scanner.md)
 - [ADR-0002 — A four-phase lifecycle lattice](docs/adr/0002-lifecycle-lattice.md)
@@ -807,6 +807,7 @@ Eighteen ADRs, which `spec-graph` validates on every CI run:
 - [ADR-0016 — A query needs a sentence before it is a rule](docs/adr/0016-a-query-needs-a-sentence.md)
 - [ADR-0017 — A predicate must finish](docs/adr/0017-a-predicate-must-finish.md)
 - [ADR-0018 — The configuration file is the root](docs/adr/0018-the-configuration-file-is-the-root.md)
+- [ADR-0019 — The sweep runs in shards](docs/adr/0019-the-sweep-runs-in-shards.md)
 
 **Zero runtime dependencies.** Node 22+, native ESM, TypeScript strict with
 `noUncheckedIndexedAccess` and `exactOptionalPropertyTypes`. The Markdown

@@ -571,6 +571,8 @@ changes are wrong.
 
 ## See also
 
+- [ADR-0019](0019-the-sweep-runs-in-shards.md) - the sweep split across
+  parallel jobs, and the merge that makes it one sweep again.
 - [ADR-0006](0006-false-positives-cost-more.md) - the other half of what
   "verified" means here: not just that the code does what the tests say, but
   that what it reports is worth reporting.
