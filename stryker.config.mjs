@@ -59,18 +59,21 @@ export default {
   timeoutMS: 15000,
   concurrency: 8,
   // `break` is a regression guard, not an aspiration: it sits below the score
-  // that actually governs - 76.83% on the hosted runner at 0.5.0, against 80.54%
-  // over the same 9,697 mutants on a developer machine - so that losing ground
-  // fails the build while ordinary refactoring does not.
+  // that actually governs - 73.41% on the hosted runner, measured once the tests
+  // stopped racing each other on disk - so that losing ground fails the build
+  // while ordinary refactoring does not.
   //
   // It stays at 70, and 0.3.0 measured three separate reasons why. Two full runs
   // of identical source on one machine moved nine untouched files by more than a
   // point each in both directions, up to 4.76. An incremental run of the same
-  // commit as the hosted rebuild read 3.18 points high. And roughly 300 of these
-  // mutants are detected by timing out, which is a timing measurement: lose all
-  // 343 of them locally and 80.54 becomes 77.00, and losing the hosted run's 341
-  // takes 76.83 to 73.31. A floor that chased any of those numbers would fail
-  // builds for no reason.
+  // commit as the hosted rebuild read 3.18 points high. And about 340 of these
+  // mutants are detected by timing out, which is a timing measurement. A floor
+  // that chased any of those numbers would fail builds for no reason.
+  //
+  // The margin is thinner than it was believed to be. The figures before
+  // 2026-09-14 carried about three points of false kills, and losing all 346
+  // timeouts now takes 73.41 to 69.88, under the floor: a reason to strengthen
+  // the tests, never to lower this.
   // See docs/adr/0007-mutation-testing.md.
   thresholds: { high: 85, low: 74, break: 70 },
 };

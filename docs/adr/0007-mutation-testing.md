@@ -369,6 +369,22 @@ two agreed on all 206, at **88.83%** - lower than either run before, as removing
 false kills would make it. **Expect the next full sweep to read lower than the
 figures recorded here, for this reason and no regression.**
 
+**The sweeps that followed measured how much.** *2026-09-14.* Two hosted sweeps
+of the fixed tests, both split across shards
+([ADR-0019](0019-the-sweep-runs-in-shards.md)), read **73.41% and 73.39%** over
+9,801 mutants, with 6,849 killed in each. The 2026-09-14 schedule's report shares
+8,594 mutants with them, outside `regex.ts` and `glob.ts`, which changed in
+between. **302 of those were killed then and survive now, and 9 went the other
+way.** Every one of the 302 had been killed by a test in one of the four files
+that raced - `runner.test.ts` 169, `cli.test.ts` 86, `docs.test.ts` 27,
+`config.test.ts` 20 - and not one by any other file. 238 of them are static, so
+they ran those files on every attempt.
+
+So **about three points of every hosted figure above were races**, and only 77
+of the 302 said so in their reason. The two fixed sweeps also agree with each
+other to 0.02 points, where the three racing rebuilds spread over 0.44 - the same
+finding seen from the other side.
+
 
 This also corrects the headroom, in the useful direction for once. Against 73.32%
 with 305 timeouts - four percent of the corpus, and a timeout is a timing
@@ -388,6 +404,14 @@ reads 73.31%, the first time it has cleared the guard by more than three points.
 Four releases of the same argument, and it still does not justify moving the
 floor: the local figure over the same mutants is 80.54%, 3.71 higher, and that
 gap has been about four points for two releases.
+
+**Then the races came out, and the argument turned.** 73.41% with 346 timeouts
+of 9,801 reads **69.88%** with every timeout lost - under the guard again, as
+it was before 0.3.0. Every "worst case" in the paragraphs above was measured
+with about three points of false kills in it. The guard does not move for that:
+a floor lowered to fit a measurement is what this section exists to refuse. What
+changes is how the margin is read. It is three and a half points, not six, and a
+timeout is still a timing measurement.
 
 **The run nearly did not finish.** The rebuild took **168 minutes against a
 job cap of 180.** 0.4.0's took 103 minutes on 8,585 mutants; 0.5.0 has 13% more
