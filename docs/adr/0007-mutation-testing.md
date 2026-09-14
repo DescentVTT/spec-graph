@@ -338,6 +338,21 @@ and `select.test.ts`, in `describe` bodies in `ecosystems.test.ts`,
 static. That is the likely cause and not yet a confirmed one: confirming it means
 moving one and counting again, which is a change under `tests/`.
 
+*Measured the same day, and the list above was wrong while the mechanism was
+right.* Stryker's vitest runner names the current test in a `beforeEach` hook and
+clears it in `afterEach`, and a hit with no test named is static. Probed on the
+25 mutants of `statusSectionBody` in `extract.ts`, all static: leaving out the
+four files named above changed nothing, still 25 of 25. Running the probe once
+per test file, each on its own, found exactly one file that makes them static,
+and it was not on the list - `baseline.test.ts`, whose `describe` body records a
+baseline with `recorded(CORPUS)` before any test starts. With it alone, 25 of 25
+are static and 19 tests cover them. With `engine.test.ts` alone, which analyses
+inside its tests, none are static and 2 tests cover them. **Every analysis at
+collection time makes static whatever its own corpus happens to reach**, so the
+cost is the union of all of them and there is no single file to move. A grep for
+the pattern finds at least `baseline.test.ts:73` and two in `edge-cases.test.ts`
+besides the five above.
+
 The schedule is also not a time. It is set for 03:00 UTC, and on 2026-09-14
 GitHub did not create the run until 08:31. A rebuild that has to finish before
 something else happens needs a dispatch, not the cron line.

@@ -77,9 +77,9 @@ mutant that was never generated. A split is safe only on a top-level boundary,
 and that boundary moves with every edit to the file.
 
 **And the minutes are a defect.** `extract.ts` takes 42.5 minutes because
-1,111 of its 1,247 mutants are static and each runs the whole suite. The likely
-cause is test files that analyse a corpus while they are collected - see
-ADR-0007. Machinery to route around that would outlive the thing it routes
+1,111 of its 1,247 mutants are static and each runs the whole suite. The cause
+is measured: test files that analyse a corpus while they are collected, before
+any test is named, make static whatever that corpus reaches - see ADR-0007. Machinery to route around that would outlive the thing it routes
 around. When the static mutants are dealt with, re-measure; changing the shards
 is one table and one matrix line.
 
