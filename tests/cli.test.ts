@@ -654,13 +654,22 @@ describe('historical records', () => {
 });
 
 describe('the baseline', () => {
-  const FILE = '.tmp-baseline.json';
+  // Named for the process. Stryker runs this file in several workers at once, all
+  // in one sandbox, and a fixed name is one they write and delete under each
+  // other: the 2026-09-14 sweep counted dozens of mutants killed by ENOENT alone.
+  const FILE = `.tmp-baseline-${process.pid}.json`;
   const path = `${LEGACY}/${FILE}`;
 
   it('records, suppresses, and lets the next new finding through', async () => {
-    const { rm, readFile, writeFile } = await import('node:fs/promises');
+    const { cp, rm, readFile, writeFile } = await import('node:fs/promises');
+    // A copy of the corpus, because this test adds a document to it, and every
+    // other test reading the legacy corpus at the same moment would count it.
+    const root = `tests/fixtures/.tmp/legacy-${process.pid}`;
+    const path = `${root}/${FILE}`;
+    await rm(root, { recursive: true, force: true });
+    await cp(LEGACY, root, { recursive: true });
     try {
-      const recorded = await run('check', '--root', LEGACY, '--no-config', '--record-baseline', FILE);
+      const recorded = await run('check', '--root', root, '--no-config', '--record-baseline', FILE);
       expect(recorded.code).toBe(EXIT_OK);
       expect(recorded.out).toContain(`in ${FILE}`);
 
@@ -669,22 +678,17 @@ describe('the baseline', () => {
       // Recorded by specification and citation, so no line number can go stale.
       expect(written).not.toMatch(/"line"|"column"/);
 
-      const clean = await run('check', '--root', LEGACY, '--no-config', '--baseline', FILE);
+      const clean = await run('check', '--root', root, '--no-config', '--baseline', FILE);
       expect(clean.code).toBe(EXIT_OK);
       expect(clean.out).toContain(`accepted by ${FILE}`);
 
       // One new broken link, and the build fails again.
-      const extra = `${LEGACY}/docs/adr/0009-new.md`;
-      await writeFile(extra, '# ADR-0009: New\n\n## Status\n\naccepted\n\nSee [gone](docs/nope.md).\n');
-      try {
-        const worse = await run('check', '--root', LEGACY, '--no-config', '--baseline', FILE);
-        expect(worse.code).toBe(EXIT_FAILED);
-        expect(worse.out).toContain('docs/nope.md');
-      } finally {
-        await rm(extra, { force: true });
-      }
+      await writeFile(`${root}/docs/adr/0009-new.md`, '# ADR-0009: New\n\n## Status\n\naccepted\n\nSee [gone](docs/nope.md).\n');
+      const worse = await run('check', '--root', root, '--no-config', '--baseline', FILE);
+      expect(worse.code).toBe(EXIT_FAILED);
+      expect(worse.out).toContain('docs/nope.md');
     } finally {
-      await rm(path, { force: true });
+      await rm(root, { recursive: true, force: true });
     }
   });
 
@@ -766,7 +770,8 @@ describe('SARIF', () => {
 });
 
 describe('the other side of the ratchet', () => {
-  const FILE = '.tmp-ratchet.json';
+  // Named for the process, for the reason the baseline's file is.
+  const FILE = `.tmp-ratchet-${process.pid}.json`;
   const path = `${LEGACY}/${FILE}`;
 
   /**
