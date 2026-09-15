@@ -446,6 +446,107 @@ describe('graph', () => {
   });
 });
 
+describe('diff', () => {
+  /**
+   * Two exports of the demo corpus, the earlier one missing a relation, written to
+   * a directory named for this process as every test that writes to disk here is
+   * (CLAUDE.md), and removed afterwards.
+   */
+  async function withExports(body: (dir: string, removed: { kind: string; from: string; to: string }) => Promise<void>): Promise<void> {
+    const { mkdir, rm, writeFile } = await import('node:fs/promises');
+    const dir = `tests/fixtures/.tmp/diff-${process.pid}`;
+    await rm(dir, { recursive: true, force: true });
+    await mkdir(dir, { recursive: true });
+    try {
+      const exported = await run('graph', '--root', DEMO, '--graph-format', 'json');
+      const graph = JSON.parse(exported.out) as { nodes: { id: string; kind: string }[]; edges: { kind: string; from: string; to: string }[] };
+      const documents = new Set(graph.nodes.filter((node) => node.kind === 'document').map((node) => node.id));
+      const index = graph.edges.findIndex((edge) => edge.kind !== 'contains' && documents.has(edge.from) && documents.has(edge.to));
+      const removed = graph.edges[index]!;
+      await writeFile(`${dir}/after.json`, exported.out);
+      await writeFile(`${dir}/before.json`, JSON.stringify({ ...graph, edges: graph.edges.filter((_, at) => at !== index) }));
+      await body(dir, removed);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  }
+
+  it('reports what changed between two exports, and exits 0 whether anything did or not', async () => {
+    await withExports(async (dir, removed) => {
+      const changed = await run('diff', `${dir}/before.json`, `${dir}/after.json`);
+      expect(changed.code).toBe(EXIT_OK);
+      expect(changed.err).toBe('');
+      expect(changed.out).toContain('1 relation changed.');
+      expect(changed.out).toContain(`+ ${removed.from} -${removed.kind}-> ${removed.to}`);
+
+      const same = await run('diff', `${dir}/after.json`, `${dir}/after.json`);
+      expect(same).toEqual({ code: EXIT_OK, out: 'No relational change.\n', err: '' });
+    });
+  });
+
+  it('writes markdown for a pull request and JSON for a bot', async () => {
+    await withExports(async (dir) => {
+      const markdown = await run('diff', `${dir}/before.json`, `${dir}/after.json`, '--format', 'markdown');
+      expect(markdown.out).toMatch(/^### spec-graph diff\n\n1 relation changed\.\n/);
+      const json = await run('diff', `${dir}/before.json`, `${dir}/after.json`, '--format', 'json');
+      expect(JSON.parse(json.out)).toMatchObject({ version: 1, verdict: '1 relation changed.' });
+    });
+  });
+
+  it('reads the two paths from where they were typed', async () => {
+    await withExports(async (dir) => {
+      const { resolve } = await import('node:path');
+      const nested = await runIn(resolve(dir), 'diff', 'before.json', 'after.json');
+      expect(nested.code).toBe(EXIT_OK);
+      expect(nested.out).toContain('1 relation changed.');
+    });
+  });
+
+  it('warns when the exports name different generators', async () => {
+    await withExports(async (dir) => {
+      const { readFile, writeFile } = await import('node:fs/promises');
+      const older = JSON.parse(await readFile(`${dir}/before.json`, 'utf8')) as Record<string, unknown>;
+      delete older['generator'];
+      await writeFile(`${dir}/before.json`, JSON.stringify(older));
+      const result = await run('diff', `${dir}/before.json`, `${dir}/after.json`);
+      expect(result.out).toMatch(/^warning: the exports were made by an unknown version and spec-graph /);
+    });
+  });
+
+  it('refuses what it cannot compare, and exits 2', async () => {
+    const one = await run('diff', 'only.json');
+    expect(one.code).toBe(EXIT_ERROR);
+    expect(one.err).toContain('diff compares two graph exports');
+
+    const missing = await run('diff', 'nope-before.json', 'nope-after.json');
+    expect(missing.code).toBe(EXIT_ERROR);
+    expect(missing.err).toContain('cannot read nope-before.json');
+
+    const notAnExport = await run('diff', 'package.json', 'package.json');
+    expect(notAnExport.code).toBe(EXIT_ERROR);
+    expect(notAnExport.err).toBe('spec-graph: package.json is not a graph export; make it with `spec-graph graph --graph-format json`\n');
+
+    const sarif = await run('diff', 'a.json', 'b.json', '--format', 'sarif');
+    expect(sarif.code).toBe(EXIT_ERROR);
+    expect(sarif.err).toContain('--format sarif reports findings, so it belongs to check, not to diff');
+  });
+
+  it('is a command, and markdown belongs to it and to check alone', () => {
+    const options = parseArgs(['diff', 'a.json', 'b.json', '--format', 'markdown'], '/repo');
+    expect(options).toMatchObject({ command: 'diff', patterns: ['a.json', 'b.json'], format: 'markdown' });
+    expect(() => parseArgs(['graph', '--format', 'markdown'], '/repo')).toThrow(
+      '--format markdown is a report for a pull request, so it belongs to check or diff, not to graph',
+    );
+  });
+
+  it('names what made an export, so a diff can tell two versions apart', async () => {
+    const { readFile } = await import('node:fs/promises');
+    const { version } = JSON.parse(await readFile('package.json', 'utf8')) as { version: string };
+    const exported = await run('graph', '--root', DEMO, '--graph-format', 'json');
+    expect(JSON.parse(exported.out)).toMatchObject({ version: 1, generator: { name: 'spec-graph', version } });
+  });
+});
+
 describe('running a registered rule by name', () => {
   const PROJECT = 'tests/fixtures/project';
 

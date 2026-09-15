@@ -93,7 +93,9 @@ relation. Added and removed relations are reported by kind and ends.
 **Obligations, only where a pair is certain.** Two items are the same item when
 they share a declared id, or when they share their document, their section path
 and their title, and no other item on either side shares all three. Nothing else
-counts as a match.
+counts as a match. The section path is read below the document's own heading,
+which is its title, so retitling a document does not unpair every question in
+it.
 
 - A matched pair whose openness changed is reported as a **transition** -
   resolved, narrowed or reopened - with its title.
@@ -123,7 +125,9 @@ and byte-identical output for identical input. There is no SARIF: nothing here i
 a defect with a line to annotate.
 
 Sections come in a fixed order - documents, relations, obligations - and each is
-sorted by id. An empty diff is one line saying there is no relational change.
+sorted by code unit: documents by id, relations by kind and then their ends,
+obligations by document, section and title. An empty diff is one line saying
+there is no relational change.
 
 **The exit code is 0 whether anything changed or not**, and 2 when an input cannot
 be read or is not an export. A diff describes; `check` gates. A diff that failed
