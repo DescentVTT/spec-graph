@@ -164,6 +164,7 @@ describe('the documented selector vocabulary', () => {
   const itemNode: ItemNode = {
     id: 'ADR-0001#q.1',
     kind: 'item',
+    declared: false,
     title: 'Q',
     at: { file: 'a.md', span: { start: { offset: 0, line: 5, column: 1 }, end: { offset: 0, line: 5, column: 1 } } },
     document: 'ADR-0001',

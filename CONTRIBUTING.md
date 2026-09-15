@@ -46,6 +46,7 @@ files ─▶ markdown.ts ─▶ extract.ts ─▶ resolve.ts ─▶ graph.ts ─
 | `rules.ts` | The diagnostics. Two of them are selector queries. |
 | `project-rules.ts` | Selectors a repository declared, compiled and checked. |
 | `report.ts` | Terminal, JSON, Graphviz and Mermaid output. |
+| `diff.ts` | Two JSON exports compared, naming only the changes it can tell apart. |
 | `glob.ts` / `paths.ts` | Pattern matching and POSIX path arithmetic. |
 | `runner.ts` / `cli.ts` | Orchestration and the command line. |
 

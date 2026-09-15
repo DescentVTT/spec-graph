@@ -1021,6 +1021,7 @@ function extractItems(context: ItemContext): ItemNode[] {
       kind: 'item',
       title: (directive ? attr(directive, 'title')?.value : null) ?? summarise(item.firstLine),
       at: refOf(file, index, item.start, item.end),
+      declared: declaredId !== null && declaredId !== undefined,
       document: documentId,
       section,
       text: summarise(item.firstLine),

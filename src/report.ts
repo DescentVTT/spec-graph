@@ -655,6 +655,13 @@ export type GraphFormat = 'dot' | 'mermaid' | 'json';
 export interface GraphExportOptions {
   /** Leave out `contains` edges and item nodes. */
   readonly documentsOnly?: boolean | undefined;
+  /**
+   * What made the export, for the JSON form. Passed in rather than looked up,
+   * because reading the package's own version is I/O and this module has none.
+   * Two exports from different versions differ wherever extraction changed, and
+   * `diff` warns about that only if it can see it (ADR-0020).
+   */
+  readonly generator?: { readonly name: string; readonly version: string } | undefined;
 }
 
 /** Serialises the graph for Graphviz, Mermaid, or a downstream tool. */
@@ -693,6 +700,7 @@ export function formatGraph(graph: SpecGraph, format: GraphFormat, options: Grap
       return `${JSON.stringify(
         {
           version: 1,
+          ...(options.generator !== undefined && { generator: options.generator }),
           nodes: nodes.map(serialiseNode),
           edges: edges.map((edge) => ({
             kind: edge.kind,
@@ -735,6 +743,7 @@ function serialiseNode(node: SpecNode): Record<string, unknown> {
     ? { ...base, path: node.path, phase: node.phase, status: node.rawStatus, aliases: node.aliases }
     : {
         ...base,
+        declared: node.declared,
         document: node.document,
         section: node.section,
         disposition: node.disposition,

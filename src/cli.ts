@@ -1,9 +1,10 @@
 /**
  * The command line.
  *
- * Four verbs, because there are four questions worth asking of a specification
+ * Five verbs, because there are five questions worth asking of a specification
  * graph: is it consistent (`check`), what does it contain (`query`), what does
- * it look like (`graph`), and what will you check for me (`rules`).
+ * it look like (`graph`), what will you check for me (`rules`), and what did a
+ * change do to it (`diff`).
  *
  * Exit codes are the contract with CI: `0` clean, `1` findings, `2` the tool
  * itself could not run. A usage mistake never masquerades as a passing build.
@@ -18,6 +19,15 @@ import {
   type StaleEntry,
 } from './baseline.js';
 import { discoverConfig, loadConfig, type SpecGraphConfig } from './config.js';
+import {
+  DiffInputError,
+  diffExports,
+  formatDiffJson,
+  formatDiffMarkdown,
+  formatDiffText,
+  parseGraphExport,
+  type GraphExport,
+} from './diff.js';
 import { isGlob, underRoot } from './glob.js';
 import { analyse, DEFAULT_PATTERNS, withDiagnostics, type AnalyseOptions, type AnalysisResult } from './runner.js';
 import {
@@ -55,7 +65,7 @@ export class UsageError extends Error {
   }
 }
 
-export type Command = 'check' | 'query' | 'graph' | 'rules';
+export type Command = 'check' | 'query' | 'graph' | 'rules' | 'diff';
 
 export interface CliOptions {
   readonly command: Command;
@@ -125,6 +135,7 @@ USAGE
   spec-graph query <selector|project:rule> [patterns...] [options]
   spec-graph graph [patterns...] [--graph-format dot|mermaid|json]
   spec-graph rules [rule-id] [--explain]
+  spec-graph diff <before.json> <after.json> [--format human|json|markdown]
 
 COMMANDS
   check     Validate the specification graph. The default.
@@ -134,6 +145,10 @@ COMMANDS
   rules     List the diagnostics that will run, built in and project. Name one
             to see only that one; --explain adds its selector and the ADR that
             decided it.
+  diff      Compare two graph exports: documents added, removed, moved or
+            accepted; relations added or removed; and obligations resolved or
+            reopened where they can be told apart. Make both exports with the
+            same spec-graph. Exits 0 whether anything changed or not.
 
 OPTIONS
   --root <dir>            Directory the patterns resolve against. Without it,
@@ -164,8 +179,9 @@ OPTIONS
   --no-config             Ignore .spec-graph.json and the package.json key.
   --format <fmt>          human, json, sarif or markdown. sarif is the
                           interchange format GitHub code scanning and editors
-                          already read; markdown is a table for a pull-request
-                          comment or $GITHUB_STEP_SUMMARY (default: human)
+                          already read, for check; markdown is a table for a
+                          pull-request comment or $GITHUB_STEP_SUMMARY, for check
+                          or diff (default: human)
   --graph-format <fmt>    dot, mermaid or json (default: dot)
   --documents-only        Leave items out of the exported graph
   --rule <id>=<severity>  Override one rule: error, warn, info or off. A project
@@ -276,6 +292,7 @@ EXAMPLES
   spec-graph check --rule project:no-draft-dependency=off
   spec-graph query project:no-draft-dependency   # what does that rule match?
   spec-graph check --format markdown >> "$GITHUB_STEP_SUMMARY"
+  spec-graph diff base.json head.json --format markdown >> "$GITHUB_STEP_SUMMARY"
 `;
 
 const SEVERITIES: readonly Severity[] = ['error', 'warn', 'info', 'off'];
@@ -287,7 +304,7 @@ export function parseArgs(argv: readonly string[], cwd: string): CliOptions {
 
   if (args.length > 0 && !((args[0] as string).startsWith('-'))) {
     const first = args[0] as string;
-    if (first === 'check' || first === 'query' || first === 'graph' || first === 'rules') {
+    if (first === 'check' || first === 'query' || first === 'graph' || first === 'rules' || first === 'diff') {
       command = first;
       args.shift();
     }
@@ -463,9 +480,19 @@ export function parseArgs(argv: readonly string[], cwd: string): CliOptions {
 
   // SARIF is a report about findings, and only `check` produces those. Falling
   // back to JSON would hand a pipeline something its uploader rejects with a
-  // message about a schema rather than about the command that was run.
-  if ((format === 'sarif' || format === 'markdown') && command !== 'check' && !help && !version) {
-    throw new UsageError(`--format ${format} reports findings, so it belongs to check, not to ${command}`);
+  // message about a schema rather than about the command that was run. Markdown
+  // is for a pull request, which reads a check or a diff.
+  if (format === 'sarif' && command !== 'check' && !help && !version) {
+    throw new UsageError(`--format sarif reports findings, so it belongs to check, not to ${command}`);
+  }
+  if (format === 'markdown' && command !== 'check' && command !== 'diff' && !help && !version) {
+    throw new UsageError(`--format markdown is a report for a pull request, so it belongs to check or diff, not to ${command}`);
+  }
+
+  if (command === 'diff' && patterns.length !== 2 && !help && !version) {
+    throw new UsageError(
+      'diff compares two graph exports, for example:\n  spec-graph diff base.json head.json\n  (make each with spec-graph graph --graph-format json)',
+    );
   }
 
   if (command === 'query' && selector === null && !help && !version) {
@@ -563,6 +590,10 @@ export async function main(io: CliIO = {}): Promise<number> {
     out(`${await readVersion()}\n`);
     return EXIT_OK;
   }
+
+  // A diff reads two files and nothing else: no configuration and no corpus, so
+  // it can compare exports from a checkout it is not running in.
+  if (options.command === 'diff') return runDiff(options.patterns as readonly [string, string], cwd, options.format, out, err);
 
   const color = options.color ?? shouldUseColor({ isTTY: io.isTTY, env });
   const ascii = options.ascii ?? shouldUseAscii({ env });
@@ -663,7 +694,12 @@ export async function main(io: CliIO = {}): Promise<number> {
 
   switch (options.command) {
     case 'graph':
-      out(formatGraph(result.graph, options.graphFormat, { documentsOnly: options.documentsOnly }));
+      out(
+        formatGraph(result.graph, options.graphFormat, {
+          documentsOnly: options.documentsOnly,
+          generator: { name: 'spec-graph', version: await readVersion() },
+        }),
+      );
       return EXIT_OK;
 
     case 'query': {
@@ -937,6 +973,45 @@ function nodeSummary(node: SpecNode): Record<string, unknown> {
 function renderQueryError(selector: string, error: QueryError): string {
   const caret = `${' '.repeat(Math.max(0, error.offset))}^`;
   return `spec-graph: ${error.message}\n  ${selector}\n  ${caret}\n`;
+}
+
+/**
+ * Compares two exports.
+ *
+ * Exit 0 whether anything changed or not: a diff describes, and `check` gates. A
+ * diff that failed on a removed relation would fail every legitimate
+ * supersession (ADR-0020).
+ */
+async function runDiff(
+  paths: readonly [string, string],
+  cwd: string,
+  format: CliOptions['format'],
+  out: (text: string) => void,
+  err: (text: string) => void,
+): Promise<number> {
+  const { readFile } = await import('node:fs/promises');
+  const { resolve } = await import('node:path');
+  const sides: GraphExport[] = [];
+  for (const path of paths) {
+    let raw: string;
+    try {
+      raw = await readFile(resolve(cwd, path), 'utf8');
+    } catch (error) {
+      err(`spec-graph: cannot read ${path}: ${(error as Error).message}\n`);
+      return EXIT_ERROR;
+    }
+    try {
+      sides.push(parseGraphExport(raw, path));
+    } catch (error) {
+      if (!(error instanceof DiffInputError)) throw error;
+      err(`spec-graph: ${error.message}\n`);
+      return EXIT_ERROR;
+    }
+  }
+  const [before, after] = sides as [GraphExport, GraphExport];
+  const diff = diffExports(before, after);
+  out(format === 'json' ? formatDiffJson(diff) : format === 'markdown' ? formatDiffMarkdown(diff) : formatDiffText(diff));
+  return EXIT_OK;
 }
 
 async function readVersion(): Promise<string> {

@@ -34,6 +34,20 @@ replaces on every glob and path in a differential corpus. See
 
 ### Added
 
+**`spec-graph diff <before.json> <after.json>` says what a change did to the
+decisions:** documents added, removed, moved or accepted, relations added or
+removed, and obligations resolved or reopened. It names only what it can tell
+apart. An obligation's id is its position in its section, so one inserted
+question renumbers every question below it, and a diff keyed on those ids would
+report a closed question as reopened when nobody touched it. An obligation is
+paired only by a declared id, or by its document, section and title when nothing
+else shares them; anything unpaired is reported as having appeared or
+disappeared. Human, `--format json` or `--format markdown`, and exit 0 either
+way. See [ADR-0020](docs/adr/0020-a-diff-names-what-it-can-tell-apart.md).
+
+- The JSON graph export names its `generator`, so a diff can warn when two
+  exports came from different versions, and each item says whether its id was
+  `declared`. Both are additions; the export is still version 1.
 - `compileGlob(pattern, { ignoreCase })`, the matcher the walk uses, and an
   `ignoreCase` option on `compilePattern` for a pattern that must respect case.
   `globToRegExp` is unchanged and still exported.

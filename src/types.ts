@@ -264,6 +264,14 @@ export interface DocumentNode extends NodeBase {
 
 export interface ItemNode extends NodeBase {
   readonly kind: 'item';
+  /**
+   * Whether the id was written by an author rather than numbered by position.
+   *
+   * A numbered id is the item's ordinal within its section, so inserting one
+   * item renumbers every item after it. Only a declared id names the same item
+   * in two states of a repository (ADR-0020).
+   */
+  readonly declared: boolean;
   /** Owning document id. */
   readonly document: string;
   /** Heading path the item sits under, outermost first. */

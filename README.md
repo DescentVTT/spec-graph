@@ -679,6 +679,7 @@ spec-graph query project:<rule>      Run a registered rule by its id.
 spec-graph graph [patterns...]       Export for Graphviz, Mermaid or JSON.
 spec-graph rules [rule-id]           List the diagnostics; --explain adds
                                      each selector and the ADR behind it.
+spec-graph diff <before> <after>     Compare two JSON graph exports.
 
 --root <dir>            Directory patterns resolve against, and the root of the
                         run. Without it the config file is discovered upward and
@@ -692,7 +693,7 @@ spec-graph rules [rule-id]           List the diagnostics; --explain adds
 --record-baseline <f>   Write today's findings as accepted debt, exit 0
 --ratchet               Also fail when a baseline entry no longer occurs
 --no-config             Ignore .spec-graph.json and the package.json key
---format <fmt>          human | json | sarif | markdown
+--format <fmt>          human | json | sarif (check) | markdown (check, diff)
 --graph-format <fmt>    dot | mermaid | json
 --documents-only        Hide items; their relations lift onto their documents
 --rule <id>=<severity>  error | warn | info | off (repeatable)
@@ -751,6 +752,28 @@ every finding, so a bot can annotate a diff:
   ]
 }
 ```
+
+A check says what is wrong. `spec-graph diff` says what a pull request changed:
+documents added, removed, moved or accepted, relations added or removed, and
+obligations resolved or reopened. It compares two exports made by the same
+binary, so CI makes one from the base branch and one from the pull request:
+
+```yaml
+- run: git fetch --depth 1 origin "$GITHUB_BASE_REF" && git worktree add ../base FETCH_HEAD
+- run: npx spec-graph graph --root ../base --graph-format json > base.json
+- run: npx spec-graph graph --graph-format json > head.json
+- run: npx spec-graph diff base.json head.json --format markdown >> "$GITHUB_STEP_SUMMARY"
+```
+
+It names only what it can tell apart. A document keeps its id through a rename,
+so a moved document reads as moved. An obligation's id is its position in its
+section, so inserting a question renumbers every question below it; an
+obligation is therefore paired only by an id its author declared, or by its
+document, section and title when nothing else shares them. Anything unpaired
+is reported as having appeared or disappeared, never as resolved or reopened.
+Findings are left to `--baseline`, which already reports what is new. The exit
+code is `0` whether anything changed or not: a diff describes, and `check`
+gates. See [ADR-0020](docs/adr/0020-a-diff-names-what-it-can-tell-apart.md).
 
 ## Visualising
 
