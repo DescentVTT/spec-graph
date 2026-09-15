@@ -85,6 +85,10 @@ describe('a register written as headings', () => {
     expect(corpus.items).toHaveLength(1);
     expect(corpus.items[0]?.document).toBe('ADR-0002');
     expect(corpus.items[0]?.id).toBe('ADR-0002#open-questions.1');
+    // Handed to the file or another section as well, the item would still be
+    // counted once: resolution drops the second copy as a duplicate id, and the
+    // problem it reports is the only sign.
+    expect(corpus.problems).toEqual([]);
   });
 
   it('resolves relations between sections of one file', () => {
