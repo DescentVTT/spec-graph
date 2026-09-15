@@ -234,6 +234,10 @@ so in practice the description is written once.
       survives a file being moved or renamed. What is left is a command, a
       comparison and a format, and 0.5.0 already carries a new matcher and a new
       rule about where the root is.
+      *Designed (2026-09-15)* in [ADR-0020](0020-a-diff-names-what-it-can-tell-apart.md),
+      proposed and not yet built. It also corrects the sentence above: identity
+      is done for documents, but an obligation's id is its ordinal within a
+      section, and one inserted question renumbers every question after it.
 - [x] SARIF's `fixes` field can carry a machine-applicable edit, and several
       findings have exactly one. **Declined (2026-09-12).** Counted, and
       "several" was generous: exactly one rule has a fix that is an edit rather
