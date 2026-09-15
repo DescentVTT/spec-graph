@@ -214,7 +214,7 @@ so in practice the description is written once.
 
 ## Open Questions
 
-- [ ] Should `spec-graph diff` report what changed *relationally* between two
+- [x] Should `spec-graph diff` report what changed *relationally* between two
       states of the graph - dependencies added or removed, a specification that
       moved from `draft` to `accepted`, an obligation that is newly unfulfilled?
       Noted here (2026-09-13) because it is the one item on this list that is
@@ -234,10 +234,11 @@ so in practice the description is written once.
       survives a file being moved or renamed. What is left is a command, a
       comparison and a format, and 0.5.0 already carries a new matcher and a new
       rule about where the root is.
-      *Designed (2026-09-15)* in [ADR-0020](0020-a-diff-names-what-it-can-tell-apart.md),
-      proposed and not yet built. It also corrects the sentence above: identity
-      is done for documents, but an obligation's id is its ordinal within a
-      section, and one inserted question renumbers every question after it.
+      **Resolved (2026-09-15):** yes, shipped as `spec-graph diff`, designed in
+      [ADR-0020](0020-a-diff-names-what-it-can-tell-apart.md). It also corrects
+      the sentence above: identity is done for documents, but an obligation's id
+      is its ordinal within a section, and one inserted question renumbers every
+      question after it.
 - [x] SARIF's `fixes` field can carry a machine-applicable edit, and several
       findings have exactly one. **Declined (2026-09-12).** Counted, and
       "several" was generous: exactly one rule has a fix that is an edit rather
