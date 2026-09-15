@@ -3,7 +3,13 @@
 Notable changes, newest first. Versions follow [semver](https://semver.org):
 a patch fixes behaviour without asking anything of a repository that upgrades.
 
-## Unreleased
+## 0.6.0
+
+A diff of two graph exports that names only the changes it can tell apart,
+every glob moved onto the automaton `~=` already ran on, and a directive that
+annotates one item where it used to annotate every item in reach. The mutation
+figure is lower than 0.5.0's, and it is the first a release has carried from
+tests that no longer race each other on disk.
 
 ### Fixed
 
@@ -61,6 +67,41 @@ way. See [ADR-0020](docs/adr/0020-a-diff-names-what-it-can-tell-apart.md).
 - `compileGlob(pattern, { ignoreCase })`, the matcher the walk uses, and an
   `ignoreCase` option on `compilePattern` for a pattern that must respect case.
   `globToRegExp` is unchanged and still exported.
+
+### Changed
+
+One behaviour moves, and it can turn a run that passed into one that fails.
+
+- **A `@spec-item` directive with prose, a heading or code between it and the
+  item below binds to nothing.** It used to reach any item starting within 200
+  characters. Its id, state and title no longer apply: the item takes its
+  numbered id, a `state="moot"` stops closing it, and a link to the declared id
+  is a `broken-reference`. Move the directive down to the line above the item.
+
+### Verified
+
+| | |
+|---|---|
+| `npm run lint` | pass |
+| `npm test` | 921 passing, 23 files |
+| `npm run selfcheck` | pass, over 23 documents and 184 relations |
+| hosted full sweep, which governs | **75.25%** over 10,519 mutants, four shards of 22 to 33 minutes |
+| `break` | unchanged at 70 |
+
+0.5.0's 76.83% is not the figure to compare with. About three points of it were
+kills no assertion made: tests writing to fixed paths deleted each other's files
+under Stryker's parallel workers. Race-free, the sweep read 73.42% before
+`spec-graph diff` and 75.25% with this release: `diff.ts` at 98.35%, and
+`directives.ts` from 66.88% to 78.01%. Lose every timeout and it reads 71.89%.
+See [ADR-0007](docs/adr/0007-mutation-testing.md) and
+[ADR-0019](docs/adr/0019-the-sweep-runs-in-shards.md).
+
+The sweep after the directive fix moved `extract.ts` down 0.18 points, among the
+usual movement in files nobody touched, and this one was real. Four mutants
+that hand an item to every specification in a register had gone from killed to
+surviving: resolution now drops the duplicates they create, and the test that
+caught them only counted items. It now also asserts that no problem is
+reported.
 
 ## 0.5.0
 
