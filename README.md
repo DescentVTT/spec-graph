@@ -831,7 +831,7 @@ Twenty ADRs, which `spec-graph` validates on every CI run:
 - [ADR-0017 — A predicate must finish](docs/adr/0017-a-predicate-must-finish.md)
 - [ADR-0018 — The configuration file is the root](docs/adr/0018-the-configuration-file-is-the-root.md)
 - [ADR-0019 — The sweep runs in shards](docs/adr/0019-the-sweep-runs-in-shards.md)
-- [ADR-0020 — A diff names only what it can tell apart](docs/adr/0020-a-diff-names-what-it-can-tell-apart.md) (proposed)
+- [ADR-0020 — A diff names only what it can tell apart](docs/adr/0020-a-diff-names-what-it-can-tell-apart.md)
 
 **Zero runtime dependencies.** Node 22+, native ESM, TypeScript strict with
 `noUncheckedIndexedAccess` and `exactOptionalPropertyTypes`. The Markdown
