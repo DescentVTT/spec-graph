@@ -15,7 +15,7 @@
  * broken reference to specification 256.
  */
 
-import { attr, attrList, directiveFor, parseDirectives, type Directive } from './directives.js';
+import { attr, attrList, bindItemDirectives, parseDirectives, type Directive } from './directives.js';
 import {
   identify,
   isDocumentTarget,
@@ -988,11 +988,12 @@ function extractItems(context: ItemContext): ItemNode[] {
   const { scanned, directives, ownerAt, file, index } = context;
   const out: ItemNode[] = [];
   const ordinals = new Map<string, number>();
+  const bound = bindItemDirectives(scanned, directives);
 
   for (const item of scanned.listItems) {
     const section = sectionPathAt(scanned, item.start);
     const inObligationSection = section.some((heading) => OBLIGATION_SECTIONS.has(normaliseHeading(heading)));
-    const directive = directiveFor(directives, 'spec-item', { start: item.start, end: item.end }, 200);
+    const directive = bound.get(item) ?? null;
 
     if (!isObligation(item, inObligationSection, directive)) continue;
 

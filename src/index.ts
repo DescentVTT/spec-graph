@@ -131,7 +131,7 @@ export type {
   ScannedLine,
 } from './markdown.js';
 
-export { parseDirectives, attr, attrList, directiveFor } from './directives.js';
+export { parseDirectives, attr, attrList, bindItemDirectives, directiveFor } from './directives.js';
 export type { Attribute, Directive, DirectiveName } from './directives.js';
 
 export { parseFrontMatter, toRecord, valuesOf } from './yaml.js';

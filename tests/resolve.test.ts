@@ -193,6 +193,52 @@ describe('corpus integrity', () => {
     expect(documents[0]?.path).toBe('docs/adr/0001-a.md');
   });
 
+  it('gives a declared id to one obligation, and numbers the one after it', () => {
+    for (const gap of ['', '\n']) {
+      const { items, nodes } = resolve({
+        'docs/adr/0001-a.md': [
+          '---',
+          'status: accepted',
+          '---',
+          '',
+          '# ADR-0001: Cache',
+          '',
+          '## Open Questions',
+          '',
+          '<!-- @spec-item id="retention" -->',
+          '- [ ] Who owns retention?',
+          `${gap}- [ ] Numbered?`,
+        ].join('\n'),
+      });
+      expect(items.map((item) => [item.id, item.title])).toEqual([
+        ['ADR-0001#retention', 'Who owns retention?'],
+        ['ADR-0001#open-questions.2', 'Numbered?'],
+      ]);
+      expect(nodes.get('ADR-0001#retention')?.title).toBe('Who owns retention?');
+    }
+  });
+
+  it('reports two items claiming the same id, and keeps the first', () => {
+    const { problems, items, edges } = resolve({
+      'docs/adr/0001-a.md': [
+        '# A',
+        '',
+        '## Open Questions',
+        '',
+        '<!-- @spec-item id="retention" -->',
+        '- [ ] Who owns retention?',
+        '',
+        '<!-- @spec-item id="retention" -->',
+        '- [ ] Who owns deletion?',
+      ].join('\n'),
+    });
+    expect(problems.map((problem) => [problem.message, problem.at.span.start.line])).toEqual([
+      ['duplicate item id "ADR-0001#retention", already taken at docs/adr/0001-a.md:6', 9],
+    ]);
+    expect(items.map((item) => item.title)).toEqual(['Who owns retention?']);
+    expect(edgesOf(edges, 'contains')).toHaveLength(1);
+  });
+
   it('reports an ambiguous alias rather than choosing', () => {
     const { dangling } = resolve({
       'docs/adr/0001-a.md': '---\naliases: [shared]\n---\n\n# A\n',

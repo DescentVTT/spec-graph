@@ -138,6 +138,17 @@ export function resolveCorpus(
     nodes.set(entry.document.id, entry.document);
     documents.push(entry.document);
     for (const item of entry.items) {
+      // Nodes are keyed by id, so a second item would replace the first in the
+      // graph while both were still counted, and one of them would vanish from
+      // the export without a word.
+      const taken = nodes.get(item.id);
+      if (taken) {
+        problems.push({
+          message: `duplicate item id "${item.id}", already taken at ${taken.at.file}:${taken.at.span.start.line}`,
+          at: item.at,
+        });
+        continue;
+      }
       nodes.set(item.id, item);
       items.push(item);
     }

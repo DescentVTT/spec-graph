@@ -18,7 +18,7 @@
  * an override is visible rather than mysterious.
  */
 
-import type { HtmlComment } from './markdown.js';
+import type { HtmlComment, ListItem, ScannedDocument } from './markdown.js';
 
 export type DirectiveName = 'spec-node' | 'spec-item' | 'spec-edge' | 'spec-ignore' | 'spec-history';
 
@@ -133,6 +133,9 @@ export function attrList(directive: Directive, name: string): string[] {
  * A `@spec-item` directive may sit on the line above the item, on the same
  * line, or inside the item body. All three read naturally in the source, so all
  * three are accepted, with the closest preceding directive winning.
+ *
+ * It answers for one region with no view of the others, so a directive in reach
+ * of two items is found for both. Extraction uses `bindItemDirectives`.
  */
 export function directiveFor(
   directives: readonly Directive[],
@@ -150,4 +153,84 @@ export function directiveFor(
     if (best === null || directive.start > best.start) best = directive;
   }
   return best;
+}
+
+/**
+ * Pairs each `@spec-item` directive with the one list item it annotates.
+ *
+ * A directive is written for one item, so it binds to one: the item directly
+ * below it, with nothing but blank lines and other comments between, or else
+ * the item it is written in, the innermost where items nest. An item that
+ * several bind to takes the last one written.
+ *
+ * A directive alone on its line is in an item only when indented further than
+ * that item's marker, which is how CommonMark reads it. Indented under an item,
+ * it annotates that item and not the sibling below; flush between two items, it
+ * annotates the second.
+ */
+export function bindItemDirectives(
+  scanned: ScannedDocument,
+  directives: readonly Directive[],
+): Map<ListItem, Directive> {
+  const bound = new Map<ListItem, Directive>();
+  const wanted = directives.filter((directive) => directive.name === 'spec-item');
+  // Most documents carry none. Sparing them the pass over their lines changes
+  // how long this takes and nothing else.
+  if (wanted.length === 0) return bound;
+
+  const { lines, listItems, masked } = scanned;
+  // The indentation of each line holding nothing but whitespace and comments.
+  // Code is masked too, so a fence has to be told apart by its flag.
+  const quiet = new Map<number, number>();
+  // For every other line, where the run of quiet lines directly above it began,
+  // when there was one.
+  const quietFrom = new Map<number, number | undefined>();
+  let run: number | undefined;
+  for (const line of lines) {
+    if (!line.code && masked.slice(line.contentStart, line.end).trim() === '') {
+      quiet.set(line.line, line.indent);
+      run ??= line.start;
+      continue;
+    }
+    quietFrom.set(line.line, run);
+    run = undefined;
+  }
+
+  // The items whose text the cursor is in, outermost first. Items nest, so one
+  // that has ended is always on top. An item ends at the end of a line, the next
+  // thing starts on a later one, and no two things start together, so `<` and
+  // `<=` read alike in every comparison of offsets below.
+  const open: ListItem[] = [];
+  const close = (offset: number): void => {
+    while (open.length > 0 && (open[open.length - 1] as ListItem).end <= offset) open.pop();
+  };
+  let next = 0;
+  for (const directive of wanted) {
+    while (next < listItems.length && (listItems[next] as ListItem).start < directive.start) {
+      const item = listItems[next] as ListItem;
+      close(item.start);
+      open.push(item);
+      next += 1;
+    }
+    close(directive.start);
+
+    // Sharing its line with text, a directive is in whatever that text is in.
+    const indent = quiet.get(directive.line) ?? Infinity;
+    // No deeper than the scanner already went to find where these items end.
+    let depth = open.length - 1;
+    while (depth >= 0 && (open[depth] as ListItem).indent >= indent) depth -= 1;
+    const holder = open[depth];
+
+    const below = listItems[next];
+    const directlyAbove = below !== undefined && (quietFrom.get(below.line) ?? Infinity) <= directive.start;
+    if (directlyAbove && (holder === undefined || below.start < holder.end)) {
+      bound.set(below, directive);
+      continue;
+    }
+    // Flush under an item and above no other, it continues the item as any
+    // unindented line does.
+    const written = holder ?? open[open.length - 1];
+    if (written !== undefined) bound.set(written, directive);
+  }
+  return bound;
 }

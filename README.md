@@ -483,6 +483,11 @@ Directives are ordinary HTML comments — invisible in every Markdown renderer:
 A directive always wins, and the report says the state came from a directive, so
 an override is visible rather than mysterious.
 
+A `@spec-item` annotates one item: the one directly below it, with nothing but
+blank lines or other comments between, or else the one it is written on or
+indented under. An id that two items end up with is a parse problem, listed by
+`--verbose`, and the first item keeps it.
+
 ## Journals, changelogs and minutes
 
 A 2024 journal noting *"decision deferred to ADR-002"* is not delegating

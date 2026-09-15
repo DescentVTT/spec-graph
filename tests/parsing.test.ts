@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { attr, attrList, directiveFor, parseDirectives } from '../src/directives.js';
+import { attr, attrList, bindItemDirectives, directiveFor, parseDirectives } from '../src/directives.js';
 import { foldRelationKey, RELATION_KEYS } from '../src/extract.js';
 import {
   familyFromPath,
@@ -315,6 +315,72 @@ describe('directives', () => {
     expect(directiveFor(directives, 'spec-item', { start: first!.start, end: first!.end }, 200)?.name).toBe('spec-item');
     // The look-behind must not reach past the item it belongs to.
     expect(directiveFor(directives, 'spec-item', { start: second!.start, end: second!.end }, 5)).toBeNull();
+  });
+
+  /** The id of the `@spec-item` bound to each list item, in document order. */
+  const boundIds = (...lines: string[]): (string | null)[] => {
+    const doc = scanMarkdown(lines.join('\n'));
+    const bound = bindItemDirectives(doc, parseDirectives(doc.comments));
+    // A directive that annotates nothing is left out, not bound to a missing item.
+    expect([...bound.keys()].every((item) => doc.listItems.includes(item))).toBe(true);
+    return doc.listItems.map((item) => {
+      const directive = bound.get(item);
+      return directive === undefined ? null : (attr(directive, 'id')?.value ?? null);
+    });
+  };
+
+  it('binds a @spec-item to the item directly below it, and not to the one after', () => {
+    expect(boundIds('<!-- @spec-item id="one" -->', '- [ ] first', '- [ ] second')).toEqual(['one', null]);
+    expect(boundIds('<!-- @spec-item id="one" -->', '- [ ] first', '', '- [ ] second')).toEqual(['one', null]);
+    expect(boundIds('<!-- @spec-item id="one" -->', '- [ ] first', '  - [ ] nested')).toEqual(['one', null]);
+  });
+
+  it('reaches the item below across blank lines and other comments, and across nothing else', () => {
+    expect(boundIds('<!-- @spec-item id="one" -->', '', '<!-- prettier-ignore -->', '- [ ] first')).toEqual(['one']);
+    expect(boundIds('> <!-- @spec-item id="one" -->', '> - [ ] first', '> - [ ] second')).toEqual(['one', null]);
+    expect(boundIds('<!-- @spec-item id="one" -->', 'Prose.', '- [ ] first')).toEqual([null]);
+    expect(boundIds('<!-- @spec-item id="one" -->', '## Next', '- [ ] first')).toEqual([null]);
+    expect(boundIds('<!-- @spec-item id="one" -->', '```', '', '```', '- [ ] first')).toEqual([null]);
+    // Ending a paragraph, it stands above nothing, whatever follows the blank line.
+    expect(boundIds('Prose. <!-- @spec-item id="one" -->', '', '- [ ] first')).toEqual([null]);
+  });
+
+  it('binds only @spec-item, so another directive above a bullet does not make it an obligation', () => {
+    expect(boundIds('<!-- @spec-node id="ADR-0001" -->', '- first')).toEqual([null]);
+  });
+
+  it('does not bind a @spec-item to an item that ended before it', () => {
+    expect(boundIds('- [ ] first', '', 'Prose. <!-- @spec-item id="one" -->')).toEqual([null]);
+    expect(boundIds('- [ ] first', '', 'Prose.', '', '  - [ ] second', '  <!-- @spec-item id="two" -->')).toEqual([
+      null,
+      'two',
+    ]);
+  });
+
+  it('binds a @spec-item written on an item, or indented under it, to that item and not the sibling below', () => {
+    expect(boundIds('- [ ] first <!-- @spec-item id="one" -->', '- [ ] second')).toEqual(['one', null]);
+    expect(boundIds('- [ ] first', '  <!-- @spec-item id="one" -->', '- [ ] second')).toEqual(['one', null]);
+  });
+
+  it('reads a @spec-item written flush between two items as the second one', () => {
+    expect(boundIds('- [ ] first', '<!-- @spec-item id="two" -->', '- [ ] second')).toEqual([null, 'two']);
+    // With no item below it, the line continues the item above.
+    expect(boundIds('- [ ] first', '<!-- @spec-item id="one" -->')).toEqual(['one']);
+  });
+
+  it('keeps a parent and the item nested in it to their own @spec-item', () => {
+    expect(
+      boundIds('<!-- @spec-item id="parent" -->', '- [ ] parent', '  <!-- @spec-item id="child" -->', '  - [ ] child'),
+    ).toEqual(['parent', 'child']);
+    expect(boundIds('- [ ] parent', '  - [ ] child <!-- @spec-item id="child" -->')).toEqual([null, 'child']);
+    // Indented to the parent's text and not the child's, it is the parent's.
+    expect(
+      boundIds('- [ ] parent', '  - [ ] child', '  <!-- @spec-item id="parent" -->', '- [ ] next'),
+    ).toEqual(['parent', null, null]);
+  });
+
+  it('gives an item with two @spec-item directives above it the nearer one', () => {
+    expect(boundIds('<!-- @spec-item id="far" -->', '<!-- @spec-item id="near" -->', '- [ ] first')).toEqual(['near']);
   });
 });
 

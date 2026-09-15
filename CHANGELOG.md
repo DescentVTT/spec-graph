@@ -31,6 +31,16 @@ replaces on every glob and path in a differential corpus. See
   both sides, and on Windows alone also folded case the way the `i` flag does,
   which made a handful of distinct characters - the micro sign and the Greek
   mu - one target there and two everywhere else.
+- **A `@spec-item` directive annotates one item.** Each item used to look for
+  its own, so a directive was found by every item within 200 characters below
+  it and by every item enclosing it. The question after a declared one took the
+  same id and vanished from the graph without a word, and a parent could take
+  its child's directive in place of its own. A directive now binds to the item
+  directly below it, with nothing but blank lines and comments between, or else
+  to the innermost item it is written on or indented under. An id two items
+  still claim, by declaring it twice or by declaring another item's number, is
+  a parse problem, and the first item keeps it. `bindItemDirectives` is
+  exported; `directiveFor` is unchanged and still exported.
 
 ### Added
 
