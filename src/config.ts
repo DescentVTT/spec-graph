@@ -102,9 +102,9 @@ const EMPTY: LoadedConfig = { config: {}, source: null, problems: [] };
 /**
  * Reads configuration from a directory.
  *
- * Never throws. A malformed config is reported as a problem and the run
- * continues with defaults: a broken config file should not stop a team seeing
- * the findings it was going to show them anyway.
+ * Never throws, and never decides. Every problem is collected and handed back
+ * whole, so the reader sees all of them at once rather than the first; what a
+ * problem costs is the caller's to say, and the CLI stops on one.
  */
 export function loadConfig(root: string, read: (path: string) => string = defaultRead): LoadedConfig {
   for (const name of CONFIG_FILES) {
@@ -125,7 +125,7 @@ export function loadConfig(root: string, read: (path: string) => string = defaul
   const section = parsed[CONFIG_PACKAGE_KEY];
   if (section === undefined) return EMPTY;
   if (!isRecord(section)) {
-    return { config: {}, source: `package.json`, problems: [`"${CONFIG_PACKAGE_KEY}" must be an object`] };
+    return { config: {}, source: `package.json`, problems: [`package.json: "${CONFIG_PACKAGE_KEY}" must be an object`] };
   }
   return readFields(section, `package.json#${CONFIG_PACKAGE_KEY}`);
 }

@@ -122,16 +122,42 @@ off, in review, next to the change that paid it.
 today so tomorrow can be compared against it. It says nothing about whether
 today is acceptable, so it reports what it wrote and exits `0`.
 
-**A missing file accepts nothing.** `--baseline` against a repository that has
-not recorded one yet reports everything, which is what an empty baseline does.
-Requiring the file to exist would only mean a worse error message for the same
-situation.
+**A configured baseline no run has recorded yet accepts nothing.**
+*Amended 2026-09-16.* A path in `.spec-graph.json` is a standing statement about
+the repository, and it is written before the file exists as often as after.
+Reporting everything is what an empty baseline does, and it is what that run
+should report.
 
-**A baseline that cannot be read is reported and ignored.** It suppresses
-findings; one nobody can parse would suppress findings the reader cannot account
-for. Malformed JSON, a version this build does not know, a misspelled rule in
-one row: each is printed, and the run continues on what is left - the same
-contract as [ADR-0010](0010-configuration-belongs-to-the-repository.md).
+**A `--baseline` that is not there is an error.** The paragraph above used to
+cover both, on the grounds that requiring the file to exist would only buy a
+worse error message for the same situation. They are not the same situation. A
+path typed on the command line says the file is there *for this run*. Read as an
+empty baseline, a typo in it reports every accepted finding as new, passes
+`--ratchet` with nothing left to be stale about, and is indistinguishable from a
+regression nobody introduced.
+
+It was found next to the bug that produces it. Every baseline path was resolved
+under the root, so an absolute one became `<root>/tmp/b.json`: the recording
+landed inside the corpus or failed naming a directory nobody had typed, and the
+read found nothing and said nothing. An absolute path now resolves to where it
+points, on either platform's spelling, and a `--baseline` that cannot be read
+exits `2`.
+
+**Unreadable is not missing.** A directory where a file was named, or a
+permission that denies the read, is the tool failing to do what it was told -
+whichever of the two places the path was written, and whatever it means about
+adoption.
+
+**A baseline that cannot be *parsed* is reported and ignored.** Malformed JSON,
+a version this build does not know, a misspelled rule in one row: each is
+printed, and the run continues on what is left.
+
+*Amended 2026-09-16:* that used to be cited as the same contract as
+[ADR-0010](0010-configuration-belongs-to-the-repository.md), which now stops the
+run instead. What separates them is the direction the failure points. A baseline
+only ever suppresses, so a row nobody can read is a finding *reported*, and the
+cost is noise the reader can see and account for. A configuration decides what
+is checked at all, so a key nobody can read is a finding nobody will ever see.
 
 **The file is deterministic.** Sorted by rule, then document, then subject; two
 spaces; no timestamp. It lands in a repository and is read in diffs, and a

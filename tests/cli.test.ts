@@ -35,6 +35,29 @@ async function runIn(cwd: string, ...argv: string[]): Promise<Run> {
   return { code, out, err };
 }
 
+/**
+ * A repository holding one document and whatever configuration is passed.
+ *
+ * Written rather than committed. A configuration that does not load is now a
+ * run that stops, and a broken file sitting in the fixtures is one that upward
+ * discovery can reach from a test that never asked for it.
+ *
+ * Named for the process, for the reason the baseline's file below is.
+ */
+async function withConfig(name: string, config: string, body: (root: string) => Promise<void>): Promise<void> {
+  const { mkdir, rm, writeFile } = await import('node:fs/promises');
+  const root = `tests/fixtures/.tmp/${name}-${process.pid}`;
+  await rm(root, { recursive: true, force: true });
+  await mkdir(`${root}/docs`, { recursive: true });
+  await writeFile(`${root}/.spec-graph.json`, config);
+  await writeFile(`${root}/docs/0001.md`, '# ADR-0001: One\n\nstatus: accepted\n');
+  try {
+    await body(root);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}
+
 /* -------------------------------------------------------------------------- */
 
 describe('argument parsing', () => {
@@ -266,15 +289,28 @@ describe('repository configuration', () => {
     expect(result.code).toBe(EXIT_OK);
   });
 
-  it('names its source under --verbose', async () => {
+  it('names its source under --verbose, beside the report rather than inside it', async () => {
     const result = await run('check', ...CONFIGURED, '--verbose');
-    expect(result.out).toContain('configuration: .spec-graph.json');
+    expect(result.err).toContain('configuration: .spec-graph.json');
+    // stdout is the report, and in three of the four formats it is a document.
+    // This line sat above it, so --verbose --format json was unparseable and
+    // --format sarif was a file the code-scanning uploader rejects.
+    const json = await run('check', ...CONFIGURED, '--verbose', '--format', 'json');
+    expect(() => JSON.parse(json.out)).not.toThrow();
+    const sarif = await run('check', ...CONFIGURED, '--verbose', '--format', 'sarif');
+    expect(() => JSON.parse(sarif.out)).not.toThrow();
   });
 
   it('is skipped entirely with --no-config', async () => {
     const result = await run('check', 'docs/**/*.md', ...CONFIGURED, '--no-config');
     expect(result.code).toBe(EXIT_FAILED);
     expect(parseArgs(['--no-config'], '/repo').noConfig).toBe(true);
+
+    // And nothing is said about a file that was not read. Under --verbose that
+    // line is the only evidence there was one, so an empty one is worse than
+    // none: it reads as a configuration whose name failed to print.
+    const loud = await run('check', 'docs/**/*.md', ...CONFIGURED, '--no-config', '--verbose');
+    expect(loud.err).not.toContain('configuration:');
   });
 
   it('adds to its list options rather than being replaced by a flag', async () => {
@@ -282,6 +318,94 @@ describe('repository configuration', () => {
     // to discard the ones the repository already declared.
     const result = await run('check', ...CONFIGURED, '--ignore-ref', 'never-matches-*');
     expect(result.code).toBe(EXIT_OK);
+  });
+});
+
+describe('a configuration that did not load', () => {
+  it('stops the run rather than checking the repository it was not configured for', async () => {
+    await withConfig('cli-broken', '{ "patterns": ["docs/**/*.md",  }\n', async (root) => {
+      const result = await run('check', '--root', root);
+      expect(result.code).toBe(EXIT_ERROR);
+      expect(result.err).toContain('not valid JSON');
+      expect(result.err).toContain('nothing was checked');
+      // No verdict at all. A report built on defaults describes a different
+      // corpus than the configured one, and "consistent" is the single answer
+      // a checker must never reach by accident.
+      expect(result.out).toBe('');
+    });
+  });
+
+  it('refuses an unknown key rather than dropping a typo', async () => {
+    await withConfig('cli-typo-key', '{ "ignoreReference": ["trap *"] }\n', async (root) => {
+      const result = await run('check', '--root', root);
+      expect(result.code).toBe(EXIT_ERROR);
+      expect(result.err).toContain('unknown key "ignoreReference"');
+    });
+  });
+
+  it('refuses a rule whose message names an attribute nothing has', async () => {
+    // The defect this was found by, on an 885-document repository: "{1.phse}"
+    // for "{1.phase}". The rule was reported at load time and then dropped, so
+    // the files the correctly spelled rule fails came back clean and CI passed.
+    const config = JSON.stringify({
+      patterns: ['docs/**/*.md'],
+      rules: {
+        'no-draft-dependency': {
+          query: 'document[phase=active] -depends-on-> document[phase=draft]',
+          message: '{0} depends on {1.phse}',
+        },
+      },
+    });
+    await withConfig('cli-typo-rule', `${config}\n`, async (root) => {
+      const result = await run('check', '--root', root);
+      expect(result.code).toBe(EXIT_ERROR);
+      expect(result.err).toContain('{1.phse}');
+      expect(result.out).toBe('');
+    });
+  });
+
+  it('refuses a severity naming a rule the file never defines', async () => {
+    await withConfig('cli-ghost-severity', '{ "severities": { "project:nope": "off" } }\n', async (root) => {
+      const result = await run('check', '--root', root);
+      expect(result.code).toBe(EXIT_ERROR);
+      expect(result.err).toContain('names no rule in "rules"');
+    });
+  });
+
+  it('refuses before listing the rules, which would be the wrong list', async () => {
+    // `rules` is the command that answers "what will you check for me", and
+    // from a file that did not load the honest answer is not a list.
+    await withConfig('cli-broken-rules', '{ "ignoreReference": ["x"] }\n', async (root) => {
+      const result = await run('rules', '--root', root);
+      expect(result.code).toBe(EXIT_ERROR);
+      expect(result.out).toBe('');
+    });
+  });
+
+  it('names package.json when that is where the key was', async () => {
+    const { mkdir, rm, writeFile } = await import('node:fs/promises');
+    const root = `tests/fixtures/.tmp/cli-package-${process.pid}`;
+    await rm(root, { recursive: true, force: true });
+    await mkdir(`${root}/docs`, { recursive: true });
+    await writeFile(`${root}/package.json`, '{ "name": "x", "spec-graph": "docs/**/*.md" }\n');
+    await writeFile(`${root}/docs/0001.md`, '# ADR-0001: One\n\nstatus: accepted\n');
+    try {
+      const result = await run('check', '--root', root);
+      expect(result.code).toBe(EXIT_ERROR);
+      // A problem reported against "the configuration" sends the reader to
+      // .spec-graph.json, which in this repository does not exist.
+      expect(result.err).toContain('package.json: "spec-graph" must be an object');
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('is what --no-config turns off, over the same broken file', async () => {
+    await withConfig('cli-no-config', '{ "ignoreReference": ["trap *"], "nope": 1 }\n', async (root) => {
+      const result = await run('check', 'docs/**/*.md', '--root', root, '--no-config');
+      expect(result.code, result.err).toBe(EXIT_OK);
+      expect(result.err).toBe('');
+    });
   });
 });
 
@@ -567,7 +691,16 @@ describe('running a registered rule by name', () => {
 
   it('names the selector under --verbose, which is what calibrating one needs', async () => {
     const result = await run('query', 'project:no-draft-dependency', '--root', PROJECT, '--verbose');
-    expect(result.out).toContain('project:no-draft-dependency: document[phase=active] -depends-on-> document[phase=draft]');
+    expect(result.err).toContain('project:no-draft-dependency: document[phase=active] -depends-on-> document[phase=draft]');
+    // Beside the matches rather than above them, so --format json stays JSON.
+    const json = await run('query', 'project:no-draft-dependency', '--root', PROJECT, '--verbose', '--format', 'json');
+    expect(() => JSON.parse(json.out)).not.toThrow();
+
+    // And only when asked for. On stderr an unwanted line is not caught by a
+    // parse the way it used to be on stdout, so the flag has to be asserted
+    // from both sides or it stops meaning anything.
+    const quiet = await run('query', 'project:no-draft-dependency', '--root', PROJECT);
+    expect(quiet.err).toBe('');
   });
 
   it('rejects a name nothing declares, and lists what is declared', async () => {
@@ -617,7 +750,7 @@ describe('finding the configuration from a subdirectory', () => {
 
   it('names the configuration the way the reader would have to type it', async () => {
     const nested = await runIn(absolute(`${PROJECT}/docs`), 'check', '--verbose', '--format', 'markdown');
-    expect(nested.out).toContain('configuration: ../.spec-graph.json');
+    expect(nested.err).toContain('configuration: ../.spec-graph.json');
   });
 
   it('keeps a pattern typed on the command line relative to where it was typed', async () => {
@@ -793,10 +926,87 @@ describe('the baseline', () => {
     }
   });
 
-  it('accepts nothing when the file is not there yet', async () => {
+  it('refuses a --baseline that is not there rather than accepting nothing', async () => {
+    // Typed on the command line, the path says the file is there for this run.
+    // Read as an empty baseline, a typo in it reports every accepted finding as
+    // new and passes --ratchet with nothing left to be stale about, and the
+    // only difference from a genuine regression is on nobody's screen.
     const missing = await run('check', '--root', LEGACY, '--no-config', '--baseline', 'nothing-here.json');
-    expect(missing.code).toBe(EXIT_FAILED);
-    expect(missing.err).toBe('');
+    expect(missing.code).toBe(EXIT_ERROR);
+    expect(missing.err).toContain('cannot read the baseline nothing-here.json');
+    expect(missing.out).toBe('');
+  });
+
+  it('accepts nothing for a configured baseline no run has recorded yet', async () => {
+    // The other half of it, and the case ADR-0012 argued for: a repository
+    // declares the path, then records the file. Reporting everything is what an
+    // empty baseline does, so the first run works before the file exists.
+    const root = `tests/fixtures/.tmp/cli-unrecorded-${process.pid}`;
+    const { mkdir, rm, writeFile } = await import('node:fs/promises');
+    await rm(root, { recursive: true, force: true });
+    await mkdir(`${root}/docs`, { recursive: true });
+    await writeFile(`${root}/.spec-graph.json`, '{"patterns":["docs/**/*.md"],"baseline":"nothing-here.json"}\n');
+    await writeFile(`${root}/docs/0001.md`, '# ADR-0001: One\n\nstatus: accepted\n\nSee [gone](docs/nope.md).\n');
+    try {
+      const quiet = await run('check', '--root', root);
+      expect(quiet.code).toBe(EXIT_FAILED);
+      expect(quiet.err).toBe('');
+
+      // Quiet is not silent: --verbose is where a path that reads nothing has
+      // to say so, or a typo there is indistinguishable from an honest start.
+      const loud = await run('check', '--root', root, '--verbose');
+      expect(loud.err).toContain('baseline nothing-here.json is not there');
+
+      // And it stops saying so once the file is there, which is the half that
+      // makes the line worth reading at all.
+      const recorded = await run('check', '--root', root, '--record-baseline', 'nothing-here.json');
+      expect(recorded.code, recorded.err).toBe(EXIT_OK);
+      const quieter = await run('check', '--root', root, '--verbose');
+      expect(quieter.err).not.toContain('is not there');
+      expect(quieter.code).toBe(EXIT_OK);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('refuses a baseline it can reach and cannot read, however the path was written', async () => {
+    // Absent is the documented case. A directory where a file was named is the
+    // tool failing to do what it was told, wherever the path came from.
+    const root = `tests/fixtures/.tmp/cli-unreadable-${process.pid}`;
+    const { mkdir, rm, writeFile } = await import('node:fs/promises');
+    await rm(root, { recursive: true, force: true });
+    await mkdir(`${root}/docs`, { recursive: true });
+    await mkdir(`${root}/a-directory`, { recursive: true });
+    await writeFile(`${root}/.spec-graph.json`, '{"patterns":["docs/**/*.md"],"baseline":"a-directory"}\n');
+    await writeFile(`${root}/docs/0001.md`, '# ADR-0001: One\n\nstatus: accepted\n');
+    try {
+      const refused = await run('check', '--root', root);
+      expect(refused.code).toBe(EXIT_ERROR);
+      expect(refused.err).toContain('cannot read the baseline a-directory');
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('records to an absolute path, and reads the same file back', async () => {
+    // `underRoot` joined every path under the root, so an absolute one became
+    // `<root>/tmp/b.json`: the write landed in the corpus or failed with a
+    // message about a directory nobody named, and the read found nothing.
+    const { mkdir, rm } = await import('node:fs/promises');
+    const directory = `${process.cwd()}/tests/fixtures/.tmp/cli-absolute-${process.pid}`;
+    const file = `${directory}/baseline.json`;
+    await rm(directory, { recursive: true, force: true });
+    await mkdir(directory, { recursive: true });
+    try {
+      const recorded = await run('check', '--root', LEGACY, '--no-config', '--record-baseline', file);
+      expect(recorded.code, recorded.err).toBe(EXIT_OK);
+
+      const accepted = await run('check', '--root', LEGACY, '--no-config', '--baseline', file);
+      expect(accepted.code, accepted.err).toBe(EXIT_OK);
+      expect(accepted.out).toContain(`accepted by ${file}`);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
   });
 
   it('reports a baseline it cannot read rather than trusting it', async () => {

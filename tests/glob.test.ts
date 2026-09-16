@@ -8,6 +8,7 @@ import {
   globBase,
   globToRegExp,
   isGlob,
+  underRoot,
   walkFiles,
 } from '../src/glob.js';
 
@@ -198,6 +199,25 @@ describe('matcher', () => {
     const matcher = createGlobMatcher(['README.md']);
     expect(matcher('README.md')).toBe(true);
     expect(matcher('docs/README.md')).toBe(false);
+  });
+});
+
+describe('resolving a path against the root', () => {
+  it('joins a repository-relative path, in POSIX form whatever it was given in', () => {
+    expect(underRoot('/repo', '.spec-graph-baseline.json')).toBe('/repo/.spec-graph-baseline.json');
+    expect(underRoot('C:\\repo', 'docs/b.json')).toBe('C:/repo/docs/b.json');
+    expect(underRoot('/repo', './docs/../b.json')).toBe('/repo/b.json');
+  });
+
+  it('leaves an absolute path where it points, in either platform spelling', () => {
+    // `--baseline /tmp/b.json` used to read `<root>/tmp/b.json`: a write that
+    // lands where nobody looks, and a read that accepts nothing without saying
+    // so. Both spellings are checked on either platform, because one repository
+    // is read on a Windows checkout and in Linux CI from the same file.
+    expect(underRoot('/repo', '/tmp/b.json')).toBe('/tmp/b.json');
+    expect(underRoot('/repo', '\\tmp\\b.json')).toBe('/tmp/b.json');
+    expect(underRoot('/repo', 'C:/tmp/b.json')).toBe('C:/tmp/b.json');
+    expect(underRoot('C:/repo', 'D:\\tmp\\b.json')).toBe('D:/tmp/b.json');
   });
 });
 

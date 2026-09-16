@@ -61,8 +61,9 @@ describe('parsing a configuration', () => {
   });
 
   it('reports malformed JSON rather than throwing', () => {
-    // A broken config must not stop a team seeing the findings it was going to
-    // show them anyway.
+    // Collected rather than thrown, so the reader is handed every problem in
+    // the file at once instead of the first one. What a problem costs is the
+    // caller's to decide, and the CLI stops the run on any of them.
     const { config, problems } = parseConfig('{ not json', 'test');
     expect(config).toEqual({});
     expect(problems[0]).toContain('not valid JSON');
@@ -107,6 +108,33 @@ describe('parsing a configuration', () => {
 
   it('tolerates $schema, so an editor can be pointed at one', () => {
     expect(parseConfig(JSON.stringify({ $schema: 'https://example.com/s.json' }), 'test').problems).toEqual([]);
+  });
+
+  it('reports a rule whose message names an attribute nothing has', () => {
+    // "{1.phse}" for "{1.phase}", found on an 885-document repository. The rule
+    // compiles here or it does not run at all, so the typo has to surface as a
+    // problem of the file rather than as a rule that quietly matches nothing.
+    const { config, problems } = parseConfig(
+      JSON.stringify({
+        rules: { 'no-draft-dependency': { query: 'document -depends-on-> document', message: '{0} needs {1.phse}' } },
+      }),
+      'test',
+    );
+    expect(problems.some((p) => p.includes('{1.phse}'))).toBe(true);
+    expect(config.rules).toEqual([]);
+  });
+
+  it('names the file in every problem, so the reader knows which one to open', () => {
+    // Discovery walks upward, and the file that did not load is often not the
+    // one in front of them. A problem that names no file names the wrong one.
+    const sources = [
+      parseConfig('{ not json', 'spec-graph.config.json'),
+      parseConfig(JSON.stringify({ nope: 1, strict: 'yes' }), '.spec-graph.json'),
+    ];
+    for (const { source, problems } of sources) {
+      expect(problems.length).toBeGreaterThan(0);
+      for (const problem of problems) expect(problem, problem).toContain(source as string);
+    }
   });
 
   it('rejects a non-integer maxRelated', () => {
@@ -161,9 +189,13 @@ describe('finding a configuration', () => {
     expect(loadConfig(ROOT)).toEqual({ config: {}, source: null, problems: [] });
   });
 
-  it('reports a package.json key that is not an object', async () => {
+  it('reports a package.json key that is not an object, and says it was package.json', async () => {
+    // The problem stops the run, and a reader sent to .spec-graph.json by a
+    // message that named no file would be looking for a file that is not there.
     await write('package.json', JSON.stringify({ [CONFIG_PACKAGE_KEY]: 'nope' }));
-    expect(loadConfig(ROOT).problems[0]).toContain('must be an object');
+    const loaded = loadConfig(ROOT);
+    expect(loaded.source).toBe('package.json');
+    expect(loaded.problems).toEqual([`package.json: "${CONFIG_PACKAGE_KEY}" must be an object`]);
   });
 
   it('survives an unreadable package.json', async () => {

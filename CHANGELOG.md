@@ -3,6 +3,86 @@
 Notable changes, newest first. Versions follow [semver](https://semver.org):
 a patch fixes behaviour without asking anything of a repository that upgrades.
 
+## Unreleased
+
+Three ways a run handed back something other than what it said it was: a
+configuration that did not load reporting a clean graph, a `--baseline` that
+read nothing accepting nothing, and `--verbose` breaking the document it was
+printed above. The first two were found on an 885-document repository, and the
+third while fixing them.
+
+### Changed
+
+**A configuration that did not load stops the run, with exit `2`.** Invalid
+JSON, an unknown key, a value of the wrong type, a project rule that does not
+compile: each was printed to stderr, and the run then went on with defaults -
+reporting `the specification graph is consistent`, exiting `0`, and writing
+`"ok": true` into JSON, SARIF and Markdown. Under `--strict` as well. A
+`{1.phse}` for `{1.phase}` in one rule's message was a green build over exactly
+the files that rule fails.
+
+It was the one place the exit codes disagreed with themselves, too:
+`--rule not-a-rule=off` on the command line has always exited `2`, and the same
+misspelling inside `"severities"` printed a line and passed. `--no-config`
+checks on defaults, and the exit code then says which run it was. The old
+behaviour was the decision in ADR-0010, and that ADR now carries why it moved.
+
+**A `--baseline` that cannot be read stops the run.** Read as an empty baseline,
+a typo in the path reports every accepted finding as new, passes `--ratchet`
+with nothing left to be stale about, and looks like a regression nobody
+introduced. A `"baseline"` named in configuration is unchanged and still
+optional, because a repository declares the path before the first run records
+the file - `--verbose` now says when it read nothing. Unreadable, as opposed to
+absent, is an error wherever the path was written. A baseline that cannot be
+*parsed* is still reported and ignored: it only ever suppresses, so a row that
+is dropped is a finding reported. See
+[ADR-0012](docs/adr/0012-a-baseline-is-a-ratchet.md).
+
+### Fixed
+
+**`--verbose` no longer breaks the format it was combined with.** The line
+naming which configuration file was read, and the one naming a project rule's
+selector under `query`, went to stdout above the report. With `--format json`
+that made the output unparseable; with `--format sarif` it made a file the
+code-scanning uploader rejects over a schema rather than over the command that
+was run. Both now go to stderr, with everything else a run says about itself.
+[ADR-0015](docs/adr/0015-feedback-goes-where-the-tools-already-look.md) already
+had the rule - rows "cannot go on stdout beside a JSON document without
+breaking the parse" - and these two lines were the places that did not follow
+it.
+
+**An absolute baseline path is no longer resolved under the root.**
+`--baseline /tmp/b.json` read `<root>/tmp/b.json` and `--record-baseline`
+wrote there: the recording landed inside the corpus, or failed naming a
+directory nobody had typed, and the read found nothing and said nothing. Both
+platforms' spellings are absolute on either platform, since one repository is
+read on a Windows checkout and in Linux CI from the same file.
+
+- **A `package.json` configuration problem names `package.json`.** It reported
+  `"spec-graph" must be an object` with no file in it, and a problem that names
+  no file sends the reader to a `.spec-graph.json` that is not there.
+
+### Verified
+
+| | |
+| --- | --- |
+| `npm run lint` | pass |
+| `npm test` | 935 passing, 23 files |
+| `npm run selfcheck` | pass, over 23 documents and 184 relations |
+| focused sweep, every changed region | 100% |
+| `src/cli.ts` alone, before and after | 80.43% over 797 mutants, then 81.11% over 826 |
+| `break` | unchanged at 70 |
+
+Each behaviour was also run against the built binary rather than only through
+`main()`, including the absolute paths, which is where a Windows drive letter
+either survives `toPosix` or does not.
+
+Moving two lines from stdout to stderr cost two mutants that a JSON parse used
+to kill for free, and both were replaced with an assertion: a flag that is only
+ever asserted when it is passed stops meaning anything. Both `cli.ts` figures
+above are single-file runs on one machine with `--coverageAnalysis all`, which
+is the comparison ADR-0007 asks for and not the hosted sweep that governs.
+
 ## 0.6.0
 
 A diff of two graph exports that names only the changes it can tell apart,

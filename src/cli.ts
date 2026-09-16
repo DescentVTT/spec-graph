@@ -49,7 +49,7 @@ import {
   RULE_IDS,
   RULE_QUERIES,
 } from './rules.js';
-import { toPosix } from './paths.js';
+import { isAbsolutePath, toPosix } from './paths.js';
 import { formatRef } from './source.js';
 import { execute, parseQuery, QueryError, renderMatch, type Match, type QuerySpec } from './select.js';
 import { isProjectRule, type AnyRuleId, type RuleId, type Severity, type SpecNode } from './types.js';
@@ -171,7 +171,10 @@ OPTIONS
                           it - journals, changelogs, minutes. Their links are
                           still checked; their obligations are not. Repeatable.
   --baseline <file>       Accept the findings recorded in this file and report
-                          only what is new since. Missing file = accept nothing.
+                          only what is new since. The file has to be there: a
+                          path that reads nothing accepts nothing and says so
+                          nowhere. A "baseline" in the configuration may name a
+                          file not recorded yet; a path typed here may not.
   --record-baseline <f>   Write today's findings to this file as accepted debt,
                           and exit 0 without judging them.
   --ratchet               Also fail when a baseline entry no longer occurs, so
@@ -240,6 +243,11 @@ CONFIGURATION
 
   A flag always wins over the file, and list flags add to it rather than
   replacing it.
+
+  A problem in that file stops the run with exit 2, named on stderr: invalid
+  JSON, an unknown key, a rule that does not compile. A configuration that did
+  not load checks a different repository than the one configured, and would
+  report that one as consistent. --no-config runs on defaults instead.
 
 PROJECT RULES
   A convention spec-graph never anticipated is a selector plus a sentence, and
@@ -533,22 +541,36 @@ function count(n: number, word: string, many?: string): string {
   return `${n} ${n === 1 ? word : (many ?? `${word}s`)}`;
 }
 
+interface HeldBaseline {
+  readonly baseline: Baseline;
+  readonly problems: readonly string[];
+  /** What stopped the file being read, when something did. */
+  readonly unread: { readonly missing: boolean; readonly message: string } | null;
+}
+
 /**
  * Reads a baseline file.
  *
- * A missing file is not an error: `--baseline` against a repository that has
- * not recorded one yet should report everything, which is exactly what an empty
- * baseline does.
+ * Absent and unreadable are different answers, and the caller needs both. A
+ * repository that has not recorded a baseline yet declares the path before the
+ * file exists, and an empty baseline accepts nothing, which is what that run
+ * should report (ADR-0012). Anything else - a directory, a permission, a path
+ * that went somewhere unintended - is the tool failing to do what it was told.
  */
-async function readBaseline(path: string, source: string): Promise<ReturnType<typeof parseBaseline>> {
+async function readBaseline(path: string, source: string): Promise<HeldBaseline> {
   let raw: string;
   try {
     const { readFile } = await import('node:fs/promises');
     raw = await readFile(path, 'utf8');
-  } catch {
-    return { baseline: EMPTY_BASELINE, problems: [] };
+  } catch (error) {
+    const failure = error as Error & { code?: string };
+    return {
+      baseline: EMPTY_BASELINE,
+      problems: [],
+      unread: { missing: failure.code === 'ENOENT', message: failure.message },
+    };
   }
-  return parseBaseline(raw, source);
+  return { ...parseBaseline(raw, source), unread: null };
 }
 
 function parseCount(flag: string, value: string): number {
@@ -611,6 +633,19 @@ export async function main(io: CliIO = {}): Promise<number> {
       ? { ...loadConfig(options.root), root: options.root }
       : discoverConfig(options.root);
   for (const problem of loaded.problems) err(`spec-graph: ${problem}\n`);
+  // A configuration that did not load means a run against a different
+  // repository than the one configured - other patterns, other rules, other
+  // severities - and the verdict printed is about that one. Reporting the
+  // problem and carrying on gave a green build with `ok: true` from a file with
+  // a typo in it, which is the one answer a checker must never reach by
+  // accident, and the same mistake in a `--rule` has always exited 2. The
+  // findings are one flag away, and the flag is named. Amends ADR-0010.
+  if (loaded.problems.length > 0) {
+    err(
+      `spec-graph: ${count(loaded.problems.length, 'problem')} in the configuration, so nothing was checked\n  fix it, or run again with --no-config to check on defaults\n`,
+    );
+    return EXIT_ERROR;
+  }
   const file = loaded.config;
   const projectRules = file.rules ?? [];
   const root = loaded.root;
@@ -670,9 +705,14 @@ export async function main(io: CliIO = {}): Promise<number> {
 
   // Named the way the reader would have to type it, because a discovered
   // configuration is often not the one in front of them.
+  //
+  // On stderr, with everything else this run says about itself. stdout is the
+  // report, and in three of the four formats it is a document: a line above it
+  // made `--verbose --format json` unparseable and handed `--format sarif` to a
+  // code-scanning uploader that rejects it over a schema.
   if (options.verbose && loaded.source !== null) {
     const depth = here === '' ? 0 : here.split('/').length;
-    out(`configuration: ${'../'.repeat(depth)}${loaded.source}\n`);
+    err(`configuration: ${'../'.repeat(depth)}${loaded.source}\n`);
   }
 
   let result;
@@ -717,7 +757,9 @@ export async function main(io: CliIO = {}): Promise<number> {
           return EXIT_ERROR;
         }
         queries = rule.queries;
-        if (options.verbose) for (const source of rule.sources) out(`${rule.id}: ${source}\n`);
+        // Beside the report rather than inside it, for the reason the
+        // configuration line above is: `--format json` is a document.
+        if (options.verbose) for (const source of rule.sources) err(`${rule.id}: ${source}\n`);
       } else {
         try {
           queries = [parseQuery(selector)];
@@ -769,6 +811,22 @@ export async function main(io: CliIO = {}): Promise<number> {
         | undefined;
       if (source !== null) {
         const held = await readBaseline(underRoot(root, source), source);
+        // A path typed on the command line says the file is there for this run.
+        // Read as an empty baseline instead, a typo in it reports every accepted
+        // finding as new, and passes --ratchet with nothing left to be stale.
+        // A path in the configuration is the case ADR-0012 argued for, and only
+        // where the file is absent: unreadable is unreadable wherever the path
+        // was written.
+        if (held.unread !== null && (options.baseline !== null || !held.unread.missing)) {
+          err(`spec-graph: cannot read the baseline ${source}: ${held.unread.message}\n`);
+          return EXIT_ERROR;
+        }
+        // Quiet by default, because a configured path legitimately precedes the
+        // first --record-baseline. Under --verbose, where parse problems already
+        // go, a path that reads nothing says so rather than accepting nothing.
+        if (held.unread !== null && options.verbose) {
+          err(`spec-graph: baseline ${source} is not there, so nothing is accepted\n`);
+        }
         for (const problem of held.problems) err(`spec-graph: ${problem}\n`);
         const outcome = applyBaseline(result.graph, result.diagnostics, held.baseline);
         reported = withDiagnostics(result, outcome.kept);
@@ -835,11 +893,9 @@ function below(root: string, from: string): string {
  * the root cannot change what it means.
  */
 function anchor(prefix: string, value: string): string {
-  if (prefix === '' || ABSOLUTE.test(value)) return value;
+  if (prefix === '' || isAbsolutePath(value)) return value;
   return value.startsWith('!') ? `!${prefix}/${value.slice(1)}` : `${prefix}/${value}`;
 }
-
-const ABSOLUTE = /^(?:[/\\]|[A-Za-z]:)/;
 
 /** The same, for an ignore, where a bare name is a directory at any depth. */
 function anchorPath(prefix: string, pattern: string): string {

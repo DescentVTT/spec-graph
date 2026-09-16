@@ -185,6 +185,7 @@ export {
   basenamePosix,
   dirnamePosix,
   extnamePosix,
+  isAbsolutePath,
   joinPosix,
   normalisePosix,
   resolveFrom,

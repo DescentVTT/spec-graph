@@ -12,6 +12,21 @@ export function toPosix(value: string): string {
   return value.replace(/\\/g, '/');
 }
 
+const ABSOLUTE = /^(?:[/\\]|[A-Za-z]:)/;
+
+/**
+ * Whether a path names a place outright rather than a place relative to one.
+ *
+ * Both platforms' spellings, whichever this is running on: one repository is
+ * read on a Windows checkout and in Linux CI, so a path is absolute where it
+ * was written rather than where it is being read. `C:docs` counts, because it
+ * is relative to a drive rather than to a root, and prefixing it with a root
+ * produces a third place that is neither.
+ */
+export function isAbsolutePath(value: string): boolean {
+  return ABSOLUTE.test(value);
+}
+
 /** Removes `.` and `..` segments. Leading `..` are preserved. */
 export function normalisePosix(value: string): string {
   const absolute = value.startsWith('/');
