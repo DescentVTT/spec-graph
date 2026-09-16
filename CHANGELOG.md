@@ -3,13 +3,17 @@
 Notable changes, newest first. Versions follow [semver](https://semver.org):
 a patch fixes behaviour without asking anything of a repository that upgrades.
 
-## Unreleased
+## 0.7.0
 
 Three ways a run handed back something other than what it said it was: a
 configuration that did not load reporting a clean graph, a `--baseline` that
 read nothing accepting nothing, and `--verbose` breaking the document it was
 printed above. The first two were found on an 885-document repository, and the
 third while fixing them.
+
+A minor rather than a patch. Two of the three turn a build that was passing
+into one that fails, which is the whole point of them and exactly what the rule
+at the top of this file says a patch may not do.
 
 ### Changed
 
