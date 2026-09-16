@@ -22,7 +22,7 @@
  */
 
 import { attr, type Directive } from './directives.js';
-import { isExternal } from './identity.js';
+import { isExternal, parsePrefixedRef } from './identity.js';
 import { isStatusHeading } from './lifecycle.js';
 import type { Heading, Range, ScannedDocument, Table, TableCell, TableRow } from './markdown.js';
 import type { EdgeKind } from './types.js';
@@ -148,6 +148,7 @@ export function findSpecificationRegions(
 
   const regions: SpecificationRegion[] = [];
   const folded = fold(fileId);
+  const fileRef = parsePrefixedRef(fileId);
 
   for (let i = 0; i < scanned.headings.length; i += 1) {
     const heading = scanned.headings[i] as Heading;
@@ -155,6 +156,14 @@ export function findSpecificationRegions(
     if (declaredId === undefined) continue;
     // The file's own title heading names the file, not a region inside it.
     if (fold(declaredId) === folded) continue;
+    // Padding is not part of an identity anywhere else - `ADR-40`, `ADR-040`
+    // and `ADR-0040` all resolve to one document - so a heading that spells the
+    // number differently from the file name is still that file's own title.
+    // Comparing the text alone made `# ADR-040` inside `0040-enforce.md` a
+    // region within the file it names: one decision, two nodes, and a citation
+    // arriving at whichever spelling it happened to use.
+    const ref = parsePrefixedRef(declaredId);
+    if (ref !== null && fileRef !== null && ref.family === fileRef.family && ref.number === fileRef.number) continue;
 
     const end = regionEnd(scanned, i);
     const directive = directiveIn(directives, heading.end, end);

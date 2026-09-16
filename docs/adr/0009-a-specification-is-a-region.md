@@ -74,6 +74,13 @@ Three further details keep the model honest:
   against that row's span rather than the file's. A region keeps `path` on its
   node, because a finding has to say which file it lives in and
   `document[path=...]` has to find it; it is simply not reachable by that path.
+
+  *Amended 2026-09-16.* **Nor the file's name.** A name is the same claim
+  spelled differently, and reading a number out of it is the identical collision
+  reached by a second route: every row of a register kept in
+  `0042-open-issues.md` answered to `ADR-0042`, and so did the file. The rule is
+  one rule - a region is identified by what the region declares - and it had
+  been written down as two.
 - **Obligations are numbered within their own specification**, so two decisions
   in one register each get `#open-questions.1` rather than sharing a sequence.
 - **Cells a column already typed are skipped by prose scanning**, so a link in a

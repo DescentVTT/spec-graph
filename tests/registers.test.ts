@@ -159,6 +159,17 @@ describe('what is not a specification', () => {
     expect(ids(files)).toEqual(['ADR-0007']);
   });
 
+  it('the file title heading when it spells the number with fewer digits', () => {
+    // Padding is not part of an identity anywhere else - ADR-40, ADR-040 and
+    // ADR-0040 all resolve to one document - so comparing the heading text
+    // against the file id split one decision into two nodes, each answering to
+    // the spelling it happened to use.
+    const files = {
+      'docs/adr/0040-enforce.md': ['# ADR-040: Enforce it', '', '## Status', '', 'accepted'].join('\n'),
+    };
+    expect(ids(files)).toEqual(['ADR-0040']);
+  });
+
   it('a status section of an ordinary document', () => {
     const files = {
       'docs/adr/0007-x.md': ['# ADR-0007: X', '', '## Status', '', 'Accepted', '', '## Context', '', 'Words.'].join('\n'),
@@ -701,6 +712,84 @@ describe('a register does not answer to its file path', () => {
     };
     expect(rules(files)).toEqual([]);
     expect(analyse(files).graph.out('B').map((edge) => edge.to)).toEqual(['ADR-0007']);
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/* Titles                                                                     */
+/* -------------------------------------------------------------------------- */
+
+describe('a row is named by its id column, not by what its title is about', () => {
+  // Found on an 885-document corpus: 27 of 232 rows of an open-issues register
+  // were attributed to the wrong entity, because a row took its id from the
+  // first identifier in its Title cell. Eighteen collided with the ADR the row
+  // was raised against; nine opened with a noun phrase and invented an open
+  // document nobody had written, which then drew a ghost handover.
+  const ISSUES = [
+    '# Open issues',
+    '',
+    '| Id | Title | Status |',
+    '| :--- | :--- | :--- |',
+    "| OI-V-05 | ADR-040's enforcement point has no browser test | open |",
+    '| OI-V-06 | STAGE-1 has no guardrail | open |',
+    '| OI-V-07 | Ordinary prose about nothing in particular | open |',
+  ].join('\n');
+
+  const ADR = ['# ADR-040: Enforce it at the boundary', '', '## Status', '', 'accepted'].join('\n');
+
+  it('gives the row the id in its id column', () => {
+    const { corpus } = analyse({ 'docs/issues/README.md': ISSUES });
+    expect(corpus.documents.map((d) => d.id).sort()).toEqual(['OI-V-05', 'OI-V-06', 'OI-V-07', 'issues']);
+    expect(corpus.problems).toEqual([]);
+  });
+
+  it('keeps the title cell as the title', () => {
+    const { corpus } = analyse({ 'docs/issues/README.md': ISSUES });
+    const row = corpus.documents.find((d) => d.id === 'OI-V-05');
+    expect(row?.title).toBe("ADR-040's enforcement point has no browser test");
+  });
+
+  it('invents no document out of a title that opens with a noun phrase', () => {
+    // Two rows whose titles both began `STAGE-1` collapsed onto one node.
+    const { corpus } = analyse({ 'docs/issues/README.md': ISSUES });
+    expect(corpus.documents.map((d) => d.id)).not.toContain('STAGE-1');
+    expect(corpus.documents).toHaveLength(4);
+  });
+
+  it('leaves the ADR the row is about alone', () => {
+    const files = { 'docs/issues/README.md': ISSUES, 'docs/adr/0040-enforce.md': ADR };
+    const { corpus } = analyse(files);
+    // ADR-0040 padded from its file name, and one node rather than two: an H1
+    // spelling the number with fewer digits is still that file's own title.
+    expect(corpus.documents.map((d) => d.id).sort()).toEqual([
+      'ADR-0040',
+      'OI-V-05',
+      'OI-V-06',
+      'OI-V-07',
+      'issues',
+    ]);
+    expect(corpus.problems).toEqual([]);
+    expect(rules(files)).toEqual([]);
+  });
+
+  it('sends a citation of that ADR to the ADR', () => {
+    // The row answering to `adr040` was the expensive half: a citation either
+    // arrived at an issue row, or went ambiguous between the row and the real
+    // decision, and neither says anything a reader can act on.
+    const files = {
+      'docs/issues/README.md': ISSUES,
+      'docs/adr/0040-enforce.md': ADR,
+      'B.md': ['# B', '', 'This rests on ADR-040.'].join('\n'),
+    };
+    expect(analyse(files).graph.out('B').map((edge) => edge.to)).toEqual(['ADR-0040']);
+  });
+
+  it('does not read a number out of the register file name', () => {
+    // The same collision by a second route: the file's name names the file.
+    const numbered = { 'docs/adr/0042-open-issues.md': ISSUES };
+    const { corpus } = analyse(numbered);
+    expect(corpus.documents.map((d) => d.id).sort()).toEqual(['ADR-0042', 'OI-V-05', 'OI-V-06', 'OI-V-07']);
+    expect(corpus.problems).toEqual([]);
   });
 });
 

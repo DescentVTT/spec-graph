@@ -23,7 +23,7 @@ exactly the noise that teaches people to ignore the output.
 
 ## Decision
 
-Four asymmetries.
+Five asymmetries.
 
 **Deliberate references are validated; opportunistic ones are not.** A link, a
 front-matter field or a directive that does not resolve is a broken foreign key
@@ -72,6 +72,44 @@ binds a path by its basename, so a link to `../guides/onboarding.md` finds the
 document now living in `handbook/` with no guess to confirm - and a suggestion
 nobody needs is a suggestion that can only ever be wrong.
 
+**A declaration and a file name *name* a document; a title only *describes*
+one.** *Added 2026-09-16.* An identifier at the start of a title usually belongs
+to the document the title is about, not to the document carrying it, and reading
+it as a name attributed 27 of 232 rows of one register to the wrong entity.
+`| OI-V-05 | ADR-040's enforcement point has no browser test |` became
+`ADR-040` - and collided with the real `ADR-040`, which then owned the row's
+span and left the issue with no node at all. Nine more rows opened with a noun
+phrase and invented a `STAGE-1`, a `GUARDRAIL-5` and a `CLOSED-2026` that nobody
+had written, each open, each drawing findings against a document that did not
+exist.
+
+So a title is read as a name only where nothing else has given one, and where a
+title is not the name it contributes no alias either. The alias is the same
+mistake one step removed and it lands somewhere worse: on a real document, whose
+every citation then arrives at whatever quoted it, or goes ambiguous between the
+two. `# ADR-0040 considered harmful` at the top of `0007-sharding.md` was
+registering `adr0040` against ADR-0007.
+
+Two things count as having given one. A **number**, from a declaration or a file
+name, settles the identity outright - a different number in a title is about a
+different document. And for a **region**, its declaration, whatever shape it is
+in: a row's id column exists to hold an identifier, and its title cell is prose
+about the rest of the corpus.
+
+A *file* keeps the looser reading, and that limit is deliberate. There the two
+cases are the same shape and nothing separates them. Front matter is an open
+vocabulary where `slug:` is in `ID_KEYS` and holds a URL segment rather than an
+id, so `slug: sharding` in `sharding.md` under `# ADR-0007: Sharding` has to
+stay ADR-0007 - and `id: MY-THING` under `# ADR-0040 considered harmful` reads
+identically and still becomes `ADR-0040`. That is the price. Separating them
+needs a rule about what may follow an identifier in a title, which is a
+convention nobody has written down, and inventing one is the trade
+[ADR-0009](0009-a-specification-is-a-region.md) declined for `<dl>` blocks.
+
+The declaration and the file name are *not* ranked against each other, which is
+the asymmetry rather than an omission: both name the same file, so a declaration
+carrying no number still takes the number from the name beside it.
+
 Link constructs are blanked before prose is scanned for bare identifiers, so a
 citation written as `[ADR-7](https://example.com/adr-7)` yields one reference
 rather than three. This relies on the masking guarantee in
@@ -102,3 +140,33 @@ on the superseded one with no redirect, and that is a finding
       distance? **Resolved (2026-09-12):** yes, under the fourth asymmetry above.
       Distance alone was the wrong question; what a suggestion needs is distance
       in the part of the spelling that is not the identity.
+- [x] Should a family prefix be allowed to contain a hyphen, so that `OI-V-05`
+      and `KEP-SIG-1` parse as a family and a number rather than staying
+      verbatim? **Declined (2026-09-16).** `PREFIXED_ID` is not only the shape
+      of an identity: it is half the gate in `looksLikeCitation`, and it decides
+      what a bare token in prose may be. Widening the prefix to admit a hyphen
+      was measured against a corpus of ordinary hyphenated values, and of the
+      eighteen strings it newly matched, sixteen were words: `og-image-2`,
+      `font-weight-400`, `x-frame-options-1`, `end-to-end-2`, `ci-cd-1`,
+      `top-level-0`. Two were the intended ones.
+
+      What it would buy is small and the other way round from the cost. An
+      unhyphenated declaration is kept verbatim and already resolves from every
+      spelling `normaliseRef` folds - `oi-v-05`, `OI V 05`, `oi_v_05` - so what
+      is lost is the zero-padding variants, `OI-V-5` for `OI-V-05`, and a bare
+      `05` resolving within an `OI-V` family. Both are misses, and a miss is
+      what this repository trades false positives for.
+
+      What would reopen it: a corpus where the padded and unpadded spellings of
+      a hyphenated family are both in use, at which point the convention is
+      being read rather than guessed at - and the widening would belong to
+      `identify`, which knows it is looking at a declaration, rather than to the
+      regular expression that also reads prose.
+- [x] Is zero-padding part of an identity? **Resolved (2026-09-16): no, and one
+      comparison had assumed otherwise.** `ADR-40`, `ADR-040` and `ADR-0040`
+      already resolve to one document everywhere references are read, but the
+      guard that stops a file's own title heading being read as a region inside
+      itself compared the folded *text*. So `# ADR-040` at the top of
+      `0040-enforce.md` was a region within the file it names: one decision,
+      two nodes, a split lifecycle, and a citation arriving at whichever
+      spelling it happened to use. The guard now compares family and number.

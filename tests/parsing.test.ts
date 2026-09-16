@@ -263,6 +263,121 @@ describe('identity', () => {
   });
 });
 
+describe('a title is not a name', () => {
+  // A title is prose about a document. An identifier it opens with belongs to
+  // the document it is about, and reading it as the title's own name attributed
+  // 27 of 232 rows of one register to the wrong entity.
+  const row = (declaredId: string, heading: string) =>
+    identify({ path: 'docs/issues/README.md', declaredId, declaredAliases: [], heading, includePathAliases: false });
+
+  it('does not let a heading override a declared id', () => {
+    expect(row('OI-V-05', "ADR-040's enforcement point has no browser test").id).toBe('OI-V-05');
+    expect(row('CUSTOM-ITEM', 'STAGE-1: Bar').id).toBe('CUSTOM-ITEM');
+  });
+
+  it('does not let the overridden identifier reach the row as an alias either', () => {
+    // The alias is the same hijack one step removed, and it lands somewhere
+    // worse: every citation of the real ADR-040 resolving to the row raised
+    // against it, or going ambiguous between the two.
+    expect(row('OI-V-05', "ADR-040's enforcement point has no browser test").aliases).toEqual(['oiv05']);
+  });
+
+  it('invents no family from a title that opens with a noun phrase', () => {
+    // STAGE-1, GUARDRAIL-5, CLAUSE-4 and Q-046 all parse as family and number,
+    // and each one became an open document nobody had written - which then drew
+    // a ghost-handover finding against a phantom.
+    for (const heading of [
+      'STAGE-1 needs a gate',
+      'GUARDRAIL-5 is unenforced',
+      'CLAUSE-4 contradicts it',
+      'Q-046 remains open',
+    ]) {
+      const identity = row('OI-V-11', heading);
+      expect(identity.id, heading).toBe('OI-V-11');
+      expect(identity.family, heading).toBeNull();
+      expect(identity.number, heading).toBeNull();
+    }
+  });
+
+  it('still takes the number from the file name when the declaration carries none', () => {
+    // A declaration and a file name both name the same file, so the name may
+    // spell what the declaration left out. `slug:` is in ID_KEYS, and a Jekyll
+    // ADR carrying one must stay ADR-0007 rather than become its slug.
+    const identity = identify({
+      path: 'docs/adr/0007-sharding.md',
+      declaredId: 'sharding-the-write-path',
+      declaredAliases: [],
+      heading: 'Sharding the write path',
+    });
+    expect(identity.id).toBe('ADR-0007');
+    expect(identity.aliases).toContain('shardingthewritepath');
+  });
+
+  it('still lets an H1 name a whole file that nothing else numbered', () => {
+    // The limit of the rule, and it is deliberate. A file's front matter is an
+    // open vocabulary - `slug:` is in ID_KEYS and holds a URL segment, not an
+    // id - so an unnumbered declaration there says nothing about the number,
+    // and the H1 is the file's own title by convention. `id: MY-THING` under
+    // `# ADR-0040 considered harmful` has the same shape and still becomes
+    // ADR-0040; telling the two apart needs a rule about what follows the
+    // identifier that no repository has written down, which is the trade
+    // ADR-0009 declined for `<dl>`.
+    const identity = identify({
+      path: 'docs/adr/sharding.md',
+      declaredId: 'sharding',
+      declaredAliases: [],
+      heading: 'ADR-0007: Sharding the write path',
+    });
+    expect(identity.id).toBe('ADR-0007');
+    expect(identity.aliases).toContain('sharding');
+  });
+
+  it('holds that limit to files, and not to the rows of a register', () => {
+    // The same three inputs on a region go the other way, because a row's id
+    // column exists to hold an identifier while its title cell is prose about
+    // the rest of the corpus. This is the whole fix: it is the shape every one
+    // of the 27 misfiled rows had.
+    const identity = identify({
+      path: 'docs/adr/sharding.md',
+      declaredId: 'sharding',
+      declaredAliases: [],
+      heading: 'ADR-0007: Sharding the write path',
+      includePathAliases: false,
+    });
+    expect(identity.id).toBe('sharding');
+    expect(identity.aliases).not.toContain('adr0007');
+  });
+
+  it('drops the title alias once the file name has named the document', () => {
+    // No declaration is involved here: the file name named it, so the H1 is
+    // already prose, and `adr0040` as an alias of ADR-0007 is a citation of
+    // ADR-0040 arriving at the wrong document.
+    const identity = identify({
+      path: 'docs/adr/0007-sharding.md',
+      declaredId: null,
+      declaredAliases: [],
+      heading: 'ADR-0040 considered harmful',
+    });
+    expect(identity.id).toBe('ADR-0007');
+    expect(identity.aliases).not.toContain('adr0040');
+  });
+
+  it('reads a region without reading the file it sits in', () => {
+    // ADR-0009 says a region does not claim the file's path. The file's name is
+    // the same claim spelled differently: every row of a register kept in
+    // `0042-open-issues.md` answered to ADR-0042, and so did the file.
+    const identity = identify({
+      path: 'docs/adr/0042-open-issues.md',
+      declaredId: 'OI-V-05',
+      declaredAliases: [],
+      heading: 'Ordinary prose title',
+      includePathAliases: false,
+    });
+    expect(identity.id).toBe('OI-V-05');
+    expect(identity.number).toBeNull();
+  });
+});
+
 describe('directives', () => {
   const parse = (md: string) => parseDirectives(scanMarkdown(md).comments);
 
