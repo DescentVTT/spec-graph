@@ -10,7 +10,7 @@
 
 import { readdir, stat } from 'node:fs/promises';
 
-import { joinPosix, normalisePosix, toPosix } from './paths.js';
+import { isAbsolutePath, joinPosix, normalisePosix, toPosix } from './paths.js';
 import { compilePattern, type Matcher } from './regex.js';
 
 /** Directories skipped unless a pattern explicitly names them. */
@@ -364,7 +364,14 @@ export async function walkFiles(options: WalkOptions): Promise<WalkedFile[]> {
   return [...out.values()].sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
 }
 
-/** Resolves a repository-relative path against the root, in POSIX form. */
+/**
+ * Resolves a repository-relative path against the root, in POSIX form.
+ *
+ * An absolute path already names one place, and joining it under the root names
+ * another: `--baseline /tmp/b.json` read `<root>/tmp/b.json`, found nothing
+ * there, and accepted nothing without saying so.
+ */
 export function underRoot(root: string, relative: string): string {
+  if (isAbsolutePath(relative)) return toPosix(relative);
   return joinPosix(toPosix(root), relative);
 }

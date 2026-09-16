@@ -561,8 +561,15 @@ spec-graph check --baseline .spec-graph-baseline.json --ratchet
 
 Now an undeclared finding fails **and** a declared one that no longer occurs
 fails, each named, with `--record-baseline` as the fix — and the diff of that
-file is the record of what was paid off. See
-[ADR-0012](docs/adr/0012-a-baseline-is-a-ratchet.md).
+file is the record of what was paid off.
+
+**A `--baseline` you typed has to be there.** A path that reads nothing accepts
+nothing, reports every accepted finding as new, and passes `--ratchet` with
+nothing left to be stale about, so a typo in it looks exactly like a regression
+nobody introduced: it exits `2` instead. A `"baseline"` in the configuration is
+the other case and stays optional, because a repository declares the path before
+the first run records the file — `--verbose` says when it read nothing. Either
+may be absolute. See [ADR-0012](docs/adr/0012-a-baseline-is-a-ratchet.md).
 
 ## In CI
 
@@ -633,11 +640,19 @@ a path typed on the command line stays relative to where you typed it. See
 A flag always wins over the file, and list flags **add** to it rather than
 replacing it — a `--ignore-ref` on the command line is one more exclusion, not a
 decision to discard what the repository already declared. `--verbose` prints
-which file was read; `--no-config` skips the mechanism entirely.
+which file was read, on stderr with everything else a run says about itself, so
+it can be combined with any `--format` and leave the document on stdout intact.
+`--no-config` skips the mechanism entirely.
 
-A broken config is reported and the run continues on defaults, including an
-unknown key: a silently ignored `ignoreReference` is a configuration that looks
-applied and is not.
+A broken config stops the run with exit `2`, each problem named on stderr —
+invalid JSON, a value of the wrong type, an unknown key, a rule that does not
+compile. A configuration that did not load checks a different repository than
+the one configured, and would report *that* one as consistent: a `{1.phse}` for
+`{1.phase}` in one rule's message is a green build over the files the correctly
+spelled rule fails. An unknown key counts, for the same reason it is reported at
+all — a silently ignored `ignoreReference` is a configuration that looks applied
+and is not. `--no-config` checks on defaults instead, and the exit code then
+says which run it was.
 
 ### Family rules
 
@@ -711,8 +726,9 @@ spec-graph diff <before> <after>     Compare two JSON graph exports.
 ```
 
 Exit codes: `0` clean, `1` findings, `2` the tool could not run. A mistyped flag
-never masquerades as a passing build, and a pattern matching nothing is an error
-rather than a silent success.
+never masquerades as a passing build, and neither does a pattern that matches
+nothing, a configuration file that did not load, or a `--baseline` that is not
+there.
 
 ## Continuous integration
 

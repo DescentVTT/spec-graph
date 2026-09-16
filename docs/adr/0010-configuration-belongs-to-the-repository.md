@@ -65,12 +65,33 @@ Both are consulted *only after resolution has already failed*, like every filter
 since ADR-0008. `RFC 0001` still resolves to the local RFC-0001 with
 `ignoreFamilies: ["RFC"]` set. No configuration can delete an edge.
 
-**A broken configuration is reported, not fatal.** Malformed JSON, an unknown
-key, a misspelled rule, a value of the wrong type: each is printed and the run
-continues on defaults. A config file with a typo in it should not stop a team
-seeing the findings it was about to show them. An unknown key is *reported*
-rather than ignored, because a silently dropped `ignoreReference` is a
-configuration that looks applied and is not.
+**A broken configuration stops the run.** *Amended 2026-09-16.* Malformed JSON,
+an unknown key, a misspelled rule, a value of the wrong type, a project rule
+that does not compile: each is printed, and the run exits `2` having checked
+nothing.
+
+This reverses the paragraph that stood here, which had the run continue on
+defaults because a config file with a typo in it should not stop a team seeing
+the findings it was about to show them. That argument assumed the fallback run
+is *less* informative than the real one. It is not. It is authoritative-looking
+and wrong. Measured on an 885-document repository: a `{1.phse}` for `{1.phase}`
+in one rule's message dropped that rule at load time, the files the correctly
+spelled rule fails came back clean, and the run printed `the specification graph
+is consistent`, exited `0`, and reported `"ok": true` in JSON, SARIF and
+Markdown alike. Under `--strict` as well. Nothing in that output says it came
+from a configuration the repository does not have.
+
+It was also the one place the exit codes disagreed with themselves.
+`--rule not-a-rule=off` on the command line has always exited `2`; the same
+misspelling inside `"severities"` printed a line and passed the build. One
+mistake, two verdicts, and the quiet one is the one CI reads.
+
+The old paragraph's concern is answered rather than overruled: the findings are
+still one flag away, and the message that stops the run names it. `--no-config`
+checks on defaults, and the exit code then says which run it was. An unknown key
+is still *reported* rather than ignored, for the reason it always was - a
+silently dropped `ignoreReference` is a configuration that looks applied and is
+not. Failing on it is that same argument carried to its end.
 
 ## What this does not fix
 
