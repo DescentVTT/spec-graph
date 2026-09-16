@@ -227,6 +227,13 @@ header you wrote:
 
 Findings point at the declaring cell, not at the file.
 
+A row is named by its ID column, and a title is only a title. An identifier a
+title opens with belongs to the document the row is *about* — an issue reading
+`| OI-V-05 | ADR-040's enforcement point has no browser test |` is filed under
+`OI-V-05`, and citations of `ADR-040` still reach `ADR-040`. The same holds for
+a whole file: an explicit `id:`, then the file name, then the H1, and the H1 is
+read as a name only when neither of the others gave one.
+
 The register itself stays in the graph as the thing that holds them, so
 `spec-graph query 'document[id=register] -contains-> document'` lists what is
 inside it.

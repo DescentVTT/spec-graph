@@ -65,11 +65,14 @@ export interface IdentityInput {
   /** The document H1, if any. */
   readonly heading: string | null;
   /**
-   * Register the file path and stem as aliases. Default true.
+   * Whether this identity is the file's own. Default true.
    *
    * A specification that is a *region* of a file must not claim the file's
    * path: the file already answers to it, and two nodes answering to one path
-   * would make every link to that file ambiguous.
+   * would make every link to that file ambiguous. The file's *name* is the same
+   * claim spelled differently, so a region does not read a number out of it
+   * either: every row of a register kept in `0042-open-issues.md` answered to
+   * ADR-0042, and so did the file.
    */
   readonly includePathAliases?: boolean | undefined;
 }
@@ -81,8 +84,13 @@ const HAS_LETTER_OR_DIGIT = /[\p{L}\p{N}]/u;
  * Derives a document's canonical id and every alias that should reach it.
  *
  * Evidence is used in order of how deliberate it is: an explicit declaration,
- * then the file name, then the H1. Whatever loses still contributes aliases, so
- * a reference written in any of those forms still resolves.
+ * then the file name, then the H1. The first two both *name* the document, so a
+ * declaration that carries no number still takes the number from the file name
+ * beside it - `slug: sharding-the-write-path` in `0007-sharding.md` is ADR-0007.
+ * A title only *describes* it, so it is read as a name only where nothing else
+ * has given one. A losing declaration or file name still contributes aliases,
+ * so a reference written in either form resolves; a title that lost does not,
+ * because the identifier it opens with belongs to the document it is about.
  */
 export function identify(input: IdentityInput): DocumentIdentity {
   // A declaration carrying no letter or digit is discarded rather than honoured.
@@ -92,6 +100,9 @@ export function identify(input: IdentityInput): DocumentIdentity {
   // exports as invalid Mermaid, and names itself in findings a reader cannot act
   // on. There is nothing to gain by taking such a value seriously.
   const declaredId = input.declaredId !== null && HAS_LETTER_OR_DIGIT.test(input.declaredId) ? input.declaredId : null;
+  // What the flag decides, named for what it means: the file's path and its
+  // name are one claim, and a region makes neither of them.
+  const ownsFile = input.includePathAliases !== false;
   const stem = fileStem(input.path);
   const directoryFamily = familyFromPath(input.path);
   const aliases = new Set<string>();
@@ -131,9 +142,26 @@ export function identify(input: IdentityInput): DocumentIdentity {
 
   consider(declaredId, true);
   // `0007-sharding-the-write-path.md` and `kep-1234-foo.md` both start with the
-  // identifier; take the leading token rather than the whole stem.
-  consider(leadingToken(stem), true);
-  consider(headingId(input.heading), false);
+  // identifier; take the leading token rather than the whole stem. Only for the
+  // file's own identity: the name names the file, and a region reading its
+  // number is the collision ADR-0009 forbids, reached by a second route.
+  if (ownsFile) consider(leadingToken(stem), true);
+
+  // A title is prose *about* a document, so it names one only where nothing has
+  // named it yet, and where it does not it registers no alias either - an alias
+  // is the same mistake one step removed, landing on a document that is real.
+  // A number disqualifies it, because a different number in a title is about a
+  // different document; so does being a region, because a row's id column
+  // exists to hold an identifier while its title cell is prose about the rest
+  // of the corpus. `| OI-V-05 | ADR-040's enforcement point has no browser
+  // test |` became ADR-040, collided with the real one and left the issue with
+  // no node at all: 27 of 232 rows of one register, nine inventing a `STAGE-1`
+  // nobody had written. A *file* keeps the looser reading deliberately - there
+  // the two cases are one shape, `slug:` holds a URL segment rather than an id,
+  // and `slug: sharding` under `# ADR-0007` has to stay ADR-0007. See the fifth
+  // asymmetry in ADR-0004 for what that costs and why it is not guessed at.
+  const titleId = ownsFile && !candidates.some((c) => c.number !== null) ? headingId(input.heading) : null;
+  consider(titleId, false);
 
   const numbered = candidates.find((c) => c.number !== null);
   const family = numbered?.family ?? directoryFamily;
@@ -159,14 +187,14 @@ export function identify(input: IdentityInput): DocumentIdentity {
   }
 
   add(id);
-  if (input.includePathAliases !== false) {
+  if (ownsFile) {
     add(stem);
     add(input.path);
     add(stripExtension(input.path));
   }
   add(declaredId);
   for (const alias of input.declaredAliases) add(alias);
-  if (input.heading) add(headingId(input.heading));
+  add(titleId);
 
   if (number !== null) {
     const spellings = numberSpellings(number, witnesses);

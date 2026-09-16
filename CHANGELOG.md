@@ -3,6 +3,64 @@
 Notable changes, newest first. Versions follow [semver](https://semver.org):
 a patch fixes behaviour without asking anything of a repository that upgrades.
 
+## Unreleased
+
+A register row took its identifier from the first thing its *title* said, not
+from its ID column. Found on the same 885-document repository as 0.7.0: 27 of
+232 rows of one issues register were filed under the wrong entity.
+
+### Fixed
+
+**A title names nothing.** `| OI-V-05 | ADR-040's enforcement point has no
+browser test |` was read as `ADR-040`. Eighteen rows collided with the ADR they
+cite that way, and the collision does not merely mislabel a row: run against a
+corpus holding both, the ADR keeps the id and the issue has no node in the graph
+at all. Nine more opened with a noun phrase, inventing a `STAGE-1`, a
+`GUARDRAIL-5` and a `CLOSED-2026` that nobody had written, each of them open -
+which is what drew the false `ghost-handover` findings the register was reported
+for; two rows collapsed onto one `STAGE-1`.
+
+The identifier a title opens with almost always belongs to the document the
+title is *about*, so a title is read as a name only where nothing else has given
+one - and where it is not the name it registers no alias either, because an
+alias sends every citation of the real document to whatever quoted it.
+`# ADR-0040 considered harmful` at the top of `0007-sharding.md` was registering
+`adr0040` against `ADR-0007`.
+
+Two things count as having given one: a number, from a declaration or a file
+name, and for a register row its id column, whatever shape the id is in. A whole
+file keeps the looser reading and its H1 can still name it, because there
+nothing separates a title about another document from a title about this one:
+`slug:` holds a URL segment rather than an id, so `slug: sharding` in
+`sharding.md` under `# ADR-0007: Sharding` has to stay `ADR-0007`. A declaration
+and the file name are still weighed together rather than ranked, so
+`slug: sharding-the-write-path` in `0007-sharding.md` is `ADR-0007` as before.
+
+**A region no longer reads a number out of the file it sits in.** Every row of
+a register kept in `0042-open-issues.md` answered to `ADR-0042`, and so did the
+file. ADR-0009 already said a region does not claim the file's *path*, for the
+reason that two nodes answering to one name make every link to it ambiguous; the
+file's name is that same claim spelled differently, and the rule was written
+down as two.
+
+**A file's own title heading is matched by its number, not its spelling.**
+`# ADR-040` at the top of `0040-enforce.md` was read as a region *inside* the
+file it names: one decision, two nodes, a split lifecycle, and a citation
+arriving at whichever padding it happened to use. Padding is not part of an
+identity anywhere else - `ADR-40`, `ADR-040` and `ADR-0040` all resolve to one
+document - and now it is not part of this comparison either.
+
+### Verified
+
+`npm run lint`, 950 tests and `npm run selfcheck`. Thirteen of the fifteen new
+tests fail against the unfixed source; the other two are the guards on the
+layouts that must not move, which have to pass both ways. `identity.ts` and
+`sections.ts` were measured on their own before and after: 72.77% and 66.89%
+became 75.18% and 71.93%, and no mutant on the new lines survived, so nothing
+was masked. ADR-0004 carries the rule as a
+fifth asymmetry, with the hyphenated-prefix question declined under it, and
+ADR-0009 is amended in place.
+
 ## 0.7.0
 
 Three ways a run handed back something other than what it said it was: a
