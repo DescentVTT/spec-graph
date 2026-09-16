@@ -3,11 +3,20 @@
 Notable changes, newest first. Versions follow [semver](https://semver.org):
 a patch fixes behaviour without asking anything of a repository that upgrades.
 
-## Unreleased
+## 0.8.0
 
 A register row took its identifier from the first thing its *title* said, not
 from its ID column. Found on the same 885-document repository as 0.7.0: 27 of
 232 rows of one issues register were filed under the wrong entity.
+
+A minor rather than a patch, and the baseline is the reason. A baseline is
+fingerprinted on document ids, and the whole of this fix is that those ids move.
+Measured on an unchanged corpus against a baseline recorded by 0.7.0: the
+accepted finding came back as new, its entry was reported as no longer
+occurring, and `check --baseline` went from exit `0` to exit `1`. One
+`--record-baseline` settles it, and the entries it writes are the ones that were
+meant all along. The rule at the top of this file says a patch asks nothing of a
+repository that upgrades, and this asks for that run.
 
 ### Fixed
 
