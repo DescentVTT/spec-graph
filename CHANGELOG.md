@@ -3,6 +3,16 @@
 Notable changes, newest first. Versions follow [semver](https://semver.org):
 a patch fixes behaviour without asking anything of a repository that upgrades.
 
+## Unreleased
+
+Versions are published by CI from a `v*` tag, through npm's trusted
+publishing, and no longer from a workstation
+([ADR-0021](docs/adr/0021-releases-are-published-by-ci.md)). There is no
+publish token anywhere, and every version from here on carries a provenance
+attestation naming the repository, the commit and the run that built the
+tarball. `npm audit signatures` checks it without taking anyone's word for
+anything. 0.2.0 to 0.8.0 have none and never will.
+
 ## 0.8.0
 
 A register row took its identifier from the first thing its *title* said, not
