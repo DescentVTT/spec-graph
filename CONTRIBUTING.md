@@ -7,7 +7,7 @@ itself; what follows is the map that is hard to recover by reading.
 
 ```bash
 npm install
-npm test          # 342 tests
+npm test          # 962 tests
 npm run lint      # tsc --noEmit, strict
 npm run build     # emits dist/
 npm run selfcheck # spec-graph checks its own ADRs
@@ -118,6 +118,34 @@ they run both engines over the same patterns and subjects and compare. That is
 what caught a clause of the language specification being read backwards, and it
 is the pattern to copy for anything else that re-implements something standard.
 `glob.ts` holds its automaton to the `RegExp` it replaced the same way.
+
+## Releasing
+
+Versions are published by CI from a tag, never from a workstation
+([ADR-0021](docs/adr/0021-releases-are-published-by-ci.md)).
+
+1. On a branch, set the version and give it notes:
+   `npm version <x.y.z> --no-git-tag-version`, then move the changelog's
+   `## Unreleased` entries under `## <x.y.z>`. The unit suite fails until
+   `CHANGELOG.md` describes the version `package.json` names.
+2. Merge to main.
+3. Tag the merge commit and push the tag:
+
+   ```bash
+   git tag -a v<x.y.z> -m "spec-graph <x.y.z>"
+   git push origin v<x.y.z>
+   ```
+
+The release workflow runs the whole CI matrix again on that commit, packs,
+publishes to npm with provenance, and creates the GitHub release with the
+changelog section as its notes. A prerelease (`0.9.0-rc.1`) goes out under the
+`next` dist-tag and never becomes `latest`. To try the workflow without
+publishing, run it by hand from main (Actions, Release, Run workflow): it does
+everything but the upload and the GitHub release.
+
+Nobody runs `npm publish`. npmjs.com is set to accept a publish from this
+repository's `release.yml`, running in the `npm` environment, and otherwise
+only from a person holding a second factor.
 
 ## Style
 
