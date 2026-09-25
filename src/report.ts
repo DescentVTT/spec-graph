@@ -11,6 +11,8 @@
  * terminal cannot render them.
  */
 
+import { createHash } from 'node:crypto';
+
 import { fingerprintOf, type StaleEntry } from './baseline.js';
 import type { SpecGraph } from './graph.js';
 import type { ProjectRule } from './project-rules.js';
@@ -589,6 +591,70 @@ function sarifLocation(at: SourceRef): {
       },
     },
   };
+}
+
+/* -------------------------------------------------------------------------- */
+/* GitLab Code Quality                                                        */
+/* -------------------------------------------------------------------------- */
+
+type GitlabSeverity = 'critical' | 'major' | 'minor' | 'info';
+
+/**
+ * GitLab's Code Quality report, which a merge request reads to show the
+ * findings a change introduced and the ones it resolved - what SARIF is to
+ * GitHub, so the family is not GitHub's alone.
+ *
+ * The format is GitLab's and carries no version of its own: a JSON array with
+ * the five fields GitLab reads and nothing else.
+ *
+ * `fingerprint` is how GitLab matches a finding in the merge request to the
+ * same finding on the target branch, so it holds what the finding is and not
+ * where it sits: the rule, the file and the message, hashed. A paragraph moved
+ * above a finding does not make it new. Two findings that agree on all three -
+ * one broken link written twice in a file - are told apart by their order, the
+ * second hashed with a `2`: GitLab tells issues apart by fingerprint, and two
+ * that shared one would be read as one.
+ */
+export function formatGitlab(
+  result: AnalysisResult,
+  options: { escalated?: ReadonlySet<AnyRuleId> | undefined } = {},
+): string {
+  const escalated = options.escalated ?? EMPTY_RULES;
+  const occurrences = new Map<string, number>();
+  const issues = result.diagnostics.map((diagnostic) => {
+    const identity = [diagnostic.rule, diagnostic.at.file, diagnostic.message];
+    const key = JSON.stringify(identity);
+    const occurrence = (occurrences.get(key) ?? 0) + 1;
+    occurrences.set(key, occurrence);
+    return {
+      description: `${diagnostic.message}. ${diagnostic.hint}`,
+      check_name: diagnostic.rule,
+      fingerprint: createHash('sha256')
+        .update(occurrence === 1 ? key : JSON.stringify([...identity, occurrence]))
+        .digest('hex'),
+      severity: gitlabSeverity(diagnostic.severity, escalated.has(diagnostic.rule)),
+      location: { path: diagnostic.at.file, lines: { begin: diagnostic.at.span.start.line } },
+    };
+  });
+  return `${JSON.stringify(issues, null, 2)}\n`;
+}
+
+/**
+ * spec-graph's three severities on GitLab's five. An error is critical: it
+ * fails the build. One that is only an error because `--strict` raised it is
+ * major, which is the one place the report can say so. A warning is minor,
+ * and a note is information. `blocker` is left to tools that know more about
+ * what cannot ship than a documentation linter does.
+ */
+function gitlabSeverity(severity: Severity, escalated: boolean): GitlabSeverity {
+  switch (severity) {
+    case 'error':
+      return escalated ? 'major' : 'critical';
+    case 'warn':
+      return 'minor';
+    default:
+      return 'info';
+  }
 }
 
 export function formatJson(

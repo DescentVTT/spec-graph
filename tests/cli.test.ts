@@ -1133,6 +1133,60 @@ describe('SARIF', () => {
   });
 });
 
+describe('GitLab Code Quality', () => {
+  // Two warnings and nothing else: the fixture the strict-mode tests use.
+  const WARNINGS = ['docs/**/*.md', '--root', 'tests/fixtures/warnings'];
+
+  interface Issue {
+    check_name: string;
+    fingerprint: string;
+    severity: string;
+    location: { path: string; lines: { begin: number } };
+  }
+
+  it('reports the findings in the shape a merge request reads, and fails as check does', async () => {
+    const gitlab = await run('check', '--root', LEGACY, '--no-config', '--format', 'gitlab');
+    expect(gitlab.code).toBe(EXIT_FAILED);
+    const issues = JSON.parse(gitlab.out) as Issue[];
+    const json = JSON.parse((await run('check', '--root', LEGACY, '--no-config', '--format', 'json')).out) as {
+      diagnostics: { rule: string; file: string; line: number }[];
+    };
+    // One issue per finding, in the same order, on the same line.
+    expect(issues.map((issue) => [issue.check_name, issue.location.path, issue.location.lines.begin])).toEqual(
+      json.diagnostics.map((diagnostic) => [diagnostic.rule, diagnostic.file, diagnostic.line]),
+    );
+    expect(new Set(issues.map((issue) => issue.fingerprint)).size).toBe(issues.length);
+    for (const issue of issues) expect(issue.location.path).not.toContain(String.fromCharCode(92));
+  });
+
+  it('is byte-identical between runs', async () => {
+    const first = await run('check', '--root', LEGACY, '--no-config', '--format', 'gitlab');
+    const second = await run('check', '--root', LEGACY, '--no-config', '--format', 'gitlab');
+    expect(first.out).toBe(second.out);
+  });
+
+  it('marks a finding only --strict made an error as major, not critical', async () => {
+    const lenient = JSON.parse((await run('check', ...WARNINGS, '--format', 'gitlab')).out) as Issue[];
+    const strict = JSON.parse((await run('check', ...WARNINGS, '--strict', '--format', 'gitlab')).out) as Issue[];
+    expect(lenient.map((issue) => issue.severity)).toEqual(['minor', 'minor']);
+    expect(strict.map((issue) => issue.severity)).toEqual(['major', 'major']);
+    // The finding is the same one either way, so GitLab follows it.
+    expect(strict.map((issue) => issue.fingerprint)).toEqual(lenient.map((issue) => issue.fingerprint));
+  });
+
+  it('belongs to check, and says so rather than falling back', async () => {
+    expect(() => parseArgs(['graph', '--format', 'gitlab'], '/repo')).toThrow(
+      '--format gitlab reports findings, so it belongs to check, not to graph',
+    );
+    expect(() => parseArgs(['check', '--format', 'gitlab'], '/repo')).not.toThrow();
+    const diff = await run('diff', 'a.json', 'b.json', '--format', 'gitlab');
+    expect(diff.code).toBe(EXIT_ERROR);
+    expect(() => parseArgs(['--format', 'codeclimate'], '/repo')).toThrow(
+      '--format must be human, json, sarif, markdown or gitlab, got "codeclimate"',
+    );
+  });
+});
+
 describe('the other side of the ratchet', () => {
   // Named for the process, for the reason the baseline's file is.
   const FILE = `.tmp-ratchet-${process.pid}.json`;

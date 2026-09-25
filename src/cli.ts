@@ -31,6 +31,7 @@ import {
 import { isGlob, underRoot } from './glob.js';
 import { analyse, DEFAULT_PATTERNS, withDiagnostics, type AnalyseOptions, type AnalysisResult } from './runner.js';
 import {
+  formatGitlab,
   formatGraph,
   formatJson,
   formatMarkdown,
@@ -103,7 +104,7 @@ export interface CliOptions {
   readonly ratchet: boolean;
   /** Skip the repository configuration file entirely. */
   readonly noConfig: boolean;
-  readonly format: 'human' | 'json' | 'sarif' | 'markdown';
+  readonly format: 'human' | 'json' | 'sarif' | 'markdown' | 'gitlab';
   readonly graphFormat: GraphFormat;
   readonly severities: Partial<Record<AnyRuleId, Severity>>;
   readonly color: boolean | null;
@@ -180,11 +181,13 @@ OPTIONS
   --ratchet               Also fail when a baseline entry no longer occurs, so
                           a paid-off exemption cannot outlive the defect.
   --no-config             Ignore .spec-graph.json and the package.json key.
-  --format <fmt>          human, json, sarif or markdown. sarif is the
+  --format <fmt>          human, json, sarif, gitlab or markdown. sarif is the
                           interchange format GitHub code scanning and editors
-                          already read, for check; markdown is a table for a
-                          pull-request comment or $GITHUB_STEP_SUMMARY, for check
-                          or diff (default: human)
+                          already read, and gitlab the Code Quality report a
+                          GitLab merge request reads, both for check; markdown
+                          is a table for a pull-request comment or
+                          $GITHUB_STEP_SUMMARY, for check or diff
+                          (default: human)
   --graph-format <fmt>    dot, mermaid or json (default: dot)
   --documents-only        Leave items out of the exported graph
   --rule <id>=<severity>  Override one rule: error, warn, info or off. A project
@@ -300,6 +303,7 @@ EXAMPLES
   spec-graph check --rule project:no-draft-dependency=off
   spec-graph query project:no-draft-dependency   # what does that rule match?
   spec-graph check --format markdown >> "$GITHUB_STEP_SUMMARY"
+  spec-graph check --format gitlab > gl-code-quality-report.json
   spec-graph diff base.json head.json --format markdown >> "$GITHUB_STEP_SUMMARY"
 `;
 
@@ -328,7 +332,7 @@ export function parseArgs(argv: readonly string[], cwd: string): CliOptions {
   const severities: Partial<Record<AnyRuleId, Severity>> = {};
   let root = cwd;
   let rootExplicit = false;
-  let format: 'human' | 'json' | 'sarif' | 'markdown' = 'human';
+  let format: CliOptions['format'] = 'human';
   let graphFormat: GraphFormat = 'dot';
   let color: boolean | null = null;
   let ascii: boolean | null = null;
@@ -435,8 +439,8 @@ export function parseArgs(argv: readonly string[], cwd: string): CliOptions {
         break;
       case '--format': {
         const value = next(arg, i);
-        if (value !== 'human' && value !== 'json' && value !== 'sarif' && value !== 'markdown') {
-          throw new UsageError(`--format must be human, json, sarif or markdown, got "${value}"`);
+        if (value !== 'human' && value !== 'json' && value !== 'sarif' && value !== 'markdown' && value !== 'gitlab') {
+          throw new UsageError(`--format must be human, json, sarif, markdown or gitlab, got "${value}"`);
         }
         format = value;
         i += 1;
@@ -486,12 +490,13 @@ export function parseArgs(argv: readonly string[], cwd: string): CliOptions {
     }
   }
 
-  // SARIF is a report about findings, and only `check` produces those. Falling
-  // back to JSON would hand a pipeline something its uploader rejects with a
-  // message about a schema rather than about the command that was run. Markdown
-  // is for a pull request, which reads a check or a diff.
-  if (format === 'sarif' && command !== 'check' && !help && !version) {
-    throw new UsageError(`--format sarif reports findings, so it belongs to check, not to ${command}`);
+  // SARIF and GitLab's Code Quality are reports about findings, and only
+  // `check` produces those. Falling back to JSON would hand a pipeline something
+  // its uploader rejects with a message about a schema rather than about the
+  // command that was run. Markdown is for a pull request, which reads a check
+  // or a diff.
+  if ((format === 'sarif' || format === 'gitlab') && command !== 'check' && !help && !version) {
+    throw new UsageError(`--format ${format} reports findings, so it belongs to check, not to ${command}`);
   }
   if (format === 'markdown' && command !== 'check' && command !== 'diff' && !help && !version) {
     throw new UsageError(`--format markdown is a report for a pull request, so it belongs to check or diff, not to ${command}`);
@@ -857,11 +862,13 @@ export async function main(io: CliIO = {}): Promise<number> {
       out(
         options.format === 'sarif'
           ? formatSarif(reported, reported.graph, { version: await readVersion(), escalated, projectRules })
-          : options.format === 'json'
-            ? formatJson(reported, { escalated, ...baselineNote })
-            : options.format === 'markdown'
-              ? formatMarkdown(reported, reporterOptions)
-              : `${formatReport(reported, { color, ascii, ...reporterOptions })}\n`,
+          : options.format === 'gitlab'
+            ? formatGitlab(reported, { escalated })
+            : options.format === 'json'
+              ? formatJson(reported, { escalated, ...baselineNote })
+              : options.format === 'markdown'
+                ? formatMarkdown(reported, reporterOptions)
+                : `${formatReport(reported, { color, ascii, ...reporterOptions })}\n`,
       );
       if (!reported.ok || looseBaseline) return EXIT_FAILED;
       if (options.maxWarnings >= 0 && reported.summary.warnings > options.maxWarnings) return EXIT_FAILED;

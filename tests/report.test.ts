@@ -1,8 +1,10 @@
+import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 
 import { buildGraph } from '../src/graph.js';
 import {
   createPainter,
+  formatGitlab,
   formatGraph,
   formatJson,
   formatMarkdown,
@@ -336,6 +338,107 @@ describe('json report', () => {
   it('lists the files it read', () => {
     const parsed: { files: string[] } = JSON.parse(formatJson(result()));
     expect(parsed.files).toEqual(SOURCES.map((s) => s.path));
+  });
+});
+
+describe('gitlab code quality report', () => {
+  interface Issue {
+    description: string;
+    check_name: string;
+    fingerprint: string;
+    severity: string;
+    location: { path: string; lines: { begin: number } };
+  }
+  const issues = (text: string): Issue[] => JSON.parse(text) as Issue[];
+  const sha256 = (value: unknown): string => createHash('sha256').update(JSON.stringify(value)).digest('hex');
+
+  /** A finding made by hand, so severity, place and message are the test's to choose. */
+  const finding = (overrides: Partial<Diagnostic> = {}, line = 3): Diagnostic => {
+    const point = { offset: 0, line, column: 1 };
+    return {
+      rule: 'broken-reference',
+      severity: 'error',
+      message: '"x.md" does not resolve to any document',
+      hint: 'fix the identifier, or add the document it names',
+      at: { file: 'docs/adr/0001-a.md', span: { start: point, end: point } },
+      nodes: ['ADR-0001'],
+      related: [],
+      target: 'x.md',
+      ...overrides,
+    };
+  };
+  const reporting = (diagnostics: Diagnostic[]): AnalysisResult => ({ ...result(), diagnostics });
+
+  it('is the array GitLab reads, holding the five fields it reads', () => {
+    const [ghost, ...rest] = issues(formatGitlab(result()));
+    const diagnostic = result().diagnostics[0] as Diagnostic;
+    expect(rest).toEqual([]);
+    expect(ghost).toEqual({
+      description: `${diagnostic.message}. ${diagnostic.hint}`,
+      check_name: 'ghost-handover',
+      fingerprint: sha256(['ghost-handover', 'docs/adr/0004-cache.md', diagnostic.message]),
+      severity: 'critical',
+      location: { path: 'docs/adr/0004-cache.md', lines: { begin: diagnostic.at.span.start.line } },
+    });
+    expect(formatGitlab(result()).endsWith(']\n')).toBe(true);
+  });
+
+  it('is an empty array for a clean run, which GitLab reads as nothing to show', () => {
+    expect(formatGitlab(reporting([]))).toBe('[]\n');
+  });
+
+  it('puts each severity on the GitLab one that means the same', () => {
+    const report = issues(
+      formatGitlab(
+        reporting([
+          finding({ severity: 'error' }),
+          finding({ severity: 'error', rule: 'ambiguous-reference' }),
+          finding({ severity: 'warn', rule: 'reference-outside-corpus' }),
+          finding({ severity: 'info', rule: 'self-reference' }),
+        ]),
+        { escalated: new Set(['ambiguous-reference']) },
+      ),
+    );
+    // An error fails the build. One that only does because --strict raised it
+    // says so the only way this format can.
+    expect(report.map((issue) => issue.severity)).toEqual(['critical', 'major', 'minor', 'info']);
+    expect(issues(formatGitlab(reporting([finding({ rule: 'ambiguous-reference' })])))[0]?.severity).toBe('critical');
+  });
+
+  it('fingerprints what a finding is, not where it sits', () => {
+    const at = (line: number): string => issues(formatGitlab(reporting([finding({}, line)])))[0]?.fingerprint as string;
+    expect(at(3)).toBe(sha256(['broken-reference', 'docs/adr/0001-a.md', '"x.md" does not resolve to any document']));
+    // A paragraph added above it moves the line and nothing else.
+    expect(at(40)).toBe(at(3));
+    expect(at(3)).toMatch(/^[0-9a-f]{64}$/);
+    const other = (overrides: Partial<Diagnostic>): string =>
+      issues(formatGitlab(reporting([finding(overrides)])))[0]?.fingerprint as string;
+    expect(other({ rule: 'ambiguous-reference' })).not.toBe(at(3));
+    expect(other({ at: { file: 'docs/adr/0002-b.md', span: finding().at.span } })).not.toBe(at(3));
+    expect(other({ message: '"y.md" does not resolve to any document' })).not.toBe(at(3));
+    expect(other({ hint: 'another hint' })).toBe(at(3));
+  });
+
+  it('tells apart two findings that agree on rule, file and message', () => {
+    // The same broken link written twice in one file: GitLab tells issues
+    // apart by fingerprint, and one shared would show as one.
+    const prints = issues(formatGitlab(reporting([finding({}, 3), finding({}, 9), finding({}, 12)]))).map(
+      (issue) => issue.fingerprint,
+    );
+    const identity = ['broken-reference', 'docs/adr/0001-a.md', '"x.md" does not resolve to any document'];
+    expect(prints).toEqual([sha256(identity), sha256([...identity, 2]), sha256([...identity, 3])]);
+    const different = issues(formatGitlab(reporting([finding({}, 3), finding({ message: 'another' }, 9)])));
+    expect(different[1]?.fingerprint).toBe(sha256(['broken-reference', 'docs/adr/0001-a.md', 'another']));
+  });
+
+  it('keeps every fingerprint when the document around the findings is edited', () => {
+    const edited = SOURCES.map((source) =>
+      source.path === 'docs/adr/0004-cache.md' ? { ...source, text: source.text.replace('# Cache', '# Cache\n\nA new paragraph.\n') } : source,
+    );
+    const before = issues(formatGitlab(result()));
+    const after = issues(formatGitlab(result(edited)));
+    expect(after.map((issue) => issue.fingerprint)).toEqual(before.map((issue) => issue.fingerprint));
+    expect(after[0]?.location.lines.begin).toBeGreaterThan(before[0]?.location.lines.begin as number);
   });
 });
 
