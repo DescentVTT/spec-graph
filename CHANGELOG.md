@@ -74,7 +74,10 @@ spec-graph's old one, a repository will see it:
 reference target is not a path: a bare pattern matches one target exactly, case
 is ignored on every host, `.` and `..` are the text of the link, and a `\`
 escapes the next character rather than being matched as itself. The glob
-changes above apply to it otherwise.
+changes above apply to it otherwise, and three more come with the syntax: a `\`
+before a letter or digit, or at the end, is refused, as is a leading `!` - both
+were literals, and `--ignore-ref` has no list to take a pattern back out of -
+and `a//b` reads as `a/b`.
 
 `globToRegExp` is deprecated, and stays as the old reading that the test of
 every difference above runs against; it no longer folds case on Windows. See

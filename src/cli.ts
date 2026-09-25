@@ -907,11 +907,13 @@ function anchor(prefix: string, value: string): string {
   // `../docs` typed one directory down is the root's `docs`. That is arithmetic
   // on two relative paths, and this is the one place both are known; left in
   // the pattern, it reads as a glob climbing out of the root, which is refused.
+  // A bare `..` typed in `docs/deep` leaves `docs/`: the directory's contents,
+  // which is what it named.
   while (directories.length > 0 && (rest === '..' || rest.startsWith('../'))) {
     directories.pop();
     rest = rest.slice(3);
   }
-  const joined = [...directories, rest].filter((part) => part.length > 0).join('/');
+  const joined = [...directories, rest].join('/');
   return negated ? `!${joined}` : joined;
 }
 

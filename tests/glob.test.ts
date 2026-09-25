@@ -404,6 +404,14 @@ describe('reference filter', () => {
   it('names the pattern as written when it does not compile', () => {
     expect(() => createReferenceFilter(['../Trap [55'])).toThrow('invalid glob "../Trap [55": a "[" is never closed');
   });
+
+  it('refuses what the syntax calls malformed, which used to be read as literal text', () => {
+    // There is no list here for a `!` to take a target back out of, and a `\`
+    // before a letter is a Windows path, which no target is.
+    expect(() => createReferenceFilter(['!trap *'])).toThrow('invalid glob "!trap *": a negated pattern is a list entry');
+    expect(() => createReferenceFilter([`notes${String.fromCharCode(92)}trap`])).toThrow('escapes glob syntax');
+    expect(createReferenceFilter(['notes//trap'])('notes/trap')).toBe(true);
+  });
 });
 
 describe('matcher', () => {
