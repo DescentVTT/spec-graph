@@ -392,6 +392,114 @@ describe('html comments', () => {
   });
 });
 
+/**
+ * Comments and code spans are found in one pass, and whichever opens first
+ * wins, as CommonMark has it. Found one kind after the other, a span that
+ * merely mentioned `<!--` opened a comment running to the next `-->` anywhere.
+ */
+describe('comments and code spans, read left to right', () => {
+  it('reads a span that mentions a comment as code, and the comment after it as a comment', () => {
+    const md = ['# T', '', 'Use `<!--` to open.', '', '## Real heading', '', 'See [a](b.md).', '', '<!--', '## Hidden', '-->', ''];
+    const doc = scanMarkdown(md.join('\n'));
+    // Read as a comment, the span took the link with it, and a broken
+    // reference to b.md would never have been reported.
+    expect(doc.links.map((l) => l.target)).toEqual(['b.md']);
+    expect(doc.comments.map((c) => c.inner)).toEqual(['\n## Hidden\n']);
+    expect(doc.isMasked(doc.text.indexOf('<!--'))).toBe(true);
+  });
+
+  it('lets a span close past a `<!--` it opened before', () => {
+    const doc = scanMarkdown('A `span <!-- here` then [x](x.md) --> end.');
+    expect(doc.comments).toEqual([]);
+    expect(doc.links.map((l) => l.target)).toEqual(['x.md']);
+  });
+
+  it('lets a comment hold a backtick it opened before', () => {
+    // Opening a span, the backtick in the comment would close at the first one
+    // of `code` and take the link between them.
+    const doc = scanMarkdown('Text <!-- one ` --> then [x](x.md) and `code`.');
+    expect(doc.comments.map((c) => c.inner)).toEqual([' one ` ']);
+    expect(doc.links.map((l) => l.target)).toEqual(['x.md']);
+    expect(doc.isMasked(doc.text.indexOf('code'))).toBe(true);
+  });
+
+  it('closes a span only with a run of its own length', () => {
+    const doc = scanMarkdown('Write ``a ` <!-- b`` then [x](x.md) --> done.');
+    expect(doc.comments).toEqual([]);
+    expect(doc.links.map((l) => l.target)).toEqual(['x.md']);
+  });
+
+  it('opens nothing with a run that never closes', () => {
+    const doc = scanMarkdown('A `` run, <!-- note --> and [x](x.md) ` end.');
+    expect(doc.comments.map((c) => c.inner)).toEqual([' note ']);
+    expect(doc.links.map((l) => l.target)).toEqual(['x.md']);
+  });
+
+  it('does not let an escaped backtick open a span', () => {
+    const doc = scanMarkdown('A \\` then <!-- note --> and [x](x.md) `.');
+    expect(doc.comments.map((c) => c.inner)).toEqual([' note ']);
+    expect(doc.links.map((l) => l.target)).toEqual(['x.md']);
+  });
+
+  it('neither opens nor closes a span with a backtick inside a fence', () => {
+    expect(targets(['Open `here and [x](x.md).', '', '```', 'not ` the end', '```'].join('\n'))).toEqual(['x.md']);
+    expect(targets(['```', 'a ` inside', '```', '[x](x.md) and a stray `'].join('\n'))).toEqual(['x.md']);
+    // A run as long as the fence's own, looking past it for a closer.
+    expect(targets(['An ``` unclosed [x](x.md).', '', '```', 'code', '```', ''].join('\n'))).toEqual(['x.md']);
+    // Looking past one fence, and then past another.
+    const past = ['Open `here and [x](x.md).', '', '```', 'not ` the end', '```', '', 'Still [y](y.md).', '', '```', 'nor ` this', '```', 'End.'];
+    expect(targets(past.join('\n'))).toEqual(['x.md', 'y.md']);
+  });
+
+  it('reads what lies before, between and after code blocks', () => {
+    const md = [
+      'Use `[fake](fake.md)` and <!-- one -->.',
+      '',
+      '```',
+      '<!-- fake -->',
+      '```',
+      '',
+      'Between `x` and <!-- two -->.',
+      '',
+      '~~~',
+      'a ` <!-- fake -->',
+      '~~~',
+      '',
+      'After [real](real.md) <!-- three --> and ``` a ```.',
+    ].join('\n');
+    const doc = scanMarkdown(md);
+    expect(doc.comments.map((c) => c.inner)).toEqual([' one ', ' two ', ' three ']);
+    expect(doc.links.map((l) => l.target)).toEqual(['real.md']);
+  });
+
+  it('opens a comment at `<!--` and at no other `<`', () => {
+    const doc = scanMarkdown('See <https://example.com/a> and <!-- note -->');
+    expect(doc.comments.map((c) => c.inner)).toEqual([' note ']);
+    expect(doc.links.map((l) => l.target)).toEqual(['https://example.com/a']);
+  });
+
+  it('keeps a `<!--` that never closes as text, and reads the spans after it', () => {
+    const doc = scanMarkdown('<!-- open\n\n`[fake](fake.md)` and <!-- again [real](real.md)');
+    expect(doc.comments).toEqual([]);
+    expect(doc.links.map((l) => l.target)).toEqual(['real.md']);
+  });
+
+  it('still closes a span after runs that never did, each a different length', () => {
+    // None of these runs closes, and each once read the rest of the document
+    // looking. The first search that fails now keeps what it saw, and the rest
+    // are answered from it - which must not stop the span below from closing.
+    //
+    // No clock here, unlike the blow-up detectors for regex and glob. This cost
+    // grew as the length to the power 1.5, not exponentially: fifteen seconds
+    // took 2 MB, and that is more than mutation testing can afford to scan for
+    // every mutant this test reaches, instrumented, inside the bound.
+    const runs = Array.from({ length: 300 }, (_, k) => '`'.repeat(k + 2)).join(' ');
+    const doc = scanMarkdown(`${runs}\n\nThen \`[fake](fake.md)\` and [real](real.md) <!-- note -->\n`);
+    expect(doc.links.map((l) => l.target)).toEqual(['real.md']);
+    expect(doc.comments.map((c) => c.inner)).toEqual([' note ']);
+  });
+});
+
 describe('slugify', () => {
   it('lowercases, drops punctuation and hyphenates spaces', () => {
     expect(slugify('Open Questions')).toBe('open-questions');

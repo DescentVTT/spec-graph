@@ -13,6 +13,32 @@ attestation naming the repository, the commit and the run that built the
 tarball. `npm audit signatures` checks it without taking anyone's word for
 anything. 0.2.0 to 0.8.0 have none and never will.
 
+### Fixed
+
+**A code span that mentions a comment is code.** ``Use `<!--` to open one``
+opened an HTML comment at the `<!--`, and it ran to the next `-->` anywhere in
+the document: every heading, citation and link in between went into it, and a
+link to a file that does not exist went unreported. Comments were found first
+and code spans after, so the span never had a say. Both are now found in one
+pass, left to right, and whichever opens first wins, which is how CommonMark
+reads them: a `<!--` inside a span is text, and so is a backtick inside a
+comment. A span still closes only on a run of its own length, and an escaped
+backtick still opens none.
+
+The same defect read a directive quoted in inline code as a directive. This
+repository's README and ADR-0011 both write `` `<!-- @spec-history -->` `` in a
+sentence, and both were being checked as historical records. They are a
+document and an accepted decision again, and `selfcheck` counts twenty open
+obligations rather than nineteen, because ADR-0011's open question is no longer
+exempt. A document quoting `<!-- @spec-ignore -->` that way was skipped whole,
+and is checked now.
+
+**Unclosed backtick runs cost the document's length once, not once each.** Each
+searched the rest of the document for its closer, so a line of runs of different
+lengths made the scan grow as the length to the power 1.5: 2 MB took fifteen
+seconds. The first search that fails now keeps what it saw, and the same 2 MB
+takes about sixty milliseconds.
+
 ## 0.8.0
 
 A register row took its identifier from the first thing its *title* said, not

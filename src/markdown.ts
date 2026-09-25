@@ -195,9 +195,8 @@ export function scanMarkdown(source: string): ScannedDocument {
   // both have in common is that their content is not Markdown, and every reader
   // downstream - comments, links, tables - already asks that one question.
   const codeRanges = mergeRanges([...collectCodeRanges(lines, bodyStart), ...collectRawTextHtml(lines, bodyStart)]);
-  const comments = scanComments(text, index, bodyStart, codeRanges);
+  const { comments, inlineCode } = scanInline(text, index, bodyStart, codeRanges);
 
-  const inlineCode = scanInlineCode(text, bodyStart, codeRanges, comments);
   const maskRanges = [
     ...(frontMatter ? [{ start: 0, end: frontMatter.bodyStart }] : []),
     ...codeRanges,
@@ -672,83 +671,124 @@ function makeCell(text: string, start: number, end: number): TableCell {
 }
 
 /* -------------------------------------------------------------------------- */
-/* HTML comments                                                              */
+/* HTML comments and inline code                                              */
 /* -------------------------------------------------------------------------- */
 
-function scanComments(text: string, index: LineIndex, bodyStart: number, code: readonly Range[]): HtmlComment[] {
-  const out: HtmlComment[] = [];
-  const merged = mergeRanges(code);
-  let from = bodyStart;
-  for (;;) {
-    const open = text.indexOf('<!--', from);
-    if (open === -1) break;
-    if (containsOffset(merged, open)) {
-      from = open + 4;
-      continue;
-    }
-    const close = text.indexOf('-->', open + 4);
-    if (close === -1) break;
-    out.push({
-      start: open,
-      end: close + 3,
-      inner: text.slice(open + 4, close),
-      innerStart: open + 4,
-      line: index.positionAt(open).line,
-    });
-    from = close + 3;
-  }
-  return out;
-}
+const BACKTICK = 0x60;
+const BACKSLASH = 0x5c;
+const LESS_THAN = 0x3c;
 
-/* -------------------------------------------------------------------------- */
-/* Inline code                                                                */
-/* -------------------------------------------------------------------------- */
-
-function scanInlineCode(
+/**
+ * Finds HTML comments and inline code spans, in one pass from left to right.
+ *
+ * One pass, because each can hide the other's opener and CommonMark settles
+ * which by position rather than by kind: whichever opens first wins. So
+ * `` `<!--` `` is code that mentions a comment, and a backtick inside a comment
+ * is a character. Looked for one kind after the other, the `<!--` inside that
+ * span opened a comment, and everything up to the next `-->` in the document -
+ * headings, citations, a link to a file that does not exist - went into it.
+ *
+ * Neither is looked for inside block code or raw-text HTML. A span's closing
+ * run may lie past a `<!--`, since the span opened first and the `<!--` is
+ * inside it. A comment ends at the first `-->` after it, wherever that is.
+ */
+function scanInline(
   text: string,
+  index: LineIndex,
   bodyStart: number,
   code: readonly Range[],
-  comments: readonly HtmlComment[],
-): Range[] {
-  const blocked = mergeRanges([...code, ...comments.map((c) => ({ start: c.start, end: c.end }))]);
-  const out: Range[] = [];
+): { comments: HtmlComment[]; inlineCode: Range[] } {
+  const comments: HtmlComment[] = [];
+  const inlineCode: Range[] = [];
+  const closeRun = createRunCloser(text, code);
+  // Once one `<!--` has no `-->` after it, no later one has either. Searching
+  // again for each would cost a document of unclosed openers its length once
+  // per opener; they are text, and so is every one after.
+  let closable = true;
+  // The first block range that does not end before the cursor.
+  let block = 0;
   let i = bodyStart;
 
   while (i < text.length) {
-    if (text[i] !== '`') {
-      i += 1;
+    const range = code[block];
+    if (range !== undefined && i >= range.start) {
+      if (i < range.end) i = range.end;
+      else block += 1;
       continue;
     }
-    if (containsOffset(blocked, i)) {
-      i += 1;
-      continue;
-    }
-    let runStart = i;
-    while (text[i] === '`') i += 1;
-    const runLength = i - runStart;
-    // An escaped backtick does not open a span.
-    if (runStart > 0 && text[runStart - 1] === '\\') continue;
+    const ch = text.charCodeAt(i);
 
-    let j = i;
-    let closed = -1;
+    if (ch === LESS_THAN && closable && text.startsWith('<!--', i)) {
+      const close = text.indexOf('-->', i + 4);
+      if (close !== -1) {
+        comments.push({
+          start: i,
+          end: close + 3,
+          inner: text.slice(i + 4, close),
+          innerStart: i + 4,
+          line: index.positionAt(i).line,
+        });
+        i = close + 3;
+        continue;
+      }
+      closable = false;
+    } else if (ch === BACKTICK) {
+      const start = i;
+      while (text.charCodeAt(i) === BACKTICK) i += 1;
+      // An escaped backtick does not open a span.
+      if (start > 0 && text.charCodeAt(start - 1) === BACKSLASH) continue;
+      const close = closeRun(i, i - start, block);
+      if (close !== -1) {
+        inlineCode.push({ start, end: close });
+        i = close;
+      }
+      continue;
+    }
+    i += 1;
+  }
+
+  return { comments, inlineCode };
+}
+
+/**
+ * Finds where a span opened by a run of backticks ends: just past the next run
+ * of exactly that length outside block code, or `-1` when there is none.
+ *
+ * Linear in the document however many openers never close. The first search to
+ * reach the end without a match has seen every run after its opener, and it
+ * keeps where the last run of each length starts. Every later opener is past
+ * that point, so whether it closes at all is a lookup. Searched for every time,
+ * a line of unclosed runs, each a different length, read the rest of the
+ * document once per run, and 2 MB of them took fifteen seconds.
+ */
+function createRunCloser(text: string, code: readonly Range[]): (from: number, length: number, block: number) => number {
+  let lastRun: Map<number, number> | null = null;
+  return (from, length, block) => {
+    // Only the time depends on this line. Without it the same answer comes
+    // from reading to the end again, so a test can hold it down only with a
+    // clock, and tests/markdown.test.ts says why there is none.
+    if (lastRun !== null && (lastRun.get(length) ?? -1) < from) return -1;
+    const seen = new Map<number, number>();
+    let j = from;
     while (j < text.length) {
-      if (text[j] !== '`') {
+      const range = code[block];
+      if (range !== undefined && j >= range.start) {
+        if (j < range.end) j = range.end;
+        else block += 1;
+        continue;
+      }
+      if (text.charCodeAt(j) !== BACKTICK) {
         j += 1;
         continue;
       }
-      const closeStart = j;
-      while (text[j] === '`') j += 1;
-      if (j - closeStart === runLength && !containsOffset(blocked, closeStart)) {
-        closed = j;
-        break;
-      }
+      const start = j;
+      while (text.charCodeAt(j) === BACKTICK) j += 1;
+      if (j - start === length) return j;
+      seen.set(j - start, start);
     }
-    if (closed === -1) continue;
-    out.push({ start: runStart, end: closed });
-    i = closed;
-  }
-
-  return out;
+    lastRun = seen;
+    return -1;
+  };
 }
 
 /* -------------------------------------------------------------------------- */
