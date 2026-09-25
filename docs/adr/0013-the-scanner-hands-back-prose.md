@@ -96,6 +96,15 @@ backtick run and a 200 KB single line were all read in 81 ms with no
 backtracking blow-up and no unbounded recursion. The degradations were wrong
 answers, not failures to answer, which is the behaviour ADR-0001 was betting on.
 
+*Amended 2026-09-26.* One more, of the same kind.
+
+**A comment and a code span are found together, and whichever opens first
+wins.** Comments were found first and spans after, so `` `<!--` `` in a sentence
+opened a comment that ran to the next `-->` in the document, taking headings
+and citations with it. It also read `` `<!-- @spec-history -->` ``, quoted in
+this repository's README and in ADR-0011, as a directive, and both files were
+being checked as records.
+
 ## Alternatives considered
 
 **Adopt a CommonMark library.** It would have prevented all three, and it costs

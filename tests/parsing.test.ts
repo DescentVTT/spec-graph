@@ -497,6 +497,14 @@ describe('directives', () => {
   it('gives an item with two @spec-item directives above it the nearer one', () => {
     expect(boundIds('<!-- @spec-item id="far" -->', '<!-- @spec-item id="near" -->', '- [ ] first')).toEqual(['near']);
   });
+
+  it('does not read a directive quoted in inline code', () => {
+    // A document explaining the directive is not annotated by it. ADR-0011 and
+    // the README both mark themselves records this way, if it is.
+    expect(parse('Mark a log with `<!-- @spec-history -->` at its top.')).toHaveLength(0);
+    expect(parse('Mark a log with ``<!-- @spec-history -->`` at its top.')).toHaveLength(0);
+    expect(parse('A `span`, then <!-- @spec-history -->')).toHaveLength(1);
+  });
 });
 
 describe('posix paths', () => {

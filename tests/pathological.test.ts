@@ -247,6 +247,34 @@ const CORPUS: Record<string, string> = {
     '',
     '#\t tabbed heading',
   ].join('\n'),
+
+  // Spans and comments that hide each other's openers, a comment holding
+  // structure, and runs of backticks that never close. The first line's span
+  // once opened a comment that ran to the `-->` nine lines down.
+  'docs/0011-spans.md': [
+    '---',
+    'id: ADR-0011',
+    'status: accepted',
+    '---',
+    '',
+    '# ADR-0011: Spans and comments',
+    '',
+    'Use `<!--` to open a comment; this depends on [ADR-0001](0001-target.md).',
+    '',
+    '<!--',
+    '## Hidden',
+    '- [ ] hidden, delegated to ADR-0001',
+    '| ID | Status |',
+    '| -- | ------ |',
+    '| ADR-0012 | Accepted |',
+    '-->',
+    '',
+    'A comment <!-- holding ` a tick --> and a span `holding <!-- an opener` and \\`an escape.',
+    '<!-- <!-- nested --> -->',
+    '``` <!-- a fence that is not one --> ```',
+    Array.from({ length: 200 }, (_, k) => '`'.repeat(k + 2)).join(' '),
+    '<!-- '.repeat(2000),
+  ].join('\n'),
 };
 
 const sources = (): Source[] => Object.entries(CORPUS).map(([path, text]): Source => ({ path, text }));
