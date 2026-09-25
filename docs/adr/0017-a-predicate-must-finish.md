@@ -116,6 +116,25 @@ selector the pattern was written, which is what the caret needs. Project rules
 inherit it for free — [ADR-0016](0016-a-query-needs-a-sentence.md) already
 reports a selector that does not parse when the configuration file is read.
 
+### Where the matcher lives
+
+*Amended 2026-09-26.* It is no longer written here. The module this ADR
+describes moved unchanged to spec-core, the library the spec-* tools share, as
+`compileRegex` in its `pattern` module, so that every tool taking a pattern
+from a file runs it on the same automaton rather than on a copy of its own
+drifting from this one. It comes back as `src/vendor/spec-core/pattern/regex.ts`,
+copied byte for byte and held to the SHA-256 it was copied with
+([spec-core's ADR-0001](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0001-one-core-copied-by-hash.md)).
+Nothing about `~=` changed. `compilePattern` and `PatternError` are still
+exported, as that same function and class, and a caught error's `name` now
+reads `RegexError`.
+
+The verification described below moved with it: the differential test against
+`RegExp`, its corpus and its generator run in spec-core, and spec-core's
+mutation sweep measures the module. This repository's sweep leaves the copy
+out, and a change to the dialect is made there and arrives here as a diff to
+the copy.
+
 ## Consequences
 
 **The pipeline has no unbounded component left.** Every stage from scanner to

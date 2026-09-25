@@ -65,8 +65,10 @@ export {
   SELECTOR_KEYS,
 } from './select.js';
 
-export { compilePattern, PatternError } from './regex.js';
-export type { Matcher, PatternOptions } from './regex.js';
+// The matcher behind `~=` lives in spec-core now (ADR-0017), and keeps the
+// names it was published under here.
+export { compileRegex as compilePattern, RegexError as PatternError } from './vendor/spec-core/pattern/index.js';
+export type { RegexMatcher as Matcher, RegexOptions as PatternOptions } from './vendor/spec-core/pattern/index.js';
 export type {
   ExecuteOptions,
   Match,

@@ -13,6 +13,18 @@ attestation naming the repository, the commit and the run that built the
 tarball. `npm audit signatures` checks it without taking anyone's word for
 anything. 0.2.0 to 0.8.0 have none and never will.
 
+### Changed
+
+**The matcher behind `~=` is spec-core's.** It moved, unchanged, to spec-core -
+the library the spec-* tools share - and is copied back into
+`src/vendor/spec-core/`, byte for byte and checked against the SHA-256 it was
+copied with, so spec-graph still installs nothing. A selector reads exactly as
+before. `compilePattern` and `PatternError` are still exported and are the same
+function and class; a caught error's `name` is now `RegexError`. The tests that
+hold the matcher to `RegExp` moved with it, and the copy is left out of this
+repository's mutation sweep and coverage, which spec-core's measure instead.
+See [ADR-0017](docs/adr/0017-a-predicate-must-finish.md).
+
 ### Fixed
 
 **A code span that mentions a comment is code.** ``Use `<!--` to open one``

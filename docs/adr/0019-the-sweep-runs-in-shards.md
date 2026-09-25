@@ -65,6 +65,10 @@ from more jobs:
 The last shard is written as the base patterns less the listed files, not as a
 list, so a file added later is mutated without anyone remembering to assign it.
 
+*Amended 2026-09-26.* `regex.ts` has left shard 3: the matcher moved to
+spec-core ([ADR-0017](0017-a-predicate-must-finish.md)), and the copy under
+`src/vendor/` is mutated by no shard, because spec-core's sweep measures it.
+
 ### Not splitting `extract.ts`
 
 Stryker's `mutate` takes line ranges, and splitting `extract.ts` and

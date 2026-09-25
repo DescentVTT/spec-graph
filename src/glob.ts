@@ -11,7 +11,7 @@
 import { readdir, stat } from 'node:fs/promises';
 
 import { isAbsolutePath, joinPosix, normalisePosix, toPosix } from './paths.js';
-import { compilePattern, type Matcher } from './regex.js';
+import { compileRegex, type RegexMatcher } from './vendor/spec-core/pattern/index.js';
 
 /** Directories skipped unless a pattern explicitly names them. */
 export const DEFAULT_IGNORED_DIRECTORIES: readonly string[] = Object.freeze([
@@ -98,10 +98,10 @@ export interface GlobOptions {
  * second is not: `--ignore-ref` patterns are matched against targets read out
  * of documents, and a document is whatever somebody wrote.
  */
-export function compileGlob(pattern: string, options: GlobOptions = {}): Matcher {
+export function compileGlob(pattern: string, options: GlobOptions = {}): RegexMatcher {
   const source = globSource(pattern);
   try {
-    return compilePattern(`^${source}$`, { ignoreCase: options.ignoreCase ?? process.platform === 'win32' });
+    return compileRegex(`^${source}$`, { ignoreCase: options.ignoreCase ?? process.platform === 'win32' });
   } catch (error) {
     // The message describes an expression the user never wrote, so it is told
     // against the glob they did.

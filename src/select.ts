@@ -21,10 +21,10 @@
  */
 
 import { receptivityOf } from './lifecycle.js';
-import { compilePattern, PatternError, type Matcher } from './regex.js';
 import { documentOf } from './resolve.js';
 import type { SpecGraph } from './graph.js';
 import { EDGE_KINDS, type Edge, type EdgeKind, type NodeKind, type SpecNode } from './types.js';
+import { compileRegex, RegexError, type RegexMatcher } from './vendor/spec-core/pattern/index.js';
 
 /* -------------------------------------------------------------------------- */
 /* Shapes                                                                     */
@@ -182,7 +182,7 @@ class Parser {
       try {
         pattern(value);
       } catch (error) {
-        if (!(error instanceof PatternError)) throw error;
+        if (!(error instanceof RegexError)) throw error;
         throw new QueryError(error.message, valueStart + error.offset + (quoted(this.source[valueStart]) ? 1 : 0));
       }
     }
@@ -402,7 +402,7 @@ function testPredicate(node: SpecNode, predicate: Predicate, graph?: SpecGraph):
   });
 }
 
-const patterns = new Map<string, Matcher>();
+const patterns = new Map<string, RegexMatcher>();
 
 /**
  * Compiles a `~=` pattern, once per distinct pattern.
@@ -410,10 +410,10 @@ const patterns = new Map<string, Matcher>();
  * Cached because a rule runs its predicate against every node in the corpus,
  * and because compiling is the expensive half now that matching is linear.
  */
-export function pattern(source: string): Matcher {
+export function pattern(source: string): RegexMatcher {
   const cached = patterns.get(source);
   if (cached) return cached;
-  const compiled = compilePattern(source);
+  const compiled = compileRegex(source);
   patterns.set(source, compiled);
   return compiled;
 }
