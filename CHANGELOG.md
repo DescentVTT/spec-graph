@@ -68,6 +68,26 @@ changes above apply to it otherwise.
 every difference above runs against; it no longer folds case on Windows. See
 [ADR-0022](docs/adr/0022-globs-are-the-family-path-dialect.md).
 
+**`archived` is a record, not a retired decision.** spec-brief closes a round
+of work by writing `status: archived` and moving the brief to an archive
+directory, and every spec-* tool reads that word as a finished round which it
+is normal to depend on. spec-graph read it as retired: a live brief that
+depended on an archived one was reported as a `stale-premise`, and an archived
+brief with a task left unticked as an `orphaned-obligation`. It is the `record`
+phase now, as a file declared by `historyPatterns` is - its links are still
+checked, its unticked boxes are nobody's work and leave the open count, and
+live work handed to it is still a `ghost-handover`. So is the status word
+`archive`.
+
+A document still retires by saying `superseded`, `deprecated` or `retired`,
+and `archived, superseded by B-7` is retired, since a retirement word wins
+wherever it is written. A document under an `archive/` directory that declares
+no status is retired as before. A repository that wrote `archived` for a
+retired decision loses the `stale-premise` findings on documents that depend
+on it, and a baseline that accepted one reports that entry as no longer
+occurring, which fails a run under `--ratchet`. `historyPatterns` and `<!-- @spec-history -->` are unchanged. See
+[ADR-0011](docs/adr/0011-a-record-is-not-a-specification.md).
+
 ### Fixed
 
 **A code span that mentions a comment is code.** ``Use `<!--` to open one``

@@ -912,6 +912,32 @@ describe('historical records', () => {
     expect(before.out).toContain('1 open');
     expect(after.out).toContain('0 open');
   });
+
+  it('counts an archived brief as one, with no configuration at all', async () => {
+    // What spec-brief leaves behind when it archives a round: the status word
+    // and the move. Its unticked box is not open work, a brief resting on it
+    // is not resting on a retired decision, and its broken link is still
+    // broken.
+    const { mkdir, rm, writeFile } = await import('node:fs/promises');
+    const root = `tests/fixtures/.tmp/cli-archived-${process.pid}`;
+    await rm(root, { recursive: true, force: true });
+    await mkdir(`${root}/briefs/archive`, { recursive: true });
+    await writeFile(
+      `${root}/briefs/archive/0001-sign-in.md`,
+      '---\nid: B-0001\nstatus: archived\n---\n\n# B-0001: Sign-in\n\n## Tasks\n\n- [ ] Rotate the key\n\nSee [the plan](plans/sign-in.md).\n',
+    );
+    await writeFile(`${root}/briefs/0002-sessions.md`, '---\nid: B-0002\nstatus: active\ndependsOn: [B-0001]\n---\n\n# B-0002: Sessions\n');
+    try {
+      const result = await run('check', 'briefs/**/*.md', '--root', root, '--no-config');
+      expect(result.out).toContain('0 open');
+      expect(result.out).toContain('broken-reference');
+      expect(result.out).not.toContain('stale-premise');
+      expect(result.out).not.toContain('orphaned-obligation');
+      expect(result.code).toBe(EXIT_FAILED);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
 });
 
 describe('the baseline', () => {

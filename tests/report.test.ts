@@ -227,7 +227,7 @@ describe('every severity reaches the report', () => {
   // severities and all three glyphs are covered.
   const mixed = (): AnalysisResult =>
     result([
-      { path: 'docs/adr/0001-old.md', text: '---\nstatus: archived\n---\n\n# Old\n' },
+      { path: 'docs/adr/0001-old.md', text: '---\nstatus: retired\n---\n\n# Old\n' },
       {
         path: 'docs/adr/0002-new.md',
         text: [

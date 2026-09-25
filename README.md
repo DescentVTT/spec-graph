@@ -123,12 +123,20 @@ onto four phases, chosen so one question can be answered from the phase alone:
 | `draft` | `proposed`, `provisional`, `wip`, `in-review`, `experimental`, … | yes |
 | `active` | `accepted`, `implementable`, `implemented`, `merged`, `adopted`, … | yes |
 | `frozen` | `final`, `ratified`, `locked`, `published`, … | **no** |
-| `retired` | `superseded`, `deprecated`, `rejected`, `withdrawn`, `archived`, … | **no** |
+| `retired` | `superseded`, `deprecated`, `rejected`, `withdrawn`, … | **no** |
 
 The status is found wherever your team writes it — front matter (`status:`,
 `state:`, `stage:`), a `## Status` section, `**Accepted** (2026-03-01) ✅`, or a
 `docs/adr/archive/` directory. `Accepted, later superseded by ADR-0009` is
 retired: retirement is terminal, so a retirement word anywhere wins.
+
+`archived` is none of the four. It is what spec-brief writes on a round of work
+it has closed, and every spec-* tool reads it as a **record**: depending on it
+is normal, its unticked boxes are not anyone's work, its links are still
+checked, and new work handed to it is still a ghost handover. See
+[Journals, changelogs and minutes](#journals-changelogs-and-minutes). To retire
+a decision, say `superseded` or `deprecated`; a document under an `archive/`
+directory that says nothing about itself is still retired.
 
 An unrecognised status becomes `unknown`, and rules treat it permissively. It
 never guesses.
@@ -509,7 +517,8 @@ had:
 { "historyPatterns": ["**/JOURNAL_*.md", "archive/**"] }
 ```
 
-or, for one file, `<!-- @spec-history -->` at the top of it.
+or, for one file, `<!-- @spec-history -->` at the top of it. A brief whose
+status is `archived` is one already, with nothing declared.
 
 |  |  |
 | --- | --- |

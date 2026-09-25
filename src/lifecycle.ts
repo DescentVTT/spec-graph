@@ -37,8 +37,6 @@ const VOCABULARY: readonly (readonly [Phase, readonly string[]])[] = [
       'obsolete',
       'obsoleted',
       'retired',
-      'archived',
-      'archive',
       'rejected',
       'declined',
       'withdrawn',
@@ -60,6 +58,16 @@ const VOCABULARY: readonly (readonly [Phase, readonly string[]])[] = [
       'not-planned',
       'wontfix',
     ],
+  ],
+  [
+    // A finished round of work kept as it was left: spec-brief archives a brief
+    // by writing this word and moving the file. Every spec-* tool reads it as a
+    // record rather than as a retired decision - depending on one is normal,
+    // its unticked boxes were never going to be ticked, and its links still
+    // have to go somewhere (ADR-0011). After retirement, so a brief written
+    // `archived, superseded by B-0007` is still retired.
+    'record',
+    ['archived', 'archive'],
   ],
   [
     'frozen',
