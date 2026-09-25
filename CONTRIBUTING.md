@@ -7,7 +7,7 @@ itself; what follows is the map that is hard to recover by reading.
 
 ```bash
 npm install
-npm test          # 995 tests
+npm test          # 1005 tests
 npm run lint      # tsc --noEmit, strict
 npm run build     # emits dist/
 npm run selfcheck # spec-graph checks its own ADRs
@@ -44,7 +44,7 @@ files ─▶ markdown.ts ─▶ extract.ts ─▶ resolve.ts ─▶ graph.ts ─
 | `select.ts` | The selector language: parser and execution engine. |
 | `rules.ts` | The diagnostics. Two of them are selector queries. |
 | `project-rules.ts` | Selectors a repository declared, compiled and checked. |
-| `report.ts` | Terminal, JSON, Graphviz and Mermaid output. |
+| `report.ts` | Terminal, JSON, SARIF, GitLab Code Quality, Markdown, Graphviz and Mermaid output. |
 | `diff.ts` | Two JSON exports compared, naming only the changes it can tell apart. |
 | `glob.ts` / `paths.ts` | Pattern lists, the walk and reference-target matching; POSIX path arithmetic. |
 | `runner.ts` / `cli.ts` | Orchestration and the command line. |

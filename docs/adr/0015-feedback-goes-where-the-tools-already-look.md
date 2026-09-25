@@ -53,6 +53,34 @@ Three properties are kept deliberately:
 carries the baseline note, the summary and the per-file detail SARIF has nowhere
 to put.
 
+### GitLab's Code Quality, because GitLab reads it (2026-09-26)
+
+*Amended 2026-09-26.* SARIF reaches a pull request on GitHub and nothing
+reaches a merge request on GitLab, which left a tool meant to run in any CI
+useful in one forge's review.
+[spec-core's ADR-0005](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0005-the-family-contract.md)
+asks each spec-* tool to add GitLab's format when it next touches its
+reporter. `--format gitlab` is that format. The Markdown table below declined
+a forge's name because the same text serves any reader; this schema is
+GitLab's own and serves nothing else, so its name is where it goes. It is an
+array of issues with a description, a check name, a fingerprint, a severity
+and a file and line, and no field GitLab does not read.
+
+- **The fingerprint is what the finding is.** It is how GitLab matches a
+  finding in a merge request to the one on the target branch, so it is a
+  SHA-256 of the rule, the file and the message, and moving a paragraph does
+  not make a finding new. Two findings identical in all three - one broken
+  link written twice - are told apart by their order, since GitLab tells
+  issues apart by fingerprint. It is not the baseline's identity, which SARIF
+  carries: that names a specification rather than a file, and a GitLab issue
+  is a place in a file.
+- **Severity says what `--strict` did.** An error is `critical`, a warning
+  `minor`, a note `info`, and an error only `--strict` made is `major`. The
+  format has no field for escalation, and a reviewer should be able to tell a
+  finding that fails the build by its nature from one that fails it because
+  the team turned on `--strict`.
+- **`check` only**, for SARIF's reason.
+
 ### A rule says which decision it came from (2026-09-13)
 
 `spec-graph rules <rule-id> --explain` prints the rule's severity, its selector

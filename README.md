@@ -609,9 +609,32 @@ without drifting, because the `partialFingerprints` spec-graph writes are the
 same identity a baseline is keyed on — the rule, the specification, and the
 citation, with no line number in it (ADR-0012).
 
-`--format json` is the other machine-readable output, and the one to parse if
-you are building something of your own: it carries the baseline note, the
-summary and the per-file detail that SARIF has nowhere to put.
+On GitLab, `--format gitlab` writes the Code Quality report a merge request
+reads, and the merge request shows which findings it introduced and which it
+resolved:
+
+```yaml
+spec-graph:
+  script:
+    - npx spec-graph --format gitlab > gl-code-quality-report.json
+  artifacts:
+    when: always
+    reports:
+      codequality: gl-code-quality-report.json
+```
+
+Each finding is an issue with its rule as `check_name`, its message and hint as
+`description`, and its file and line as `location`. Severities map as `error`
+to `critical` - or `major` when only `--strict` made it an error - `warn` to
+`minor` and `info` to `info`. The `fingerprint` is a SHA-256 of the rule, the
+file and the message, with no line in it, so a finding a paragraph moved is not
+reported as new; the second of two findings identical in all three is told
+apart by its order. `when: always` keeps the report when the job fails, which
+it does, with exit `1`, whenever there is an error to report.
+
+`--format json` is the machine-readable output to parse if you are building
+something of your own: it carries the baseline note, the summary and the
+per-file detail that SARIF and Code Quality have nowhere to put.
 
 **There is no `--watch`.** A full run on this repository takes 60 ms, so the
 loop that would justify a resident process is one line of shell, and it belongs
@@ -761,7 +784,8 @@ spec-graph diff <before> <after>     Compare two JSON graph exports.
 --record-baseline <f>   Write today's findings as accepted debt, exit 0
 --ratchet               Also fail when a baseline entry no longer occurs
 --no-config             Ignore .spec-graph.json and the package.json key
---format <fmt>          human | json | sarif (check) | markdown (check, diff)
+--format <fmt>          human | json | sarif (check) | gitlab (check)
+                        | markdown (check, diff)
 --graph-format <fmt>    dot | mermaid | json
 --documents-only        Hide items; their relations lift onto their documents
 --rule <id>=<severity>  error | warn | info | off (repeatable)
