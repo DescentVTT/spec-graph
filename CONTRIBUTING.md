@@ -7,7 +7,7 @@ itself; what follows is the map that is hard to recover by reading.
 
 ```bash
 npm install
-npm test          # 966 tests
+npm test          # 987 tests
 npm run lint      # tsc --noEmit, strict
 npm run build     # emits dist/
 npm run selfcheck # spec-graph checks its own ADRs
@@ -46,9 +46,9 @@ files ─▶ markdown.ts ─▶ extract.ts ─▶ resolve.ts ─▶ graph.ts ─
 | `project-rules.ts` | Selectors a repository declared, compiled and checked. |
 | `report.ts` | Terminal, JSON, Graphviz and Mermaid output. |
 | `diff.ts` | Two JSON exports compared, naming only the changes it can tell apart. |
-| `glob.ts` / `paths.ts` | Pattern matching and POSIX path arithmetic. |
+| `glob.ts` / `paths.ts` | Pattern lists, the walk and reference-target matching; POSIX path arithmetic. |
 | `runner.ts` / `cli.ts` | Orchestration and the command line. |
-| `vendor/spec-core/` | spec-core's modules, copied byte for byte: the matcher behind `~=`, an automaton that cannot backtrack. Never edited here: see below. |
+| `vendor/spec-core/` | spec-core's modules, copied byte for byte: the glob dialect and the matcher behind `~=`, automata that cannot backtrack. Never edited here: see below. |
 
 ## Where changes usually go
 
@@ -110,7 +110,8 @@ heuristic, check that a mutant of it dies.
 `scripts/vendor.mjs` and held to the SHA-256 of every file by
 `tests/vendor.test.ts`. A change to it is made in spec-core and copied again,
 never made here. It is left out of the mutation sweep and of coverage: its
-mutants are killed by spec-core's own suite (spec-core ADR-0001), and counting
+mutants are killed by spec-core's own suite
+([its ADR-0001](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0001-one-core-copied-by-hash.md)), and counting
 them here would move this repository's score with code it does not own.
 
 CI runs the same sweep in four shards and merges them into one report and one
@@ -125,7 +126,8 @@ author believed about regular expressions — they run both engines over the sam
 patterns and subjects and compare. That is
 what caught a clause of the language specification being read backwards, and it
 is the pattern to copy for anything else that re-implements something standard.
-`glob.ts` holds its automaton to the `RegExp` it replaced the same way.
+`glob.ts` holds the glob dialect it adopted to the one it replaced the same way:
+every difference between the two readings must be one ADR-0022 names.
 
 ## Releasing
 

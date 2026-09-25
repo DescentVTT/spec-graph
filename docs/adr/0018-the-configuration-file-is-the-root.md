@@ -84,6 +84,12 @@ Leaving those alone was the alternative and it is a trap:
 `--ignore "docs/drafts/**"` typed in a package would silently match nothing,
 which is a check quietly getting weaker.
 
+*Amended 2026-09-26.* A leading `..` is resolved while re-anchoring:
+`"../*.md"` typed in `docs/deep` is `docs/*.md`. It used to be left in the
+pattern for the matcher to normalise away, and a glob may no longer climb out
+of its root ([ADR-0022](0022-globs-are-the-family-path-dialect.md)), so this
+is the one place left that knows both halves of the arithmetic.
+
 `--ignore-ref`, `--family` and `--ignore-family` are not paths and are left
 alone. So is an absolute path: it was never relative to anywhere, so moving the
 root cannot change what it means.

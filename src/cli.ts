@@ -894,7 +894,18 @@ function below(root: string, from: string): string {
  */
 function anchor(prefix: string, value: string): string {
   if (prefix === '' || isAbsolutePath(value)) return value;
-  return value.startsWith('!') ? `!${prefix}/${value.slice(1)}` : `${prefix}/${value}`;
+  const negated = value.startsWith('!');
+  const directories = prefix.split('/');
+  let rest = toPosix(negated ? value.slice(1) : value);
+  // `../docs` typed one directory down is the root's `docs`. That is arithmetic
+  // on two relative paths, and this is the one place both are known; left in
+  // the pattern, it reads as a glob climbing out of the root, which is refused.
+  while (directories.length > 0 && (rest === '..' || rest.startsWith('../'))) {
+    directories.pop();
+    rest = rest.slice(3);
+  }
+  const joined = [...directories, rest].filter((part) => part.length > 0).join('/');
+  return negated ? `!${joined}` : joined;
 }
 
 /** The same, for an ignore, where a bare name is a directory at any depth. */
