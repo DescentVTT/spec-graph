@@ -399,10 +399,11 @@ against a fifty-four-character title takes `RegExp` 103 seconds and this 13
 microseconds. It reads the usual syntax minus backreferences and lookaround,
 which are not regular; both are refused when the selector is read, with the
 character pointed at. Globs - the patterns to check, `--ignore`, `--ignore-ref`,
-`--history` - are matched by the same automaton, because a glob with three stars
-in it is
-enough to keep `RegExp` busy for two minutes over a long reference target. See
-[ADR-0017](docs/adr/0017-a-predicate-must-finish.md).
+`--history` - are matched by an automaton too, because a glob with three stars
+in it is enough to keep `RegExp` busy for two minutes over a long reference
+target. See [ADR-0017](docs/adr/0017-a-predicate-must-finish.md). Both automata
+are spec-core's, the library the spec-* tools share, copied into this package
+rather than installed.
 
 On a register, a region answers its file's front matter for every descriptive
 key — `fm.owner` on a decision inside a register is the register's owner — while
@@ -661,6 +662,37 @@ all — a silently ignored `ignoreReference` is a configuration that looks appli
 and is not. `--no-config` checks on defaults instead, and the exit code then
 says which run it was.
 
+### Patterns
+
+The patterns to check, `--ignore`, `--history` and `historyPatterns` are the
+glob dialect every spec-* tool reads, so a scope means the same to spec-graph
+as to the tool that wrote it. They are matched against the whole
+repository-relative path, **case-sensitively on every host** — a baseline
+recorded on a Windows checkout holds in Linux CI:
+
+| pattern | matches |
+| --- | --- |
+| `docs/**/*.md` | Markdown anywhere under `docs`; `**` is whole directories, none or more |
+| `docs/**.md` | `docs/a.md` only: `**` inside a name is `*` |
+| `docs` | a file called `docs`, or everything under the directory |
+| `docs/` | everything under `docs`, and not `docs` itself |
+| `{docs,specs}` | two literals, so both directories and what they hold |
+| `adr/[0-9]*.md`, `adr/[!0-9]*.md` | a class, and a negated one; `[^0-9]` negates too |
+| `!docs/drafts/**` | takes back what an earlier pattern matched; the last to match wins |
+| `docs\adr\*.md` | the same as `docs/adr/*.md`: a `\` is a separator |
+
+A class never matches a `/`, and a pattern that cannot mean a path under the
+root — an unclosed `[` or `{`, `..`, a lone `.` — stops the run with exit `2`
+and names the pattern, wherever it was written. A `..` typed below the root,
+`spec-graph "../*.md"` from `docs/deep`, is resolved against where you typed
+it. A bare `--ignore` name, `--ignore drafts`, still prunes that directory at
+any depth.
+
+`--ignore-ref` is matched against reference targets rather than paths: a bare
+pattern names one target exactly, case is ignored on every host, a `\` escapes
+the next character, and `.` and `..` are the text of the link. See
+[ADR-0022](docs/adr/0022-globs-are-the-family-path-dialect.md).
+
 ### Family rules
 
 Every specification cites RFC 2119. In a repository that also keeps its own
@@ -838,7 +870,7 @@ exported. Reporters, editor extensions and custom rules are all first-class.
 
 ## Design
 
-Twenty ADRs, which `spec-graph` validates on every CI run:
+Twenty-two ADRs, which `spec-graph` validates on every CI run:
 
 - [ADR-0001 — A hand-written Markdown scanner](docs/adr/0001-hand-written-markdown-scanner.md)
 - [ADR-0002 — A four-phase lifecycle lattice](docs/adr/0002-lifecycle-lattice.md)
@@ -860,13 +892,17 @@ Twenty ADRs, which `spec-graph` validates on every CI run:
 - [ADR-0018 — The configuration file is the root](docs/adr/0018-the-configuration-file-is-the-root.md)
 - [ADR-0019 — The sweep runs in shards](docs/adr/0019-the-sweep-runs-in-shards.md)
 - [ADR-0020 — A diff names only what it can tell apart](docs/adr/0020-a-diff-names-what-it-can-tell-apart.md)
+- [ADR-0021 — Releases are published by CI, with provenance](docs/adr/0021-releases-are-published-by-ci.md)
+- [ADR-0022 — Globs are the family's path dialect](docs/adr/0022-globs-are-the-family-path-dialect.md)
 
 **Zero runtime dependencies.** Node 22+, native ESM, TypeScript strict with
 `noUncheckedIndexedAccess` and `exactOptionalPropertyTypes`. The Markdown
 scanner, the front-matter reader, the glob matcher, the query parser and the
-regular-expression matcher behind `~=` are all written here, so the whole
-package is auditable in an afternoon — and nothing in the pipeline can take
-longer than its input.
+regular-expression matcher behind `~=` are all written here or in
+[spec-core](https://github.com/DescentVTT/spec-core), the library the spec-*
+tools share, whose code is copied into `src/vendor/` and checked by hash rather
+than installed. So the whole package is auditable in an afternoon — and nothing
+in the pipeline can take longer than its input.
 
 **Verified, not just covered.** 411 tests; 94.2% statement and 96.9% line
 coverage. Coverage says a line ran, so the suite is also held to a mutation

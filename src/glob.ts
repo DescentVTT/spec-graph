@@ -1,17 +1,28 @@
 /**
  * Pattern matching and directory walking.
  *
- * A dependency-free glob, because pulling in a matcher for `docs/**\/*.md` would
- * be the single largest thing in the package. The supported syntax is the
- * portion people actually type - `**`, `*`, `?`, `{a,b}`, `[abc]`, and a leading
- * `!` for negation - and everything is matched against repository-relative
- * POSIX paths so results do not depend on the host platform.
+ * The patterns are the `path` dialect every spec-* tool reads, from spec-core:
+ * `**`, `*`, `?`, `{a,b}`, `[abc]` and `[!a-z]`, matched against whole
+ * repository-relative POSIX paths by an automaton that cannot backtrack, with
+ * case respected on every host (ADR-0022). What stays here is spec-graph's own:
+ * how a list with `!` entries in it reads, which directories a walk never
+ * enters, and how a reference target - which is not a path - is matched.
  */
 
 import { readdir, stat } from 'node:fs/promises';
 
-import { isAbsolutePath, joinPosix, normalisePosix, toPosix } from './paths.js';
-import { compileRegex, type RegexMatcher } from './vendor/spec-core/pattern/index.js';
+import { isAbsolutePath, joinPosix, toPosix } from './paths.js';
+import {
+  compileGlob as compileFamilyGlob,
+  GlobError,
+  isGlobSyntax,
+  parseGlob,
+  parseGlobList,
+  type Glob,
+  type GlobList,
+  type GlobOptions as FamilyGlobOptions,
+  type RegexMatcher,
+} from './vendor/spec-core/pattern/index.js';
 
 /** Directories skipped unless a pattern explicitly names them. */
 export const DEFAULT_IGNORED_DIRECTORIES: readonly string[] = Object.freeze([
@@ -54,62 +65,57 @@ export interface WalkOptions {
   readonly followSymlinks?: boolean | undefined;
 }
 
+/**
+ * How a path pattern is read everywhere in spec-graph.
+ *
+ * A literal names a file or a directory and everything beneath it, which is
+ * what `--ignore docs/drafts` has always meant. A `\` is a separator, because a
+ * pattern typed on a Windows shell arrives with them and spec-graph has always
+ * read them that way; it cannot also be an escape.
+ */
+const PATH: FamilyGlobOptions = { dialect: 'path', caseSensitive: true, literal: 'either', backslash: 'separator' };
+
 /** True when the string contains glob syntax rather than being a literal path. */
 export function isGlob(pattern: string): boolean {
-  return /[*?[\]{}]/.test(pattern);
+  return isGlobSyntax(pattern);
 }
 
 /**
- * Compiles a glob to an anchored regular expression.
+ * Compiles a glob to an anchored regular expression, in the dialect spec-graph
+ * read before it adopted spec-core's.
  *
- * `**` crosses directory separators; `*` and `?` do not. A trailing `/` or a
- * bare directory name matches everything beneath it, which is what people mean
- * when they write `--ignore drafts`.
- *
- * Nothing in the pipeline matches with this any more - see {@link compileGlob},
- * which gives the same answers without the backtracking. It stays for callers
- * who want a `RegExp`, and as the oracle the tests hold the automaton to.
+ * @deprecated Nothing matches with this. It stays for callers who want a
+ * `RegExp`, and as the record of the old reading that `tests/glob.test.ts`
+ * holds every difference against, each one named in ADR-0022. It no longer
+ * folds case on Windows alone: an answer must not depend on the host.
  */
 export function globToRegExp(pattern: string): RegExp {
-  return new RegExp(`^${globSource(pattern)}$`, process.platform === 'win32' ? 'i' : '');
+  return new RegExp(`^${globSource(pattern)}$`);
 }
 
 export interface GlobOptions {
-  /** Fold case. Defaults to the host's convention: on for Windows, off elsewhere. */
+  /** Fold case. Off unless asked for, on every host. */
   readonly ignoreCase?: boolean | undefined;
 }
 
 /**
- * Compiles a glob to the automaton every matcher here uses.
+ * Compiles one glob to a matcher over whole repository-relative paths.
  *
- * A glob has no nested quantifiers, and ADR-0017 took that to mean there was no
- * backtracking hazard in handing one to `RegExp`. Nobody had timed it. Each
- * `*` is a `[^/]*`, and against a subject that fails to match, a backtracking
- * engine tries every way of dividing it between them - the subject's length to
- * the power of the stars:
+ * A pattern with no glob syntax names that path and nothing beneath it; a bare
+ * directory meaning its contents is a reading of {@link createGlobMatcher}'s.
+ * Throws a `GlobError` that names the glob as it was written.
  *
- * ```text
- *                                                              RegExp      here
- * **\/*-*-*-*.md   a 643-character hyphenated file name          2.3s     0.2ms
- * *-*-*-x          a 10,000-character reference target            120s     0.9ms
- * ```
- *
- * The first is bounded by the filesystem, which caps a name at 255 bytes. The
- * second is not: `--ignore-ref` patterns are matched against targets read out
- * of documents, and a document is whatever somebody wrote.
+ * Matching is linear in the path whatever the pattern. It was not always: a
+ * glob's stars are not nested, but each is a `[^/]*` to `RegExp`, and a subject
+ * that fails is divided between them every way there is - `*-*-*-x` took two
+ * minutes over a 10,000-character reference target (ADR-0017).
  */
 export function compileGlob(pattern: string, options: GlobOptions = {}): RegexMatcher {
-  const source = globSource(pattern);
-  try {
-    return compileRegex(`^${source}$`, { ignoreCase: options.ignoreCase ?? process.platform === 'win32' });
-  } catch (error) {
-    // The message describes an expression the user never wrote, so it is told
-    // against the glob they did.
-    throw new Error(`invalid glob "${pattern}": ${(error as Error).message}`);
-  }
+  const glob = compileFamilyGlob(pattern, { ...PATH, literal: 'file', caseSensitive: options.ignoreCase !== true });
+  return { test: (path) => glob.match(path), size: glob.automaton.kinds.length };
 }
 
-/** The expression a glob stands for, before anchors and flags. */
+/** The expression a glob stood for before 0.9.0, before anchors and flags. */
 function globSource(pattern: string): string {
   let source = '';
   let i = 0;
@@ -186,82 +192,108 @@ export interface GlobMatcher {
   (path: string): boolean;
 }
 
+/** Compiles a list of path patterns, or throws naming the one that is not a glob. */
+function pathList(patterns: readonly string[]): GlobList {
+  const parsed = parseGlobList(patterns, PATH);
+  if (!parsed.ok) throw new Error(`invalid glob ${parsed.error}`);
+  return parsed.list;
+}
+
 /**
  * Builds a matcher from include patterns, honouring `!` negations.
  *
  * Later patterns win, so `docs/**\/*.md` followed by `!docs/drafts/**` reads the
- * way a `.gitignore` does.
+ * way a `.gitignore` does. A pattern with no glob syntax in it names a file, or
+ * a directory and everything beneath it; `docs/` names only what is beneath.
  */
 export function createGlobMatcher(patterns: readonly string[]): GlobMatcher {
-  const compiled = patterns.map((pattern) => {
-    const negated = pattern.startsWith('!');
-    const body = negated ? pattern.slice(1) : pattern;
-    const normalised = normalisePosix(toPosix(body));
-    // A bare directory means everything under it.
-    const expanded = isGlob(normalised) ? normalised : `${normalised}/**`;
-    return {
-      negated,
-      exact: isGlob(normalised) ? null : normalised.toLowerCase(),
-      expression: compileGlob(expanded),
-      direct: compileGlob(normalised),
-    };
-  });
-
-  return (path: string): boolean => {
-    let included = false;
-    for (const entry of compiled) {
-      const hit =
-        entry.direct.test(path) ||
-        entry.expression.test(path) ||
-        (entry.exact !== null && entry.exact === path.toLowerCase());
-      if (hit) included = !entry.negated;
-    }
-    return included;
-  };
+  const list = pathList(patterns);
+  return (path: string): boolean => list.match(path);
 }
 
 /**
  * Builds a predicate over reference *targets*, not paths.
  *
  * Separate from {@link createGlobMatcher} on purpose. That one is
- * path-oriented: it expands a bare name to `name/**` because a directory means
- * everything under it. A reference target has no such structure - `trap 55` is
- * a name, not a location - so a bare pattern must match it literally and
- * nothing else.
+ * path-oriented: a bare name there is a directory and everything under it. A
+ * reference target has no such structure - `trap 55` is a name, not a location
+ * - so a bare pattern matches it literally and nothing else.
  *
- * Matching is case-insensitive on every platform. Path matching inherits the
- * host filesystem's case rules, which is right for paths and wrong here: a
- * repository's findings must not depend on which machine ran the check.
+ * Case is ignored, on every platform, because a citation's spelling is the
+ * author's and not the filesystem's. The fold is simple case mapping, one code
+ * point at a time and without a locale, so every host gives the same answer:
+ * U+00B5 (micro sign) and U+03BC (mu) stay two targets, as they have been since
+ * a Windows-only `i` flag made them one there (ADR-0017).
  *
- * Both sides are lower-cased, and that is the whole of the case rule. Folding
- * as well used to happen on Windows only, where it made U+00B5 (micro sign)
- * and U+03BC (mu) the same target - one machine's answer, which is what this
- * function exists not to give.
+ * A target is text a document holds rather than a path on this host, and two
+ * things follow. A `\` escapes the character after it: there is no Windows
+ * separator to allow for. And a `.` or `..` segment is text: in a path the
+ * dialect drops the one and refuses the other as climbing out of the root, but
+ * `../../notes/gone.md` is a link somebody wrote and may want left alone.
  */
 export function createReferenceFilter(patterns: readonly string[]): (target: string) => boolean {
-  if (patterns.length === 0) return () => false;
-  const compiled = patterns
+  const globs: Glob[] = patterns
     .filter((pattern) => pattern.trim().length > 0)
-    .map((pattern) => compileGlob(pattern.trim().toLowerCase(), { ignoreCase: false }));
-  if (compiled.length === 0) return () => false;
+    .map((pattern) => {
+      const literalDots = pattern
+        .trim()
+        .split('/')
+        .map((segment) => (segment === '.' ? '\\.' : segment === '..' ? '\\.\\.' : segment))
+        .join('/');
+      const parsed = parseGlob(literalDots, { dialect: 'path', caseSensitive: false, literal: 'file' });
+      if (!parsed.ok) throw new GlobError(pattern, parsed.error);
+      return parsed.glob;
+    });
+  if (globs.length === 0) return () => false;
   return (target: string): boolean => {
-    const value = target.trim().toLowerCase();
-    return compiled.some((expression) => expression.test(value));
+    const value = target.trim();
+    return globs.some((glob) => glob.match(value));
   };
 }
 
-/** The literal directory prefix of a pattern, used to avoid walking the world. */
+/**
+ * The literal directory a pattern's matches all sit under, or `''` for the root.
+ *
+ * `{docs,specs}/**` has two, and this is the directory they share; the walk
+ * itself starts at each.
+ */
 export function globBase(pattern: string): string {
-  const normalised = normalisePosix(toPosix(pattern.startsWith('!') ? pattern.slice(1) : pattern));
-  const segments = normalised.split('/');
-  const literal: string[] = [];
-  for (const segment of segments) {
-    if (isGlob(segment)) break;
-    literal.push(segment);
+  const { glob } = pathList([pattern]).entries[0] as { readonly glob: Glob };
+  const bases = glob.bases.map((base) => base.split('/'));
+  const shared = bases[0] as string[];
+  let length = shared.length;
+  for (const base of bases) {
+    let same = 0;
+    while (same < length && base[same] === shared[same]) same += 1;
+    length = same;
   }
-  // The last literal segment may be the file itself rather than a directory.
-  if (literal.length === segments.length && literal.length > 0) literal.pop();
-  return literal.join('/');
+  return shared.slice(0, length).join('/');
+}
+
+/**
+ * Whether a base names directories that exist with exactly that spelling.
+ *
+ * A walk starts where a pattern's literal prefix points rather than at the
+ * root, and on a filesystem that ignores case, `readdir('Docs')` lists `docs`.
+ * Every file under it would come back spelled `Docs/...` - a node id, a
+ * baseline key - and `Docs/**` would find it on Windows and macOS and nothing
+ * on Linux. Asking each parent for the name gives git's answer on every host. A
+ * base with an empty segment is rooted at `/`, which is never inside the root.
+ */
+async function spelledAsOnDisk(root: string, base: string): Promise<boolean> {
+  if (base.length === 0) return true;
+  let directory = root;
+  for (const segment of base.split('/')) {
+    let names: string[];
+    try {
+      names = await readdir(directory);
+    } catch {
+      return false;
+    }
+    if (!names.includes(segment)) return false;
+    directory = `${directory}/${segment}`;
+  }
+  return true;
 }
 
 /**
@@ -272,7 +304,7 @@ export function globBase(pattern: string): string {
  */
 export async function walkFiles(options: WalkOptions): Promise<WalkedFile[]> {
   const root = toPosix(options.root).replace(/\/+$/, '');
-  const matcher = createGlobMatcher(options.patterns);
+  const patterns = pathList(options.patterns);
   const maxSize = options.maxFileSize ?? MAX_FILE_SIZE;
 
   // Ignores come in two shapes and both are documented. A bare name prunes any
@@ -286,14 +318,15 @@ export async function walkFiles(options: WalkOptions): Promise<WalkedFile[]> {
     ...ignores.filter((pattern) => !isGlob(pattern) && !pattern.includes('/')),
   ]);
   const pathIgnores = ignores.filter((pattern) => isGlob(pattern) || pattern.includes('/'));
-  const ignoreMatcher = pathIgnores.length > 0 ? createGlobMatcher(pathIgnores) : null;
-  const excluded = (path: string): boolean => ignoreMatcher !== null && ignoreMatcher(path);
+  const ignoreList = pathIgnores.length > 0 ? pathList(pathIgnores) : null;
+  const excluded = (path: string): boolean => ignoreList !== null && ignoreList.match(path);
 
-  // Only walk the directories the patterns can possibly reach.
+  // Only walk the directories the patterns can possibly reach: each pattern's
+  // literal prefix, one per brace alternative.
   const bases = new Set<string>();
-  for (const pattern of options.patterns) {
-    if (pattern.startsWith('!')) continue;
-    bases.add(globBase(pattern));
+  for (const entry of patterns.entries) {
+    if (entry.negated) continue;
+    for (const base of entry.glob.bases) bases.add(base);
   }
   if (bases.size === 0) bases.add('');
   // Drop any base already contained in another: walking it again would only
@@ -338,7 +371,7 @@ export async function walkFiles(options: WalkOptions): Promise<WalkedFile[]> {
             await walk(child);
             continue;
           }
-          if (!matcher(child) || excluded(child) || info.size > maxSize) continue;
+          if (!patterns.match(child) || excluded(child) || info.size > maxSize) continue;
           out.set(child, { path: child, absolute: `${root}/${child}`, size: info.size });
         } catch {
           continue;
@@ -347,7 +380,7 @@ export async function walkFiles(options: WalkOptions): Promise<WalkedFile[]> {
       }
 
       if (!entry.isFile()) continue;
-      if (!matcher(child) || excluded(child)) continue;
+      if (!patterns.match(child) || excluded(child)) continue;
 
       try {
         const info = await stat(`${root}/${child}`);
@@ -359,7 +392,7 @@ export async function walkFiles(options: WalkOptions): Promise<WalkedFile[]> {
     }
   };
 
-  for (const base of roots) await walk(base);
+  for (const base of roots) if (await spelledAsOnDisk(root, base)) await walk(base);
 
   return [...out.values()].sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
 }

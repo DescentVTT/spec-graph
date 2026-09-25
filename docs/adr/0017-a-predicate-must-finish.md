@@ -245,6 +245,13 @@ much as a rule nobody tested.**
       were one target on one platform and two on the others, in the function
       whose comment says its answer must not depend on the machine. It no
       longer folds anywhere.
+
+      *Amended 2026-09-26.* Globs have moved again, off this automaton and
+      onto spec-core's glob engine, which reads the syntax the way every
+      spec-* tool does and is built for it rather than translated into a
+      regular expression. The bound is the same. Path globs stopped folding
+      case on Windows too, and [ADR-0022](0022-globs-are-the-family-path-dialect.md)
+      lists what else a user sees change.
 - [ ] Should a pattern that compiles to more than a few hundred states warn?
       The ceiling refuses the pathological case and nothing between "fine" and
       "refused" has been observed, so a warning would be a number invented to

@@ -400,6 +400,25 @@ describe('a configuration that did not load', () => {
     }
   });
 
+  it('refuses an unclosed [ in a pattern as it refuses any glob that does not compile', async () => {
+    // It used to be read as a literal `[`, which made the pattern a scope that
+    // silently matched nothing a repository has.
+    await withConfig('cli-unclosed', '{ "patterns": ["docs/[draft*.md"] }\n', async (root) => {
+      const result = await run('check', '--root', root);
+      expect(result.code).toBe(EXIT_ERROR);
+      expect(result.err).toContain('invalid glob "docs/[draft*.md": a "[" is never closed');
+      expect(result.out).toBe('');
+    });
+    await withConfig('cli-unclosed-history', '{ "historyPatterns": ["**/JOURNAL_[0-9*.md"] }\n', async (root) => {
+      const result = await run('check', 'docs/**/*.md', '--root', root);
+      expect(result.code).toBe(EXIT_ERROR);
+      expect(result.err).toContain('a "[" is never closed');
+    });
+    const typed = await run('check', 'docs/[a', '--root', 'tests/fixtures/project', '--no-config');
+    expect(typed.code).toBe(EXIT_ERROR);
+    expect(typed.err).toContain('invalid glob "docs/[a"');
+  });
+
   it('is what --no-config turns off, over the same broken file', async () => {
     await withConfig('cli-no-config', '{ "ignoreReference": ["trap *"], "nope": 1 }\n', async (root) => {
       const result = await run('check', 'docs/**/*.md', '--root', root, '--no-config');
@@ -766,6 +785,14 @@ describe('finding the configuration from a subdirectory', () => {
 
     expect(await files(absolute(`${PROJECT}/docs`), 'deep/*.md')).toEqual(['docs/deep/0003.md']);
     expect(await files(absolute(`${PROJECT}/docs`), '*.md')).toEqual(['docs/0001.md', 'docs/0002.md']);
+    // Climbing back towards the root from where it was typed is arithmetic on
+    // two relative paths, not a pattern climbing out of the root, which a glob
+    // may no longer do.
+    expect(await files(absolute(`${PROJECT}/docs/deep`), '../*.md')).toEqual(['docs/0001.md', 'docs/0002.md']);
+    expect(await files(absolute(`${PROJECT}/docs/deep`), '..\\..\\docs\\deep\\*.md')).toEqual(['docs/deep/0003.md']);
+    const beyond = await runIn(absolute(`${PROJECT}/docs`), 'check', '../../elsewhere/*.md');
+    expect(beyond.code).toBe(EXIT_ERROR);
+    expect(beyond.err).toContain('invalid glob "../elsewhere/*.md": a pattern cannot climb out of its root');
   });
 
   it('anchors a negated pattern by its glob, not by its exclamation mark', async () => {

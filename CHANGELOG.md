@@ -25,6 +25,49 @@ hold the matcher to `RegExp` moved with it, and the copy is left out of this
 repository's mutation sweep and coverage, which spec-core's measure instead.
 See [ADR-0017](docs/adr/0017-a-predicate-must-finish.md).
 
+**Globs are the dialect every spec-* tool reads.** The patterns to check,
+`--ignore`, `--history` and `historyPatterns` are compiled by spec-core's glob
+engine, in the `path` dialect spec-brief and spec-guard read too, so a scope
+means the same thing to each of them. Where that reading differs from
+spec-graph's old one, a repository will see it:
+
+- **Case is respected on every host.** `Docs/**` matched `docs/a.md` on Windows
+  and nowhere else, so one repository gave one answer on a Windows checkout and
+  another in CI. And a pattern with no glob syntax was compared lower-cased on
+  every host, Linux included: `README.md` also took `readme.md`. Neither folds
+  now, and `compileGlob`'s `ignoreCase` is off unless asked for on any host.
+- **`**` inside a name is `*`.** `docs/**.md` no longer reaches
+  `docs/adr/a.md`; `docs/**/*.md` does, as it always did.
+- **An unclosed `[` is an error**, like an unclosed `{` always was. It was a
+  literal `[`, which made the pattern a scope that matched nothing. The run
+  stops with exit `2` and names the pattern, from the command line or from the
+  configuration file.
+- **A trailing `/` means the directory's contents.** It was normalised away, so
+  `drafts*/` named a file called `drafts`, and `docs/` took `docs` itself.
+- **Braces expand to literals.** `{docs,specs}` was a glob matching two names
+  exactly; it is two literals now, each a directory and what it holds.
+- **A class never matches `/`**, and **`[^a]` negates**, as `[!a]` does. `a[!b]c`
+  took `a/c`, and `[^a]` was the class of `^` and `a`.
+- **A pattern must name a path under the root.** `.`, `./` and `docs/..` are
+  refused rather than read as nothing, and a `..` that climbs out of the root
+  is refused rather than walked. A `.` segment inside a pattern is dropped, as
+  it was. A `..` typed below the root is resolved against where it was typed,
+  so `spec-graph "../*.md"` in `docs/deep` still means `docs/*.md`.
+- **The walk finds a directory only as it is spelled on disk.** It starts at a
+  pattern's literal prefix, and on a filesystem that ignores case `Docs/` found
+  `docs/` and reported its files as `Docs/...`. A pattern rooted at `/` is not
+  walked under the root either, where it reported paths like `/docs/a.md`.
+
+`--ignore-ref` runs on the same engine and keeps its own reading, since a
+reference target is not a path: a bare pattern matches one target exactly, case
+is ignored on every host, `.` and `..` are the text of the link, and a `\`
+escapes the next character rather than being matched as itself. The glob
+changes above apply to it otherwise.
+
+`globToRegExp` is deprecated, and stays as the old reading that the test of
+every difference above runs against; it no longer folds case on Windows. See
+[ADR-0022](docs/adr/0022-globs-are-the-family-path-dialect.md).
+
 ### Fixed
 
 **A code span that mentions a comment is code.** ``Use `<!--` to open one``
