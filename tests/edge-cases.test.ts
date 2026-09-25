@@ -92,7 +92,7 @@ describe('report ordering is total', () => {
 /* -------------------------------------------------------------------------- */
 
 describe('verb governance', () => {
-  const retired = { 'docs/adr/0002-old.md': '---\nstatus: archived\n---\n\n# Old\n' };
+  const retired = { 'docs/adr/0002-old.md': '---\nstatus: retired\n---\n\n# Old\n' };
 
   it('does not reach across a table cell edge', () => {
     // A table row is a list of independent fields. Found on a real index of
@@ -569,7 +569,7 @@ describe('thematic breaks', () => {
 
 describe('severity overrides', () => {
   const files = {
-    'docs/adr/0002-old.md': '---\nstatus: archived\n---\n\n# Old\n\n## Open Questions\n\n- [ ] Who owns this?\n',
+    'docs/adr/0002-old.md': '---\nstatus: retired\n---\n\n# Old\n\n## Open Questions\n\n- [ ] Who owns this?\n',
   };
 
   it('turning a rule off removes its findings entirely', () => {
@@ -596,7 +596,7 @@ describe('severity overrides', () => {
           path: 'docs/adr/0002-old.md',
           text: [
             '---',
-            'status: archived',
+            'status: retired',
             '---',
             '',
             '# Old',

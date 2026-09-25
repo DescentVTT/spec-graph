@@ -250,7 +250,7 @@ describe('stale premises', () => {
     // `blocked-by` transfers an obligation *and* is load-bearing, so both rules
     // match the same edge. One defect on one line must produce one finding.
     const { diagnostics } = analyse({
-      'docs/adr/0002-old.md': ['---', 'status: archived', '---', '', '# Old'].join('\n'),
+      'docs/adr/0002-old.md': ['---', 'status: retired', '---', '', '# Old'].join('\n'),
       'docs/adr/0004-new.md': [
         '---',
         'status: accepted',
@@ -271,7 +271,7 @@ describe('stale premises', () => {
     // Only the edges ghost-handover actually matched are claimed. A depends-on
     // is load-bearing but transfers no obligation, so it must still report.
     const { diagnostics } = analyse({
-      'docs/adr/0002-old.md': ['---', 'status: archived', '---', '', '# Old'].join('\n'),
+      'docs/adr/0002-old.md': ['---', 'status: retired', '---', '', '# Old'].join('\n'),
       'docs/adr/0004-new.md': ['---', 'status: accepted', 'depends-on: ADR-0002', '---', '', '# New'].join('\n'),
     });
     expect(rules(diagnostics)).toContain('stale-premise');
@@ -484,7 +484,7 @@ describe('supersession consistency', () => {
 
   it('reports a retired document that never says what replaced it', () => {
     const { diagnostics } = analyse({
-      'docs/adr/0002-old.md': '---\nstatus: archived\n---\n\n# Old\n',
+      'docs/adr/0002-old.md': '---\nstatus: retired\n---\n\n# Old\n',
       'docs/adr/0003-new.md': '---\nstatus: accepted\nsupersedes: ADR-0002\n---\n\n# New\n',
     });
     const found = only(diagnostics, 'unreciprocated-supersession');
@@ -656,7 +656,7 @@ describe('item state conflicts', () => {
 describe('multiline pathologies', () => {
   it('reads a delegation split across wrapped lines', () => {
     const { diagnostics } = analyse({
-      'docs/adr/0002-old.md': '---\nstatus: archived\n---\n\n# Old\n',
+      'docs/adr/0002-old.md': '---\nstatus: retired\n---\n\n# Old\n',
       'docs/adr/0004-new.md': [
         '---',
         'status: accepted',

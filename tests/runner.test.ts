@@ -36,7 +36,7 @@ beforeAll(async () => {
 
   await write('docs/adr/0001-old.md', [
     '---',
-    'status: archived',
+    'status: retired',
     '---',
     '',
     '# Old',
@@ -281,7 +281,7 @@ describe('options reaching the engine', () => {
   });
 
   it('forwards the related-location cap', async () => {
-    // ADR-0001 is archived and holds four open obligations, so the finding has
+    // ADR-0001 is retired and holds four open obligations, so the finding has
     // four related locations unless the cap is actually passed through.
     const uncapped = await analyse({ root: ROOT, patterns: ['docs/adr/0001-old.md'] });
     const orphaned = uncapped.diagnostics.find((d) => d.rule === 'orphaned-obligation');

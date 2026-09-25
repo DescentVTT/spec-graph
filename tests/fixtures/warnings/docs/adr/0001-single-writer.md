@@ -1,5 +1,5 @@
 ---
-status: archived
+status: retired
 ---
 
 # ADR-0001: A single writer

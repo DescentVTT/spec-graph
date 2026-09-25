@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { receptivityOf } from '../src/lifecycle.js';
+import { phaseOf, receptivityOf } from '../src/lifecycle.js';
 import { analyseSources, createHistoryMatcher, type AnalyseSourcesOptions, type Source } from '../src/runner.js';
 import type { AnyRuleId } from '../src/types.js';
 
@@ -170,6 +170,88 @@ describe('the exemption is stated once, so every rule inherits it', () => {
     };
     expect(rules(files)).toContain('circular-delegation');
     expect(rules(files, asHistory('docs/journal/JOURNAL_2024.md'))).not.toContain('circular-delegation');
+  });
+});
+
+describe('an archived round of work is a record', () => {
+  // spec-brief archives a finished round by writing `status: archived` and
+  // moving the brief into an archive directory, and every spec-* tool reads
+  // that word the same way: a closed round, kept as it was left, which it is
+  // normal to depend on. It used to read here as a retired decision. ADR-0011.
+  const ARCHIVED = [
+    '---',
+    'id: B-0001',
+    'status: archived',
+    '---',
+    '',
+    '# B-0001: Sign-in',
+    '',
+    '## Tasks',
+    '',
+    '- [x] Store the session',
+    '- [ ] Rotate the key',
+    '',
+    'The steps were in [the plan](plans/sign-in.md).',
+  ].join('\n');
+  const LIVE = ['---', 'id: B-0002', 'status: active', 'dependsOn: [B-0001]', '---', '', '# B-0002: Sessions'].join('\n');
+  const BRIEFS = { 'briefs/archive/0001-sign-in.md': ARCHIVED, 'briefs/0002-sessions.md': LIVE };
+
+  it('reads the word as a record, however it is written', () => {
+    expect(phaseOf('archived')).toBe('record');
+    expect(phaseOf('Archived (2026-09-01)')).toBe('record');
+    expect(phaseOf('archive')).toBe('record');
+    expect(analyse(BRIEFS).graph.document('B-0001')?.phase).toBe('record');
+  });
+
+  it('is a premise a live brief may rest on', () => {
+    // Before, B-0002 rested on a "retired" decision and was stale-premise.
+    const { graph } = analyse(BRIEFS);
+    expect(graph.edges.some((edge) => edge.kind === 'depends-on' && edge.from === 'B-0002' && edge.to === 'B-0001')).toBe(true);
+    expect(rules(BRIEFS)).not.toContain('stale-premise');
+  });
+
+  it('still has its links checked, and nothing else', () => {
+    // An unticked box in a closed round was never going to be ticked, so it is
+    // not an orphaned obligation. The link to a plan that is not there is
+    // still broken.
+    expect(rules(BRIEFS)).toEqual(['broken-reference']);
+    const { corpus } = analyse(BRIEFS);
+    expect(corpus.items.filter((item) => item.document === 'B-0001' && item.openness === 'open')).toHaveLength(1);
+  });
+
+  it('still cannot take on new work', () => {
+    // Sealed, as any record is: handing live work to a closed round is the
+    // ghost handover this tool exists to find.
+    const handed = {
+      ...BRIEFS,
+      'briefs/0002-sessions.md': `${LIVE}\n\n## Tasks\n\n- [ ] Expire idle sessions? Deferred to [B-0001](archive/0001-sign-in.md).\n`,
+    };
+    const ghost = analyse(handed).diagnostics.find((diagnostic) => diagnostic.rule === 'ghost-handover');
+    expect(ghost?.message).toContain('a historical record');
+  });
+
+  it('leaves a retirement word retiring, archived or not', () => {
+    // Retirement is terminal and wins wherever it is written (ADR-0002).
+    expect(phaseOf('archived, superseded by B-0003')).toBe('retired');
+    const superseded = { ...BRIEFS, 'briefs/archive/0001-sign-in.md': ARCHIVED.replace('status: archived', 'status: superseded') };
+    expect(rules(superseded)).toContain('stale-premise');
+    expect(rules(superseded)).toContain('orphaned-obligation');
+  });
+
+  it('leaves the archive directory retiring a document that declares nothing', () => {
+    // Moving an ADR into archive/ is how a team retires one without editing it,
+    // and that reading is unchanged. A brief spec-brief archives says so itself.
+    const silent = { ...BRIEFS, 'briefs/archive/0001-sign-in.md': ARCHIVED.replace('status: archived\n', '') };
+    expect(analyse(silent).graph.document('B-0001')?.phase).toBe('retired');
+    expect(rules(silent)).toContain('stale-premise');
+  });
+
+  it('is what historyPatterns declares, as before, whatever the status says', () => {
+    const accepted = { ...BRIEFS, 'briefs/archive/0001-sign-in.md': ARCHIVED.replace('status: archived', 'status: accepted') };
+    expect(analyse(accepted).graph.document('B-0001')?.phase).toBe('active');
+    const declared = analyse(accepted, { isRecord: createHistoryMatcher(['briefs/archive/**']) });
+    expect(declared.graph.document('B-0001')?.phase).toBe('record');
+    expect(declared.graph.document('B-0002')?.phase).toBe('active');
   });
 });
 

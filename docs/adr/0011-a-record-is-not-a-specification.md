@@ -50,6 +50,30 @@ declared, two ways:
 <!-- @spec-history -->                                     <!-- one file -->
 ```
 
+*Amended 2026-09-26.* **One status word reaches it: `archived`.** spec-brief
+closes a round of work by writing `status: archived` into the brief and moving
+it to an archive directory, and the family's lifecycle table gives the word
+one meaning in every spec-* tool: a closed round, frozen, and a record -
+depending on it is normal
+([spec-core's ADR-0005](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0005-the-family-contract.md)).
+spec-graph read it as retired, so a live brief that depended on an archived
+one was a stale premise, and an archived brief with a task left unticked was
+an orphaned obligation: two findings about a round nobody can reopen, which is
+the noise [ADR-0006](0006-false-positives-cost-more.md) exists to prevent.
+
+That does not reopen the argument above. `Historical` was a guess about what
+one team meant by a word another team uses differently; `archived` is the
+family's word, written by a tool, with one meaning. It is a table entry
+(`lifecycle.ts`), after the retirement words, so a status of
+`archived, superseded by B-0007` is still retired. The `archive/` directory
+still retires a document that declares no status of its own, as
+[ADR-0002](0002-lifecycle-lattice.md) says - it is how a team retires an ADR
+without editing it, and a brief that spec-brief archives says `archived`
+itself. A team that wrote `archived` to retire a decision now has a record: its
+links are checked and its open items are nobody's, and a document resting on
+it is no longer told it rests on something retired. `superseded`, `deprecated`
+or `retired` says that.
+
 **Being a record outranks a status word written inside the file**, at the file
 level and at the section level both. It is a categorical statement about what
 the document is, made deliberately from outside it; a `Status: accepted` line in

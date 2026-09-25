@@ -53,6 +53,11 @@ Status is also inferred from directory layout - a document under `archive/` or
 `superseded/` is retired even with no front matter - because moving a file is the
 most common way a team retires a decision without editing it.
 
+*Amended 2026-09-26.* The status word `archived` has left the retired row. It
+reads as a record ([ADR-0011](0011-a-record-is-not-a-specification.md)), which
+is what every spec-* tool means by it: a finished round of work, which it is
+normal to depend on. The directories are unchanged.
+
 ## Open Questions
 
 - [ ] Should `frozen` and `retired` be distinguishable in the `receptivity`

@@ -56,7 +56,7 @@ describe('declaration sites', () => {
 
   it('keeps a single declaration site when only one document says it', () => {
     const { edges } = resolve({
-      'docs/adr/0002-old.md': '---\nstatus: archived\n---\n\n# Old\n',
+      'docs/adr/0002-old.md': '---\nstatus: retired\n---\n\n# Old\n',
       'docs/adr/0003-new.md': '---\nstatus: accepted\nsupersedes: ADR-0002\n---\n\n# New\n',
     });
     expect(edgesOf(edges, 'supersedes')[0]?.declaredIn).toEqual(['docs/adr/0003-new.md']);

@@ -5,7 +5,7 @@
  *
  * 1. **Documents have a lifecycle phase**, normalised from whatever vocabulary
  *    the repository already uses (MADR `accepted`, KEP `implementable`, RFC
- *    `final`, plain English `archived`). The phase answers one question that
+ *    `final`, plain English `withdrawn`). The phase answers one question that
  *    matters more than any other: *can this document still absorb new work?*
  *
  * 2. **Items are obligations with nuanced state.** A checkbox is not a boolean.
@@ -59,9 +59,13 @@ export interface SourceRef {
  * - `draft`   - not yet binding. Mutable. Absorbs new work.
  * - `active`  - binding and mutable. Absorbs new work.
  * - `frozen`  - binding and immutable. Changes require a new document.
- * - `retired` - no longer binding: superseded, rejected, withdrawn, archived.
+ * - `retired` - no longer binding: superseded, rejected, withdrawn.
  *
- * `unknown` is a fifth, deliberately non-lattice value for documents that never
+ * `record` is outside the lattice: a log of what was decided, or a finished
+ * round of work kept as it was left (`archived`). It absorbs nothing, owes
+ * nothing, and is normal to depend on. See ADR-0011.
+ *
+ * `unknown` is a further, deliberately non-lattice value for documents that never
  * declared a status. Rules treat it permissively rather than guessing.
  */
 export type Phase = 'draft' | 'active' | 'frozen' | 'retired' | 'record' | 'unknown';

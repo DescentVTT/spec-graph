@@ -122,7 +122,7 @@ describe('concept wiki-links', () => {
 
 describe('what the filter must never do', () => {
   const corpus = {
-    'docs/adr/0001-a.md': '---\nstatus: archived\n---\n\n# A\n',
+    'docs/adr/0001-a.md': '---\nstatus: retired\n---\n\n# A\n',
     'docs/adr/0002-b.md': [
       '---',
       'status: accepted',
