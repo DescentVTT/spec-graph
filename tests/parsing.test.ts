@@ -498,6 +498,12 @@ describe('directives', () => {
     expect(boundIds('<!-- @spec-item id="far" -->', '<!-- @spec-item id="near" -->', '- [ ] first')).toEqual(['near']);
   });
 
+  it('reads a directive from a comment, and nothing else the comment holds', () => {
+    // The checklist commented out is not an item, so the directive above it
+    // reaches across the comment to the item that is.
+    expect(boundIds('<!-- @spec-item id="one" -->', '<!--', '- [ ] parked', '-->', '- [ ] first')).toEqual(['one']);
+  });
+
   it('does not read a directive quoted in inline code', () => {
     // A document explaining the directive is not annotated by it. ADR-0011 and
     // the README both mark themselves records this way, if it is.

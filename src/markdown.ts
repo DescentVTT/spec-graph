@@ -58,6 +58,12 @@ export interface ScannedLine {
   readonly quoteDepth: number;
   /** Inside a fenced or indented code block, fence delimiters included. */
   readonly code: boolean;
+  /**
+   * The first thing on the line is inside an HTML comment. What is written there
+   * is not Markdown: a heading, a list item or a table row in a comment is text
+   * a renderer never shows. Never set on a blank line.
+   */
+  readonly comment: boolean;
 }
 
 export interface Heading {
@@ -196,6 +202,7 @@ export function scanMarkdown(source: string): ScannedDocument {
   // downstream - comments, links, tables - already asks that one question.
   const codeRanges = mergeRanges([...collectCodeRanges(lines, bodyStart), ...collectRawTextHtml(lines, bodyStart)]);
   const { comments, inlineCode } = scanInline(text, index, bodyStart, codeRanges);
+  markCommentedLines(lines, comments);
 
   const maskRanges = [
     ...(frontMatter ? [{ start: 0, end: frontMatter.bodyStart }] : []),
@@ -293,8 +300,14 @@ function stripQuotes(raw: string, lineStart: number): { contentStart: number; co
   return { contentStart: lineStart + i, content: raw.slice(i), depth };
 }
 
-function scanLines(text: string, index: LineIndex, bodyStart: number): ScannedLine[] {
-  const out: ScannedLine[] = [];
+/**
+ * A line as the scan builds it. Whether it begins inside a comment is only known
+ * once comments are, and they are found after the code blocks these lines mark.
+ */
+type LineDraft = { -readonly [K in keyof ScannedLine]: ScannedLine[K] };
+
+function scanLines(text: string, index: LineIndex, bodyStart: number): LineDraft[] {
+  const out: LineDraft[] = [];
   const firstLine = index.positionAt(bodyStart).line;
 
   let fence: { char: string; length: number; indent: number } | null = null;
@@ -370,7 +383,7 @@ function scanLines(text: string, index: LineIndex, bodyStart: number): ScannedLi
       }
     }
 
-    out.push({ line, start, end, contentStart, content, indent, blank, quoteDepth: depth, code });
+    out.push({ line, start, end, contentStart, content, indent, blank, quoteDepth: depth, code, comment: false });
     previousBlank = blank;
   }
 
@@ -457,7 +470,7 @@ function scanHeadings(lines: readonly ScannedLine[]): Heading[] {
   const out: Heading[] = [];
   for (let i = 0; i < lines.length; i += 1) {
     const line = lines[i] as ScannedLine;
-    if (line.code || line.blank) continue;
+    if (line.code || line.blank || line.comment) continue;
 
     const atx = ATX_HEADING.exec(line.content);
     if (atx && line.indent < 4) {
@@ -474,9 +487,11 @@ function scanHeadings(lines: readonly ScannedLine[]): Heading[] {
     }
 
     // Setext: an underline of `=` or `-` directly below a paragraph line. The
-    // preceding line must not itself be a heading, a list item or a fence.
+    // preceding line must not itself be a heading, a list item or a fence. A
+    // rule under a comment is a rule: `<!-- note -->` over `---` is not a heading
+    // called "<!-- note -->".
     const next = lines[i + 1];
-    if (!next || next.code || next.blank) continue;
+    if (!next || next.code || next.blank || next.comment) continue;
     const under = SETEXT_UNDERLINE.exec(next.content);
     if (!under) continue;
     if (LIST_MARKER.test(line.content) || THEMATIC_BREAK.test(line.content)) continue;
@@ -508,7 +523,9 @@ function scanListItems(lines: readonly ScannedLine[], text: string, masked: stri
 
   for (let i = 0; i < lines.length; i += 1) {
     const line = lines[i] as ScannedLine;
-    if (line.code || line.blank) continue;
+    // A checklist commented out is the most common thing kept in a comment, and
+    // read as items it is a list of open obligations nobody can see.
+    if (line.code || line.blank || line.comment) continue;
     const marker = LIST_MARKER.exec(line.content);
     if (!marker) continue;
 
@@ -572,7 +589,10 @@ function findItemEnd(lines: readonly ScannedLine[], startIndex: number, indent: 
       sawBlank = true;
       continue;
     }
-    if (!line.code) {
+    // What a comment holds cannot end an item any more than it can start one.
+    // The blank-line rule below still applies to it: that is about where the
+    // comment sits, not about what it says.
+    if (!line.code && !line.comment) {
       if (line.indent < 4 && ATX_HEADING.test(line.content)) break;
       if (line.indent <= indent) {
         if (sawBlank) break;
@@ -610,7 +630,9 @@ function scanTables(lines: readonly ScannedLine[], text: string, masked: string)
   for (let i = 0; i < lines.length - 1; i += 1) {
     const header = lines[i] as ScannedLine;
     const delimiter = lines[i + 1] as ScannedLine;
-    if (header.code || header.blank || delimiter.code) continue;
+    // A register commented out would otherwise go on declaring a specification
+    // for every row of it.
+    if (header.code || header.blank || header.comment || delimiter.code || delimiter.comment) continue;
     if (!header.content.includes('|')) continue;
     if (!TABLE_DELIMITER.test(delimiter.content.trim())) continue;
 
@@ -621,7 +643,7 @@ function scanTables(lines: readonly ScannedLine[], text: string, masked: string)
     let end = delimiter.end;
     for (let j = i + 2; j < lines.length; j += 1) {
       const line = lines[j] as ScannedLine;
-      if (line.blank || line.code || !line.content.includes('|')) break;
+      if (line.blank || line.code || line.comment || !line.content.includes('|')) break;
       const cells = splitRow(line, text, masked);
       if (cells.length === 0) break;
       rows.push({ cells, start: line.contentStart, end: line.end, line: line.line });
@@ -789,6 +811,43 @@ function createRunCloser(text: string, code: readonly Range[]): (from: number, l
     lastRun = seen;
     return -1;
   };
+}
+
+/**
+ * Marks each line whose first character is inside a comment.
+ *
+ * Headings, list items and tables are read from lines rather than from the
+ * masked text, so until this they all read what a comment held: `## Hidden`
+ * inside `<!-- -->` was a heading, and a checklist commented out was a list of
+ * open obligations nobody could see. The first character decides, as it does
+ * in CommonMark, where a line that begins with a comment is HTML to its end.
+ */
+function markCommentedLines(lines: readonly LineDraft[], comments: readonly HtmlComment[]): void {
+  let next = 0;
+  for (const line of lines) {
+    if (line.blank) continue;
+    while (next < comments.length && (comments[next] as HtmlComment).end <= line.contentStart) next += 1;
+    const comment = comments[next];
+    if (comment === undefined) return;
+    // Spares the trim on a line no comment reaches, and decides nothing: a
+    // comment that starts past the line cannot hold its first character.
+    if (comment.start >= line.end) continue;
+    // This comment is the one that could hold the line's first character: it
+    // ends in a `>`, which is not whitespace, at or after the line's content.
+    line.comment = comment.start <= line.end - line.content.trimStart().length;
+  }
+}
+
+/**
+ * Whether a line holds a comment and nothing else.
+ *
+ * For a reader that takes the first line of a section as its value, which is
+ * what a status section is. A template's hint written above the value - `<!--
+ * proposed | accepted -->` - is not the value, and neither is a directive. A
+ * line that goes on past its comment, `<!-- hint --> Accepted`, is still read.
+ */
+export function isOnlyComment(scanned: ScannedDocument, line: ScannedLine): boolean {
+  return line.comment && scanned.masked.slice(line.contentStart, line.end).trim().length === 0;
 }
 
 /* -------------------------------------------------------------------------- */

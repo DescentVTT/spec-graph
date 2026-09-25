@@ -94,6 +94,21 @@ describe('lifecycle', () => {
     expect(graph.document('ADR-0001')?.phase).toBe('active');
   });
 
+  it('reads the status under a template hint, and none out of a comment', () => {
+    const { graph } = analyse({
+      // The hint was the status: "<!-- ... -->", which no vocabulary knows.
+      'docs/adr/0001-a.md': '# A\n\n## Status\n\n<!-- proposed | accepted | superseded -->\nAccepted\n',
+      'docs/adr/0002-b.md': '# B\n\n## Status\n\n<!--\nAccepted\n-->\n\n## Context\n',
+      // A line that carries on past its comment is read, as it was.
+      'docs/adr/0003-c.md': '# C\n\n## Status\n\n<!-- hint --> Accepted\n',
+    });
+    expect(graph.document('ADR-0001')?.phase).toBe('active');
+    expect(graph.document('ADR-0001')?.rawStatus).toBe('Accepted');
+    expect(graph.document('ADR-0002')?.phase).toBe('unknown');
+    expect(graph.document('ADR-0002')?.rawStatus).toBeNull();
+    expect(graph.document('ADR-0003')?.phase).toBe('active');
+  });
+
   it('retires everything in an archive directory even without a status', () => {
     const { graph } = analyse({ 'docs/adr/archive/0001-a.md': '# A\n' });
     expect(graph.document('ADR-0001')?.phase).toBe('retired');

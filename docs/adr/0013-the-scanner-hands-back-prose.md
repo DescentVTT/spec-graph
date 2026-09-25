@@ -96,7 +96,7 @@ backtick run and a 200 KB single line were all read in 81 ms with no
 backtracking blow-up and no unbounded recursion. The degradations were wrong
 answers, not failures to answer, which is the behaviour ADR-0001 was betting on.
 
-*Amended 2026-09-26.* One more, of the same kind.
+*Amended 2026-09-26.* Two more, of the same kind.
 
 **A comment and a code span are found together, and whichever opens first
 wins.** Comments were found first and spans after, so `` `<!--` `` in a sentence
@@ -104,6 +104,13 @@ opened a comment that ran to the next `-->` in the document, taking headings
 and citations with it. It also read `` `<!-- @spec-history -->` ``, quoted in
 this repository's README and in ADR-0011, as a directive, and both files were
 being checked as records.
+
+**What a comment holds is not structure.** Headings, list items and tables are
+read from lines, and a line whose first character is inside a comment is none
+of them: `## Hidden` inside `<!-- -->` was a heading, and a checklist commented
+out was a list of open obligations nobody could see. A reader that takes the
+first line of a status section passes over a line that is only a comment, so a
+template's hint is not taken for the status beneath it.
 
 ## Alternatives considered
 
@@ -165,6 +172,16 @@ contains it.
       show nothing at all. And the cause is almost always an encoding rather
       than a keystroke - UTF-16 read as UTF-8 puts a NUL between every
       character - so the message names that instead of just pointing.
+- [ ] Code blocks are found line by line before comments are, because a
+      comment is defined as being outside code. So a fence inside a comment
+      still opens one, and an odd number of them turns the prose after the
+      comment into code and the next real code block into prose; a list marker
+      inside one still decides whether an indented block after it is code. And
+      the four raw-text elements have their links masked but not their
+      headings and list items, so `- [ ]` inside `<pre>` is an open
+      obligation. CommonMark answers the first two by recognising a line that
+      begins with `<!--` as an HTML block while the line scan runs, and the
+      third by the same flag this amendment gives a comment.
 
 ## See also
 

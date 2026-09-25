@@ -39,6 +39,40 @@ lengths made the scan grow as the length to the power 1.5: 2 MB took fifteen
 seconds. The first search that fails now keeps what it saw, and the same 2 MB
 takes about sixty milliseconds.
 
+**What a comment holds is not structure.** Headings, list items and tables are
+read from lines, and none of them asked whether the line was inside a comment.
+`## Hidden` in `<!-- -->` was a heading and started a section, a checklist
+commented out was a list of open obligations nobody could see, and
+`<!-- note -->` over `---` was a heading called "<!-- note -->". A line whose
+first character is inside a comment is now none of these, and cannot end a list
+item either; `ScannedLine` says so as `comment`. Directives are read out of
+comments exactly as before.
+
+Nor is a status read out of one. Under `## Status`, a template's
+`<!-- proposed | accepted -->` was taken as the status - which no vocabulary
+knows, so the phase was `unknown` with `Accepted` on the next line - and a
+commented-out `Status: proposed` gave a register's section the second signal it
+needs to become a specification.
+
+An obligation that was only ever inside a comment is gone on upgrade, with any
+finding about it, so a baseline that accepted one reports that entry as no
+longer occurring under `--ratchet`. An item under a heading that was only inside
+a comment is numbered under the heading above it instead.
+
+### Verified
+
+`npm run lint`, 987 tests, `npm run build` and `npm run selfcheck`. Fifteen of
+the 25 new tests fail against the unfixed source; the other ten hold the one pass
+to what the two it replaced already got right - fences, escapes, runs that never
+close, a `<` that is not `<!--`. Measured on their own with
+`--coverageAnalysis all`, before and after: `markdown.ts` went from 69.30% to
+72.97%, the status readers in `sections.ts` from 52.63% to 59.49%, and
+`statusSectionBody` in `extract.ts` from 60.00% to 73.08%. The mutants left alive
+on the new lines change how long an answer takes, or compare offsets that cannot
+be equal. 600,000 generated documents read the same through the one pass as
+through a naive left-to-right reading of the same rule, and this repository's
+documents scan no slower than before.
+
 ## 0.8.0
 
 A register row took its identifier from the first thing its *title* said, not
