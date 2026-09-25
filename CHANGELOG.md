@@ -60,11 +60,12 @@ spec-graph's old one, a repository will see it:
   exactly; it is two literals now, each a directory and what it holds.
 - **A class never matches `/`**, and **`[^a]` negates**, as `[!a]` does. `a[!b]c`
   took `a/c`, and `[^a]` was the class of `^` and `a`.
-- **A pattern must name a path under the root.** `.`, `./` and `docs/..` are
-  refused rather than read as nothing, and a `..` that climbs out of the root
-  is refused rather than walked. A `.` segment inside a pattern is dropped, as
-  it was. A `..` typed below the root is resolved against where it was typed,
-  so `spec-graph "../*.md"` in `docs/deep` still means `docs/*.md`.
+- **A pattern must name a path under the root.** `.` and `./` are refused
+  rather than read as nothing, and so is a `..` anywhere in a pattern:
+  `docs/../specs` was resolved to `specs`, and `../other/**` walked outside
+  the root. A `.` segment inside a pattern is dropped, as it was. A `..` typed
+  below the root is resolved against where it was typed, so
+  `spec-graph "../*.md"` in `docs/deep` still means `docs/*.md`.
 - **The walk finds a directory only as it is spelled on disk.** It starts at a
   pattern's literal prefix, and on a filesystem that ignores case `Docs/` found
   `docs/` and reported its files as `Docs/...`. A pattern rooted at `/` is not
@@ -100,7 +101,8 @@ wherever it is written. A document under an `archive/` directory that declares
 no status is retired as before. A repository that wrote `archived` for a
 retired decision loses the `stale-premise` findings on documents that depend
 on it, and a baseline that accepted one reports that entry as no longer
-occurring, which fails a run under `--ratchet`. `historyPatterns` and `<!-- @spec-history -->` are unchanged. See
+occurring, which fails a run under `--ratchet`. `historyPatterns` and
+`<!-- @spec-history -->` are unchanged. See
 [ADR-0011](docs/adr/0011-a-record-is-not-a-specification.md).
 
 ### Fixed
@@ -162,6 +164,24 @@ on the new lines change how long an answer takes, or compare offsets that cannot
 be equal. 600,000 generated documents read the same through the one pass as
 through a naive left-to-right reading of the same rule, and this repository's
 documents scan no slower than before.
+
+Then spec-core, the record phase and GitLab: `npm run lint`, 1,010 tests,
+`npm run build` and `npm run selfcheck`. The 30 tests of `tests/regex.test.ts`
+went to spec-core with the matcher, where they run with only its names
+changed. Every glob change listed above has a test that fails against the
+0.8.0 matcher - the host-dependent ones on Windows, where the defect was - and
+the differential in `tests/glob.test.ts` requires each of them to occur and
+nothing else to; five of the eight tests for `archived` fail without its table
+entry, and the other three hold what must not move. Measured on their own with
+`--coverageAnalysis all`, before and after: `glob.ts` from 73.74% to 77.22%,
+`cli.ts` from 81.11% to 83.45%, `report.ts` from 69.03% to 70.17% and
+`lifecycle.ts` from 53.10% to 53.26%. `select.ts`, whose only change is an
+import, read 74.01% and then 71.08%: sixteen selector-parsing mutants that no
+assertion kills in either run timed out in the first and survived in the
+second. Of the mutants left alive on new lines, seven are equivalent and say
+so where they are; the rest are on the ignore filter, whose reading did not
+change, and on the symlink branch of the walk, which no test reaches, as
+before.
 
 ## 0.8.0
 

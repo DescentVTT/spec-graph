@@ -73,6 +73,13 @@ describe('argument parsing', () => {
     }
   });
 
+  it('takes each format by name, the default included', () => {
+    expect(parseArgs([], '/repo').format).toBe('human');
+    for (const format of ['human', 'json', 'sarif', 'markdown', 'gitlab'] as const) {
+      expect(parseArgs(['check', '--format', format], '/repo').format).toBe(format);
+    }
+  });
+
   it('takes the first bare argument of a query as the selector', () => {
     const options = parseArgs(['query', 'document[phase=active]', 'docs/**/*.md'], '/repo');
     expect(options.selector).toBe('document[phase=active]');

@@ -168,6 +168,8 @@ describe('the dialect every spec-* tool reads', () => {
     expect(createGlobMatcher(['./docs/./adr'])('docs/adr/a.md')).toBe(true);
     expect(() => createGlobMatcher(['.'])).toThrow('invalid glob ".": the pattern names no path');
     expect(() => createGlobMatcher(['docs/..'])).toThrow('a pattern cannot climb out of its root');
+    // It used to be resolved: `docs/../specs` was `specs`.
+    expect(() => createGlobMatcher(['docs/../specs'])).toThrow('a pattern cannot climb out of its root');
     expect(() => createGlobMatcher(['../elsewhere/**'])).toThrow('a pattern cannot climb out of its root');
   });
 
@@ -212,6 +214,32 @@ function legacyMatcher(patterns: readonly string[], foldLiterals: boolean): (pat
     return included;
   };
 }
+
+describe('the deprecated globToRegExp', () => {
+  // The record of the old reading, which the differential below runs against.
+  // Pinned here on its own, because a broken oracle there only moves a
+  // difference from one named change to another.
+  const old = (pattern: string, path: string): boolean => globToRegExp(pattern).test(path);
+
+  it('still reads the dialect spec-graph read before', () => {
+    expect(old('docs/*.{md,mdx}', 'docs/a.mdx')).toBe(true);
+    expect(old('{a,b}c', 'bc')).toBe(true);
+    expect(old('{a,b}c', 'b}c')).toBe(false);
+    expect(old('a,b', 'a,b')).toBe(true);
+    expect(old('a}b', 'a}b')).toBe(true);
+    expect(old('a**b', 'a/x/b')).toBe(true);
+    expect(old('a[b', 'a[b')).toBe(true);
+    expect(old('[!a]', '!')).toBe(true);
+    expect(old('[!a]', '/')).toBe(true);
+    expect(old('[a^]', '^')).toBe(true);
+    expect(old('[a^]', 'b')).toBe(false);
+    expect(old('[^a]', '^')).toBe(true);
+  });
+
+  it('still refuses an unclosed brace with the glob named', () => {
+    expect(() => globToRegExp('docs/{a')).toThrow('invalid glob "docs/{a": unclosed "{"');
+  });
+});
 
 describe('the dialect spec-graph read before, against the one it reads now', () => {
   /** mulberry32: small, seeded, the same on every host. */
@@ -394,6 +422,7 @@ describe('reference filter', () => {
     expect(createReferenceFilter(['./scratch/*'])('./scratch/a.md')).toBe(true);
     expect(createReferenceFilter(['./scratch/*'])('scratch/a.md')).toBe(false);
     expect(createReferenceFilter(['a/../b'])('a/../b')).toBe(true);
+    expect(createReferenceFilter(['  ../notes/*'])('../notes/gone.md')).toBe(true);
   });
 
   it('escapes with a backslash, since a target is not a host path', () => {
@@ -497,6 +526,13 @@ describe('walking', () => {
     expect(files).not.toContain('node_modules/pkg/docs/evil.md');
     expect(files).not.toContain('dist/built.md');
     expect(files).toContain('README.md');
+  });
+
+  it('descends into one when a pattern names it, by starting there', async () => {
+    // The skip list applies to what the walk passes through; a pattern whose
+    // literal prefix is inside a skipped directory starts the walk inside it.
+    expect(await paths(['node_modules/pkg/docs/*.md'])).toEqual(['node_modules/pkg/docs/evil.md']);
+    expect(await paths(['node_modules/pkg/docs/*.md', '!node_modules/**'])).toEqual([]);
   });
 
   it('honours a bare-name ignore by pruning that directory at any depth', async () => {
