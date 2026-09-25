@@ -7,7 +7,7 @@ itself; what follows is the map that is hard to recover by reading.
 
 ```bash
 npm install
-npm test          # 994 tests
+npm test          # 966 tests
 npm run lint      # tsc --noEmit, strict
 npm run build     # emits dist/
 npm run selfcheck # spec-graph checks its own ADRs
@@ -42,14 +42,13 @@ files ─▶ markdown.ts ─▶ extract.ts ─▶ resolve.ts ─▶ graph.ts ─
 | `resolve.ts` | References → edges, or reportable foreign-key failures. |
 | `graph.ts` | Indexed, immutable graph. Adjacency, reachability, Tarjan. |
 | `select.ts` | The selector language: parser and execution engine. |
-| `regex.ts` | The matcher behind `~=` and every glob: an automaton that cannot backtrack. |
 | `rules.ts` | The diagnostics. Two of them are selector queries. |
 | `project-rules.ts` | Selectors a repository declared, compiled and checked. |
 | `report.ts` | Terminal, JSON, Graphviz and Mermaid output. |
 | `diff.ts` | Two JSON exports compared, naming only the changes it can tell apart. |
 | `glob.ts` / `paths.ts` | Pattern matching and POSIX path arithmetic. |
 | `runner.ts` / `cli.ts` | Orchestration and the command line. |
-| `vendor/spec-core/` | spec-core's modules, copied byte for byte. Never edited here: see below. |
+| `vendor/spec-core/` | spec-core's modules, copied byte for byte: the matcher behind `~=`, an automaton that cannot backtrack. Never edited here: see below. |
 
 ## Where changes usually go
 
@@ -120,9 +119,10 @@ in the last shard. When the shards' times drift apart,
 `node scripts/mutation-timeline.mjs <report> <log>` reads per-file minutes off a
 sweep's log to rebalance them.
 
-**Where an oracle exists, use it.** `regex.ts` replaces a built-in engine, so
-its tests do not assert what its author believed about regular expressions —
-they run both engines over the same patterns and subjects and compare. That is
+**Where an oracle exists, use it.** The matcher behind `~=` replaces a built-in
+engine, so its tests - in spec-core now, beside it - do not assert what its
+author believed about regular expressions — they run both engines over the same
+patterns and subjects and compare. That is
 what caught a clause of the language specification being read backwards, and it
 is the pattern to copy for anything else that re-implements something standard.
 `glob.ts` holds its automaton to the `RegExp` it replaced the same way.

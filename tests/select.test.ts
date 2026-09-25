@@ -234,6 +234,19 @@ describe('matching', () => {
     expect(() => parseQuery('document[id~=a{3,1}]')).toThrow(QueryError);
   });
 
+  it('matches a pattern with the automaton, not with RegExp', () => {
+    // The matcher lives in spec-core now, and its own suite holds it to
+    // RegExp. What is held here is that `~=` reaches it: the ADR-0017 title
+    // pattern against a fifty-four-character title that fails it takes RegExp
+    // over a minute, and a lookahead is refused rather than run.
+    const title = 'the quick brown fox jumps over the lazy dog and keeps!';
+    const graph = analyseSources([{ path: 'docs/a.md', text: `---\nstatus: accepted\n---\n\n# ${title}\n` }]).graph;
+    const started = performance.now();
+    expect(query(graph, 'document[title~="^([A-Za-z0-9_]+[ ]?)+$"]')).toEqual([]);
+    expect(performance.now() - started).toBeLessThan(2000);
+    expect(() => parseQuery('document[id~="(?=ADR)"]')).toThrow('lookaround is not supported');
+  });
+
   it('points at the character of the pattern that failed, not at the predicate', () => {
     // The caret is the whole reason a pattern is compiled while parsing rather
     // than on first use: this is the only place that knows where it was written.

@@ -63,7 +63,6 @@ export const ASSIGNED = [
     'src/yaml.ts',
     'src/sections.ts',
     'src/graph.ts',
-    'src/regex.ts',
     'src/cli.ts',
     'src/glob.ts',
     'src/paths.ts',

@@ -13,6 +13,9 @@ import { createHash } from 'node:crypto';
 import { readdirSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
+import { compilePattern, PatternError } from '../src/index.js';
+import { compileRegex, RegexError } from '../src/vendor/spec-core/pattern/index.js';
+
 const DIRECTORY = 'src/vendor/spec-core';
 
 interface VendorRecord {
@@ -50,4 +53,14 @@ describe('the vendored spec-core', () => {
       expect(readdirSync(`${DIRECTORY}/${module}`).sort()).toEqual(Object.keys(files).sort());
     });
   }
+});
+
+describe('the names the matcher was published under here', () => {
+  it('are the vendored matcher, not a second copy of it', () => {
+    // src/regex.ts moved to spec-core unchanged (ADR-0017), and the API keeps
+    // exporting it under the names it had. Two engines would be two answers.
+    expect(compilePattern).toBe(compileRegex);
+    expect(PatternError).toBe(RegexError);
+    expect(() => compilePattern('ab(?=c)')).toThrow(PatternError);
+  });
 });

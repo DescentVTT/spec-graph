@@ -9,7 +9,11 @@ These are not preferences. Breaking one is a decision that needs an ADR.
 
 - **Zero runtime dependencies.** The Markdown scanner, front-matter reader, glob
   matcher, query parser and the regular-expression matcher behind `~=` are all
-  written here. A documentation linter a security team has to audit is one that
+  written here, or in spec-core - the library the spec-* tools share, copied
+  into `src/vendor/spec-core/` byte for byte and held to its hashes by
+  `tests/vendor.test.ts`, never installed. Nothing under `src/vendor/` is edited
+  here: change spec-core and copy it again. The regular-expression matcher is
+  spec-core's. A documentation linter a security team has to audit is one that
   never gets installed.
 - **Nothing in the pipeline may take longer than its input.** Every stage has a
   stated cost in the size of what it reads. `~=` and globs used to be the
@@ -140,9 +144,10 @@ Mutation testing measures what the tests assert. It cannot find a case nobody
 thought of, so **probe new parsing code against a corpus written to break it**
 before trusting the score. Where the thing being written already exists
 somewhere else, compare against it rather than against your own beliefs:
-`regex.ts` is verified by running both it and `RegExp` over a generated corpus,
-which is what caught a clause of the language specification being read
-backwards. Three bugs in the register work were found that way
+the matcher behind `~=`, spec-core's now, is verified by running both it and
+`RegExp` over a generated corpus, which is what caught a clause of the
+language specification being read backwards. Three bugs in the register work
+were found that way
 and none of them by the suite: a link column read the label instead of the
 destination, a path lost its underscores to emphasis stripping, and one `/g`
 regex shared between a scan and a helper called from inside that scan reset its
