@@ -8,9 +8,10 @@
  * each way of not being one sweep must be refused rather than scored.
  */
 
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { minimatch } from 'minimatch';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -390,11 +391,33 @@ describe('the merged report as people read it', () => {
 describe('this repository', () => {
   const config = readFileSync('stryker.config.mjs', 'utf8');
   const base = JSON.parse(/mutate: (\[.*\]),/.exec(config)![1]!.replaceAll("'", '"')) as string[];
+  const vendored = readdirSync('src/vendor', { recursive: true, withFileTypes: true })
+    .filter((entry) => entry.isFile() && entry.name.endsWith('.ts'))
+    .map((entry) => `${entry.parentPath.replaceAll('\\', '/')}/${entry.name}`);
 
   it('lists only files the configuration mutates, each once', () => {
-    expect(base).toEqual(BASE);
+    expect(base).toEqual([...BASE, '!src/vendor/**']);
     expect([...checkAssignment(base).keys()].sort()).toEqual(ASSIGNED.flat().sort());
     for (const file of ASSIGNED.flat()) expect(() => readFileSync(file)).not.toThrow();
+  });
+
+  it('leaves the vendored spec-core to spec-core, in every shard', async () => {
+    // Its mutants are spec-core's to kill (spec-core ADR-0001), and
+    // `disableTypeChecks` prepends a line to every file it matches: a vendored
+    // file rewritten that way fails its hash in tests/vendor.test.ts, and that
+    // one test would then kill every mutant in the sweep.
+    expect(vendored.length).toBeGreaterThan(0);
+    const { default: stryker } = (await import(pathToFileURL(path.resolve('stryker.config.mjs')).href)) as {
+      default: { disableTypeChecks: string };
+    };
+    const reads = (patterns: readonly string[], file: string): boolean =>
+      patterns.reduce((hit, pattern) => (pattern.startsWith('!') ? hit && !minimatch(file, pattern.slice(1)) : hit || minimatch(file, pattern)), false);
+    for (let shard = 1; shard <= SHARD_COUNT; shard += 1) {
+      for (const file of vendored) expect(reads(mutateFor(base, shard), file), `shard ${shard}: ${file}`).toBe(false);
+    }
+    for (const file of vendored) expect(minimatch(file, stryker.disableTypeChecks), file).toBe(false);
+    expect(minimatch('src/glob.ts', stryker.disableTypeChecks)).toBe(true);
+    expect(minimatch('src/later/new.ts', stryker.disableTypeChecks)).toBe(true);
   });
 
   it('runs every test in every shard', () => {
