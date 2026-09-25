@@ -790,6 +790,8 @@ describe('finding the configuration from a subdirectory', () => {
     // may no longer do.
     expect(await files(absolute(`${PROJECT}/docs/deep`), '../*.md')).toEqual(['docs/0001.md', 'docs/0002.md']);
     expect(await files(absolute(`${PROJECT}/docs/deep`), '..\\..\\docs\\deep\\*.md')).toEqual(['docs/deep/0003.md']);
+    expect(await files(absolute(`${PROJECT}/docs/deep`), '..')).toEqual(['docs/0001.md', 'docs/0002.md', 'docs/deep/0003.md']);
+    expect(await files(absolute(`${PROJECT}/docs/deep`), '..', '!../*.md')).toEqual(['docs/deep/0003.md']);
     const beyond = await runIn(absolute(`${PROJECT}/docs`), 'check', '../../elsewhere/*.md');
     expect(beyond.code).toBe(EXIT_ERROR);
     expect(beyond.err).toContain('invalid glob "../elsewhere/*.md": a pattern cannot climb out of its root');

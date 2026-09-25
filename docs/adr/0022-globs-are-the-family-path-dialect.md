@@ -46,7 +46,10 @@ What stays spec-graph's is what was never a question of syntax:
   wrote, not against a path, so it keeps its own reading on the same engine: a
   bare pattern matches the target exactly, case is ignored on every host by
   simple case mapping, a `\` escapes, and `.` and `..` are text -
-  `../../notes/gone.md` is a link somebody may want left alone.
+  `../../notes/gone.md` is a link somebody may want left alone. The rest of
+  the table below applies to it as well, and the syntax brings two more
+  refusals: a `\` before a letter or digit or at the end, and a leading `!`,
+  which were literals here and are malformed in every dialect.
 
 ### What a user sees change
 

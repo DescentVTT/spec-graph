@@ -244,7 +244,6 @@ export function createReferenceFilter(patterns: readonly string[]): (target: str
       if (!parsed.ok) throw new GlobError(pattern, parsed.error);
       return parsed.glob;
     });
-  if (globs.length === 0) return () => false;
   return (target: string): boolean => {
     const value = target.trim();
     return globs.some((glob) => glob.match(value));
