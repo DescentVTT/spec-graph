@@ -7,7 +7,7 @@ itself; what follows is the map that is hard to recover by reading.
 
 ```bash
 npm install
-npm test          # 987 tests
+npm test          # 994 tests
 npm run lint      # tsc --noEmit, strict
 npm run build     # emits dist/
 npm run selfcheck # spec-graph checks its own ADRs
@@ -49,6 +49,7 @@ files ─▶ markdown.ts ─▶ extract.ts ─▶ resolve.ts ─▶ graph.ts ─
 | `diff.ts` | Two JSON exports compared, naming only the changes it can tell apart. |
 | `glob.ts` / `paths.ts` | Pattern matching and POSIX path arithmetic. |
 | `runner.ts` / `cli.ts` | Orchestration and the command line. |
+| `vendor/spec-core/` | spec-core's modules, copied byte for byte. Never edited here: see below. |
 
 ## Where changes usually go
 
@@ -105,6 +106,13 @@ Mutation testing matters here more than coverage does. This codebase is built ou
 of vocabularies and boundary conditions, and either can be weakened by an
 ordinary-looking refactor without a single test going red. If you are adding a
 heuristic, check that a mutant of it dies.
+
+`src/vendor/spec-core/` is the family's shared library, copied in by spec-core's
+`scripts/vendor.mjs` and held to the SHA-256 of every file by
+`tests/vendor.test.ts`. A change to it is made in spec-core and copied again,
+never made here. It is left out of the mutation sweep and of coverage: its
+mutants are killed by spec-core's own suite (spec-core ADR-0001), and counting
+them here would move this repository's score with code it does not own.
 
 CI runs the same sweep in four shards and merges them into one report and one
 score (`scripts/mutation-shards.mjs`, ADR-0019). A new file under `src/` lands

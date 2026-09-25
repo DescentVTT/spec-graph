@@ -33,7 +33,10 @@ export default {
   coverageAnalysis: 'perTest',
 
   // types.ts is type-only and index.ts is pure re-exports: nothing to mutate.
-  mutate: ['src/**/*.ts', '!src/types.ts', '!src/index.ts'],
+  // src/vendor/ is spec-core's code, copied here and checked by hash; its
+  // mutants are spec-core's sweep to kill, and counting them here would pad or
+  // dilute a score for code this repository does not own (spec-core ADR-0001).
+  mutate: ['src/**/*.ts', '!src/types.ts', '!src/index.ts', '!src/vendor/**'],
 
   // Stryker's sandbox rewrites relative paths in a tsconfig that reaches
   // outside the project. Ours does not, and the rewriter calls
@@ -44,8 +47,10 @@ export default {
   // Stryker prepends "// @ts-nocheck" to every file it copies, because a mutant
   // can easily produce a type error. Its default glob covers tests/ as well,
   // which would rewrite the fixture documents and shift every line number the
-  // suite asserts on. Only the mutated sources need it.
-  disableTypeChecks: 'src/**/*.ts',
+  // suite asserts on. Only the mutated sources need it - and a vendored file
+  // must not get it, or it no longer has the hash tests/vendor.test.ts checks,
+  // and that one test would kill every mutant in the sweep.
+  disableTypeChecks: 'src/{*.ts,!(vendor)/**/*.ts}',
 
   reporters: ['html', 'clear-text', 'progress'],
   htmlReporter: { fileName: 'reports/mutation/index.html' },

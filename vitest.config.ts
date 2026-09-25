@@ -9,8 +9,9 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       include: ['src/**/*.ts'],
-      // types.ts is type-only: it compiles to an empty module.
-      exclude: ['src/types.ts'],
+      // types.ts is type-only: it compiles to an empty module. src/vendor/ is
+      // spec-core's, measured by spec-core's own suite (its ADR-0001).
+      exclude: ['src/types.ts', 'src/vendor/**'],
       reporter: ['text', 'lcov'],
       // Floors, not targets. They sit just below the measured numbers so that
       // losing ground fails the build while ordinary refactoring does not.
