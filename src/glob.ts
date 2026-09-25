@@ -111,6 +111,9 @@ export interface GlobOptions {
  * minutes over a 10,000-character reference target (ADR-0017).
  */
 export function compileGlob(pattern: string, options: GlobOptions = {}): RegexMatcher {
+  // `literal: 'file'` is the dialect's reading of any value but `directory`
+  // and `either`, so a mutant that blanks it reads the same. It is spelled out
+  // because what an unknown value means is spec-core's to change.
   const glob = compileFamilyGlob(pattern, { ...PATH, literal: 'file', caseSensitive: options.ignoreCase !== true });
   return { test: (path) => glob.match(path), size: glob.automaton.kinds.length };
 }
@@ -240,6 +243,9 @@ export function createReferenceFilter(patterns: readonly string[]): (target: str
         .split('/')
         .map((segment) => (segment === '.' ? '\\.' : segment === '..' ? '\\.\\.' : segment))
         .join('/');
+      // Every option spelled out, though the dialect reads `{}` the same way
+      // today: its defaults are spec-core's to change, and this reading is
+      // spec-graph's to keep. A mutant that drops one is equivalent until then.
       const parsed = parseGlob(literalDots, { dialect: 'path', caseSensitive: false, literal: 'file' });
       if (!parsed.ok) throw new GlobError(pattern, parsed.error);
       return parsed.glob;
@@ -263,6 +269,8 @@ export function globBase(pattern: string): string {
   let length = shared.length;
   for (const base of bases) {
     let same = 0;
+    // `<=` would read one past the end, where both sides are undefined and
+    // equal, and slice the same prefix: an equivalent mutant, left untested.
     while (same < length && base[same] === shared[same]) same += 1;
     length = same;
   }
@@ -287,6 +295,9 @@ async function spelledAsOnDisk(root: string, base: string): Promise<boolean> {
     try {
       names = await readdir(directory);
     } catch {
+      // Answering `true` here would change nothing a test can see: the walk
+      // would then read a directory beneath this one, fail the same way, and
+      // find nothing.
       return false;
     }
     if (!names.includes(segment)) return false;
@@ -316,18 +327,19 @@ export async function walkFiles(options: WalkOptions): Promise<WalkedFile[]> {
     ...DEFAULT_IGNORED_DIRECTORIES,
     ...ignores.filter((pattern) => !isGlob(pattern) && !pattern.includes('/')),
   ]);
-  const pathIgnores = ignores.filter((pattern) => isGlob(pattern) || pattern.includes('/'));
-  const ignoreList = pathIgnores.length > 0 ? pathList(pathIgnores) : null;
-  const excluded = (path: string): boolean => ignoreList !== null && ignoreList.match(path);
+  const ignoreList = pathList(ignores.filter((pattern) => isGlob(pattern) || pattern.includes('/')));
+  const excluded = (path: string): boolean => ignoreList.match(path);
 
   // Only walk the directories the patterns can possibly reach: each pattern's
-  // literal prefix, one per brace alternative.
+  // literal prefix, one per brace alternative. A negated pattern adds none,
+  // and adding its would change no answer - whatever lies beneath it that no
+  // other pattern reaches, no other pattern matches either - so that mutant is
+  // equivalent. No positive pattern at all walks nothing, which is the answer.
   const bases = new Set<string>();
   for (const entry of patterns.entries) {
     if (entry.negated) continue;
     for (const base of entry.glob.bases) bases.add(base);
   }
-  if (bases.size === 0) bases.add('');
   // Drop any base already contained in another: walking it again would only
   // repeat work. The empty base is the repository root, which contains
   // everything, so when it is present it is the only root worth walking.
