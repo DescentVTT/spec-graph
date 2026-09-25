@@ -28,7 +28,7 @@ import {
   ID_KEYS,
 } from './identity.js';
 import { isStatusHeading, phaseFromPath, phaseOf, STATUS_KEYS, supersessionTargetsIn } from './lifecycle.js';
-import { scanMarkdown, slugify, type Link, type ListItem, type ScannedDocument } from './markdown.js';
+import { isOnlyComment, scanMarkdown, slugify, type Link, type ListItem, type ScannedDocument } from './markdown.js';
 import { findSpecificationRegions, regionAt, type SpecificationRegion } from './sections.js';
 import { resolveItemState } from './state.js';
 import { refOf, type LineIndex } from './source.js';
@@ -957,7 +957,7 @@ function statusSectionBody(
 ): { text: string; start: number; end: number } | null {
   for (const line of scanned.lines) {
     if (line.line <= headingLine) continue;
-    if (line.blank) continue;
+    if (line.blank || isOnlyComment(scanned, line)) continue;
     if (line.code) return null;
     const trimmed = line.content.trim();
     // A heading immediately after means the section is empty.

@@ -401,8 +401,9 @@ describe('comments and code spans, read left to right', () => {
   it('reads a span that mentions a comment as code, and the comment after it as a comment', () => {
     const md = ['# T', '', 'Use `<!--` to open.', '', '## Real heading', '', 'See [a](b.md).', '', '<!--', '## Hidden', '-->', ''];
     const doc = scanMarkdown(md.join('\n'));
-    // Read as a comment, the span took the link with it, and a broken
-    // reference to b.md would never have been reported.
+    // Read as a comment, the span took the heading's section and the link with
+    // it, and a broken reference to b.md would never have been reported.
+    expect(doc.headings.map((h) => h.text)).toEqual(['T', 'Real heading']);
     expect(doc.links.map((l) => l.target)).toEqual(['b.md']);
     expect(doc.comments.map((c) => c.inner)).toEqual(['\n## Hidden\n']);
     expect(doc.isMasked(doc.text.indexOf('<!--'))).toBe(true);
@@ -497,6 +498,70 @@ describe('comments and code spans, read left to right', () => {
     const doc = scanMarkdown(`${runs}\n\nThen \`[fake](fake.md)\` and [real](real.md) <!-- note -->\n`);
     expect(doc.links.map((l) => l.target)).toEqual(['real.md']);
     expect(doc.comments.map((c) => c.inner)).toEqual([' note ']);
+  });
+});
+
+/**
+ * What a comment holds is text a renderer never shows, so it is not a heading,
+ * an item or a table either. The first character of a line decides, as it does
+ * in CommonMark: a line that begins inside a comment is HTML to its end.
+ */
+describe('what a comment holds is not structure', () => {
+  it('reads no heading in a comment, and every heading around it', () => {
+    const doc = scanMarkdown(['# Title', '<!--', '## Hidden', '   # Also hidden', '-->', '## Shown <!-- aside -->'].join('\n'));
+    expect(doc.headings.map((h) => h.text)).toEqual(['Title', 'Shown <!-- aside -->']);
+    expect(doc.lines.map((l) => l.comment)).toEqual([false, true, true, true, true, false]);
+  });
+
+  it('reads no setext heading out of a comment or under one', () => {
+    const under = (md: string[]) => scanMarkdown(md.join('\n')).headings.map((h) => h.text);
+    // A rule under a comment is a rule, not a heading called "<!-- note -->".
+    expect(under(['<!-- note -->', '---'])).toEqual([]);
+    expect(under(['   <!-- note -->', '==='])).toEqual([]);
+    expect(under(['Prose. <!-- open', '===', '-->'])).toEqual([]);
+    expect(under(['<!--', 'Title', '=====', '-->'])).toEqual([]);
+    expect(under(['<!-- note -->', 'Title', '====='])).toEqual(['Title']);
+  });
+
+  it('reads no list item in a comment, and the items around it', () => {
+    const md = ['- [ ] first', '<!--', '- [ ] parked', '  - [ ] nested and parked', '-->', '- [ ] second <!-- aside -->'];
+    const items = scanMarkdown(md.join('\n')).listItems;
+    expect(items.map((i) => i.firstLine)).toEqual(['first', 'second <!-- aside -->']);
+  });
+
+  it('does not end an item at a heading or a marker a comment holds', () => {
+    const md = ['- [ ] Should we shard?', '<!--', '## Old notes', '- [ ] parked', '-->', '  Resolved: no.'].join('\n');
+    const [item, ...rest] = scanMarkdown(md).listItems;
+    expect(rest).toEqual([]);
+    expect(item?.body).toContain('Resolved: no.');
+    expect(item?.maskedBody).not.toContain('parked');
+  });
+
+  it('still ends an item at a blank line before an unindented comment', () => {
+    const md = ['- [ ] first', '', '<!--', '- [ ] parked', '-->', 'Resolved: no.'].join('\n');
+    expect(scanMarkdown(md).listItems.map((i) => i.body)).toEqual(['first']);
+  });
+
+  it('reads no table in a comment, nor a row of one a comment opens', () => {
+    const tables = (md: string[]) => scanMarkdown(md.join('\n')).tables.map((t) => t.rows.map((r) => r.cells[0]?.text));
+    expect(tables(['<!--', '| ID | Status |', '| -- | ------ |', '| ADR-9 | Accepted |', '-->'])).toEqual([]);
+    expect(tables(['| ID | Status | <!--', '| -- | ------ |', '| ADR-9 | Accepted |', '-->'])).toEqual([]);
+    expect(tables(['| ID | Status |', '| -- | ------ |', '| ADR-1 | Accepted | <!--', '| ADR-9 | Draft |', '-->'])).toEqual([
+      ['ADR-1'],
+    ]);
+    expect(tables(['<!-- a register -->', '| ID | Status |', '| -- | ------ |', '| ADR-1 | Accepted |'])).toEqual([['ADR-1']]);
+    // Masking hides the pipes of a row written wholly inside a comment. It does
+    // not hide the ones after a comment that opens the line, which is HTML to
+    // its end all the same, and begins no header and continues no table.
+    expect(tables(['<!-- note --> | ID | Status |', '| -- | ------ |', '| ADR-1 | Accepted |'])).toEqual([]);
+    expect(tables(['| ID | Status |', '| -- | ------ |', '| ADR-1 | Accepted |', '<!-- x --> | ADR-9 | Draft |'])).toEqual([
+      ['ADR-1'],
+    ]);
+  });
+
+  it('marks a line by its first character, not by where a comment on it starts', () => {
+    const doc = scanMarkdown(['Prose <!-- a', '', 'still a -->', '', '  <!-- b --> after', 'x'].join('\n'));
+    expect(doc.lines.map((l) => l.comment)).toEqual([false, false, true, false, true, false]);
   });
 });
 

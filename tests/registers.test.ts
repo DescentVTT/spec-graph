@@ -105,6 +105,31 @@ describe('a register written as headings', () => {
     expect(found).toContain('stale-premise');
   });
 
+  it('reads a section status past what a comment says it could be', () => {
+    const files = {
+      'docs/r.md': [
+        '# R',
+        '',
+        '## ADR-0100: One',
+        '',
+        '### Status',
+        '',
+        '<!-- proposed | accepted -->',
+        'Accepted',
+        '',
+        '## ADR-0101: Two',
+        '',
+        '<!--',
+        'Status: accepted',
+        '-->',
+        '**Status:** draft',
+      ].join('\n'),
+    };
+    const { graph } = analyse(files);
+    expect(graph.document('ADR-0100')?.phase).toBe('active');
+    expect(graph.document('ADR-0101')?.phase).toBe('draft');
+  });
+
   it('numbers obligations within their own specification', () => {
     const two = {
       'docs/r.md': [
@@ -168,6 +193,23 @@ describe('what is not a specification', () => {
       'docs/adr/0040-enforce.md': ['# ADR-040: Enforce it', '', '## Status', '', 'accepted'].join('\n'),
     };
     expect(ids(files)).toEqual(['ADR-0040']);
+  });
+
+  it('a heading whose only status is in a comment', () => {
+    // A template's hint to whoever fills it in declares nothing.
+    const files = {
+      'docs/plan.md': ['# Plan', '', '## ADR-0100: Something', '', '<!--', '**Status:** proposed', '-->', '', 'Words.'].join(
+        '\n',
+      ),
+    };
+    expect(ids(files)).toEqual(['plan']);
+  });
+
+  it('a heading whose only status is in a code block', () => {
+    const files = {
+      'docs/plan.md': ['# Plan', '', '## ADR-0100: Something', '', '```md', 'Status: proposed', '```'].join('\n'),
+    };
+    expect(ids(files)).toEqual(['plan']);
   });
 
   it('a status section of an ordinary document', () => {
@@ -311,6 +353,13 @@ describe('what is not a specification table', () => {
   it('a table with no identifier column', () => {
     const files = {
       'docs/x.md': ['# X', '', '| Thing | Status |', '| :---- | :----- |', '| a | Accepted |'].join('\n'),
+    };
+    expect(ids(files)).toEqual(['x']);
+  });
+
+  it('a register commented out', () => {
+    const files = {
+      'docs/x.md': ['# X', '', '<!--', '| ID | Status |', '| :- | :----- |', '| ADR-0001 | Accepted |', '-->'].join('\n'),
     };
     expect(ids(files)).toEqual(['x']);
   });

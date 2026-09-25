@@ -24,7 +24,15 @@
 import { attr, type Directive } from './directives.js';
 import { isExternal, parsePrefixedRef } from './identity.js';
 import { isStatusHeading } from './lifecycle.js';
-import type { Heading, Range, ScannedDocument, Table, TableCell, TableRow } from './markdown.js';
+import {
+  isOnlyComment,
+  type Heading,
+  type Range,
+  type ScannedDocument,
+  type Table,
+  type TableCell,
+  type TableRow,
+} from './markdown.js';
 import type { EdgeKind } from './types.js';
 
 /** A status as written, and where it was written. */
@@ -383,7 +391,9 @@ function readLabelledStatus(scanned: ScannedDocument, start: number, end: number
   for (const line of scanned.lines) {
     if (line.contentStart < start) continue;
     if (line.contentStart >= end) break;
-    if (line.code || line.blank) continue;
+    // A template's commented-out `Status: proposed | accepted` is a hint to
+    // whoever fills it in, not a status the region declares.
+    if (line.code || line.blank || line.comment) continue;
     const match = INLINE_STATUS.exec(line.content);
     if (!match) continue;
     // `**Status:** Accepted` closes its emphasis *after* the colon, so the
@@ -404,7 +414,7 @@ function readHeadedStatus(scanned: ScannedDocument, start: number, end: number):
   for (const line of scanned.lines) {
     if (line.line <= heading.line) continue;
     if (line.contentStart >= end) break;
-    if (line.blank) continue;
+    if (line.blank || isOnlyComment(scanned, line)) continue;
     if (line.code) return null;
     const trimmed = line.content.trim();
     if (trimmed.startsWith('#')) return null;
