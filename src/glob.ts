@@ -235,21 +235,22 @@ export function createGlobMatcher(patterns: readonly string[]): GlobMatcher {
  * `../../notes/gone.md` is a link somebody wrote and may want left alone.
  */
 export function createReferenceFilter(patterns: readonly string[]): (target: string) => boolean {
-  const globs: Glob[] = patterns
-    .filter((pattern) => pattern.trim().length > 0)
-    .map((pattern) => {
-      const literalDots = pattern
-        .trim()
-        .split('/')
-        .map((segment) => (segment === '.' ? '\\.' : segment === '..' ? '\\.\\.' : segment))
-        .join('/');
-      // Every option spelled out, though the dialect reads `{}` the same way
-      // today: its defaults are spec-core's to change, and this reading is
-      // spec-graph's to keep. A mutant that drops one is equivalent until then.
-      const parsed = parseGlob(literalDots, { dialect: 'path', caseSensitive: false, literal: 'file' });
-      if (!parsed.ok) throw new GlobError(pattern, parsed.error);
-      return parsed.glob;
-    });
+  // A blank pattern reaches the dialect, which refuses it, as every pattern
+  // spec-graph reads is refused when it names nothing. It used to be dropped,
+  // so an unset variable in `--ignore-ref "$TAGS"` went unnoticed.
+  const globs: Glob[] = patterns.map((pattern) => {
+    const literalDots = pattern
+      .trim()
+      .split('/')
+      .map((segment) => (segment === '.' ? '\\.' : segment === '..' ? '\\.\\.' : segment))
+      .join('/');
+    // Every option spelled out, though the dialect reads `{}` the same way
+    // today: its defaults are spec-core's to change, and this reading is
+    // spec-graph's to keep. A mutant that drops one is equivalent until then.
+    const parsed = parseGlob(literalDots, { dialect: 'path', caseSensitive: false, literal: 'file' });
+    if (!parsed.ok) throw new GlobError(pattern, parsed.error);
+    return parsed.glob;
+  });
   return (target: string): boolean => {
     const value = target.trim();
     return globs.some((glob) => glob.match(value));
@@ -323,11 +324,12 @@ export async function walkFiles(options: WalkOptions): Promise<WalkedFile[]> {
   // repository-relative path, which is what `--ignore "docs/drafts/**"` means -
   // and treating that as a directory name silently excluded nothing at all.
   const ignores = options.ignore ?? [];
-  const ignoredNames = new Set([
-    ...DEFAULT_IGNORED_DIRECTORIES,
-    ...ignores.filter((pattern) => !isGlob(pattern) && !pattern.includes('/')),
-  ]);
-  const ignoreList = pathList(ignores.filter((pattern) => isGlob(pattern) || pattern.includes('/')));
+  // The empty pattern is no directory's name, so it goes to the dialect, which
+  // refuses it as it refuses an empty include: a pattern that names nothing is
+  // a typo or an unset variable, and was an ignore that ignored nothing.
+  const bare = (pattern: string): boolean => pattern.length > 0 && !isGlob(pattern) && !pattern.includes('/');
+  const ignoredNames = new Set([...DEFAULT_IGNORED_DIRECTORIES, ...ignores.filter(bare)]);
+  const ignoreList = pathList(ignores.filter((pattern) => !bare(pattern)));
   const excluded = (path: string): boolean => ignoreList.match(path);
 
   // Only walk the directories the patterns can possibly reach: each pattern's
