@@ -39,6 +39,15 @@ describe('the vendored spec-core', () => {
     expect(Object.keys(record.modules).sort()).toEqual(['markdown', 'path', 'pattern', 'text']);
   });
 
+  it("carries spec-core's licence, and the package ships it", () => {
+    // The tarball's dist/vendor/spec-core/ is spec-core's code, compiled, and
+    // MIT asks for its notice to travel with it. tsc copies no licence into
+    // dist/, so the package names the one beside the copies.
+    expect(readFileSync(`${DIRECTORY}/LICENSE`, 'utf8')).toMatch(/^MIT License/);
+    const manifest = JSON.parse(readFileSync('package.json', 'utf8')) as { files: readonly string[] };
+    expect(manifest.files).toContain(`${DIRECTORY}/LICENSE`);
+  });
+
   for (const [module, { files }] of Object.entries(record.modules)) {
     it(`has every file of ${module} exactly as it was copied`, () => {
       const edited = Object.entries(files)

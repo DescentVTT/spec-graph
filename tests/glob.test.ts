@@ -132,11 +132,29 @@ describe('the dialect every spec-* tool reads', () => {
     expect(matcher('docs/ADR/0001.md')).toBe(false);
   });
 
-  it('reads ** inside a segment as *, which no longer crosses directories', () => {
-    expect(matches('docs/**.md', 'docs/a.md')).toBe(true);
-    expect(matches('docs/**.md', 'docs/adr/a.md')).toBe(false);
-    expect(matches('a**b', 'axxb')).toBe(true);
-    expect(matches('a**b', 'a/x/b')).toBe(false);
+  it('refuses ** inside a name, and names the two things it could have meant', () => {
+    // It crossed directories wherever it was written. Read as `*` instead, a
+    // scope that used to reach every nested file would quietly stop at one.
+    expect(() => compileGlob('docs/**.md')).toThrow(
+      'invalid glob "docs/**.md": "**" means any number of directories only as a whole segment: write "docs/**/*.md" for any depth, or "*.md" for one level',
+    );
+    expect(() => createGlobMatcher(['**.ts'])).toThrow('invalid glob "**.ts": "**" means any number of directories');
+    expect(() => createGlobMatcher(['a**b'])).toThrow('only as a whole segment');
+    expect(() => createReferenceFilter(['trap**'])).toThrow('only as a whole segment');
+    expect(matches('docs/**/*.md', 'docs/adr/a.md')).toBe(true);
+  });
+
+  it('refuses an extended glob, and reads a parenthesis with no | in its group as itself', () => {
+    // `+(a|b)` was the literal text `+(a|b)`: a scope that matched nothing.
+    expect(() => compileGlob('docs/+(a|b).md')).toThrow(
+      'invalid glob "docs/+(a|b).md": extended globs such as "+(a|b)" are not supported: write alternatives as "{a,b}", and a literal parenthesis as "[(]"',
+    );
+    expect(() => createGlobMatcher(['docs/@(adr|rfc)/*.md'])).toThrow('extended globs');
+    // Names with parentheses in them, as they always were.
+    expect(matches('docs/C++(notes).md', 'docs/C++(notes).md')).toBe(true);
+    expect(matches('books/*(2017).md', 'books/dune(2017).md')).toBe(true);
+    expect(matches('team@(home).md', 'team@(home).md')).toBe(true);
+    expect(matches('docs/[(]a|b).md', 'docs/(a|b).md')).toBe(true);
   });
 
   it('refuses an unclosed [ rather than reading it as a literal', () => {
@@ -255,12 +273,13 @@ describe('the dialect spec-graph read before, against the one it reads now', () 
   };
 
   // spec-core's differential pieces, and the ones only spec-graph's wrapper
-  // reads: case, a `^` class, a backslash, a negation.
-  const PIECES = ['a', 'b', 'ab', 'A', '.', '*', '?', '[ab]', '[!a]', '[^a]', 'a*', '*b', '**', 'x**', '[a', '{a,b}', '{a,{b,.x}}', '{[,]a,b}', 'a\\b'];
+  // reads: case, a `^` class, a backslash, a negation, and parentheses, with
+  // and without the `|` that makes a group an extended glob.
+  const PIECES = ['a', 'b', 'ab', 'A', '.', '*', '?', '[ab]', '[!a]', '[^a]', 'a*', '*b', '**', 'x**', '[a', '{a,b}', '{a,{b,.x}}', '{[,]a,b}', 'a\\b', '*(a)', '+(a|b)'];
 
   const PATTERNS = (() => {
     const rand = random(7);
-    const out = new Set<string>(['docs', 'docs/', 'README.md', '*.md', 'docs/**', 'a/**/b', '**/b', '**.b', 'a**b', 'a/[!b]', '*[!a]*', '{a,b}/**', 'a/', 'A', '[^a]/b', '{.,a}/b', 'a/../b', '.', './']);
+    const out = new Set<string>(['docs', 'docs/', 'README.md', '*.md', 'docs/**', 'a/**/b', '**/b', '**.b', 'a**b', 'a/[!b]', '*[!a]*', '{a,b}/**', 'a/', 'A', '[^a]/b', '{.,a}/b', 'a/../b', '.', './', 'a(b)', '@(a|b)']);
     while (out.size < 400) {
       const segments = 1 + Math.floor(rand() * 3);
       const parts: string[] = [];
@@ -286,7 +305,8 @@ describe('the dialect spec-graph read before, against the one it reads now', () 
     return out;
   })();
 
-  const GLOBSTAR_IN_SEGMENT = /(?:[^/{,]\*\*|\*\*[^/},])/;
+  const GLOBSTAR_IN_NAME = /(?:[^/{,]\*\*|\*\*[^/},])/;
+  const EXTGLOB = /[?*+@!]\([^)]*\|/;
   const UNCLOSED_CLASS = /\[(?![^\]/]*\])/;
   const CARET_CLASS = /\[\^/;
   const NEGATED_CLASS = /\[[!^]/;
@@ -297,6 +317,8 @@ describe('the dialect spec-graph read before, against the one it reads now', () 
   function explain(pattern: string, path: string, legacy: boolean | 'error', core: boolean | 'error'): string | null {
     if (core === 'error') {
       if (UNCLOSED_CLASS.test(pattern)) return 'an unclosed class is an error';
+      if (GLOBSTAR_IN_NAME.test(pattern)) return 'a globstar inside a name is an error';
+      if (EXTGLOB.test(pattern)) return 'an extended glob is an error';
       if (CLIMB.test(pattern) || DOT_SEGMENT.test(pattern)) return 'a pattern that names no path, or climbs out, is an error';
       return null;
     }
@@ -304,7 +326,6 @@ describe('the dialect spec-graph read before, against the one it reads now', () 
     // Normalised away before it was read, so `dir*/` named `dirx` and not what
     // is in it, and `docs/` named `docs` itself as well as its contents.
     if (pattern.endsWith('/')) return "a trailing slash names a directory's contents";
-    if (GLOBSTAR_IN_SEGMENT.test(pattern)) return 'a globstar inside a segment is a star';
     if (CARET_CLASS.test(pattern)) return 'a ^ opening a class negates it';
     if (NEGATED_CLASS.test(pattern) && path.includes('/')) return 'a class never matches a separator';
     if (/\{/.test(pattern) && legacy === false && core === true) return 'braces expand to literals';
@@ -354,10 +375,11 @@ describe('the dialect spec-graph read before, against the one it reads now', () 
     expect([...seen.keys()].sort()).toEqual([
       "a ^ opening a class negates it",
       "a class never matches a separator",
-      "a globstar inside a segment is a star",
+      "a globstar inside a name is an error",
       "a literal no longer ignores case",
       "a pattern that names no path, or climbs out, is an error",
       "a trailing slash names a directory's contents",
+      "an extended glob is an error",
       "an unclosed class is an error",
       "braces expand to literals",
     ]);

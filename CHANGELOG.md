@@ -30,7 +30,9 @@ new, and a second finding identical in all three is told apart by its order.
 **The matcher behind `~=` is spec-core's.** It moved, unchanged, to spec-core -
 the library the spec-* tools share - and is copied back into
 `src/vendor/spec-core/`, byte for byte and checked against the SHA-256 it was
-copied with, so spec-graph still installs nothing. A selector reads exactly as
+copied with, so spec-graph still installs nothing. The package carries the
+copies compiled, and spec-core's MIT notice with them, as
+`src/vendor/spec-core/LICENSE`. A selector reads exactly as
 before. `compilePattern` and `PatternError` are still exported and are the same
 function and class; a caught error's `name` is now `RegexError`. The tests that
 hold the matcher to `RegExp` moved with it, and the copy is left out of this
@@ -48,8 +50,15 @@ spec-graph's old one, a repository will see it:
   another in CI. And a pattern with no glob syntax was compared lower-cased on
   every host, Linux included: `README.md` also took `readme.md`. Neither folds
   now, and `compileGlob`'s `ignoreCase` is off unless asked for on any host.
-- **`**` inside a name is `*`.** `docs/**.md` no longer reaches
-  `docs/adr/a.md`; `docs/**/*.md` does, as it always did.
+- **`**` inside a name is refused.** `docs/**.md`, `**.ts` and `a**b` crossed
+  directories wherever the `**` was written. `**` means any number of
+  directories only as a whole segment now, and the error says so: write
+  `docs/**/*.md` for any depth, as it always read, or `*.md` for one level.
+- **An extended glob is refused.** `+(a|b)` was the literal text `+(a|b)`, a
+  scope that matched nothing; the error says to write `{a,b}`, and `[(]` for a
+  parenthesis. A group is an extended glob only when it holds a `|`, so
+  `C++(notes).md` and `books/*(2017).md` are names with parentheses in them,
+  as they were.
 - **An unclosed `[` is an error**, like an unclosed `{` always was. It was a
   literal `[`, which made the pattern a scope that matched nothing. The run
   stops with exit `2` and names the pattern, from the command line or from the
@@ -139,9 +148,14 @@ where it wrote one of these:
 - **A table needs a delimiter row with as many cells as its header.** One
   without was read as a table, and as a register when its columns said so.
 - **A fence ends with its block quote.** One opened in a quote and never closed
-  made the rest of the document code. And a fence indented four columns after a
-  blank line, outside a list, is indented code, not a fence that can run to the
-  end.
+  made the rest of the document code.
+- **Indented code is four columns past its container**: the margin, or the text
+  of the list item the line is in. Inside a list four columns were never code,
+  so a link or a checkbox in an example indented under an item was read as one.
+  Under `- item`, six columns after a blank line are code now, and four are
+  still the item's text. A fence line that deep opens no fence - after a blank
+  line it is indented code, and under a paragraph it is text - where it used to
+  open one at any depth and, unclosed, run to the end of the document.
 - **Front matter opens on exactly `---` or `+++`.** `----` is a rule.
 
 For the library API, the scanner's types are spec-core's, exported under the
@@ -164,12 +178,14 @@ why.** Keys are compared in lower case and one level of nesting is read as
 - **A value YAML does not say is not read.** A plain value holding `: ` -
   `title: ADR-7: Sharding`, which YAML reads as an error - a value continued onto
   the next line, which was read as its first line, a block scalar, an anchor and
-  a tag are left out rather than guessed at. Quote the value and it is read.
-  Each is a parse problem at the value, under `--verbose` and in
-  `--format json`, naming the reason; so are a line that is not `key: value`, a
-  key written twice, of which the last still wins, and TOML front matter, which
-  was read as nothing in silence. A status left out this way is looked for in a
-  `## Status` section, as a missing one always was.
+  a tag are left out rather than guessed at. Quote the value and it is read. An
+  inline list on the line under its key, `translators:` over an indented `[]`,
+  is left out too, with the advice to write it after the colon, since quoting it
+  would make it a string. Each is a parse problem at the value, under
+  `--verbose` and in `--format json`, naming the reason; so are a line that is
+  not `key: value`, a key written twice, of which the last still wins, and TOML
+  front matter, which was read as nothing in silence. A status left out this way
+  is looked for in a `## Status` section, as a missing one always was.
 - **A list written at its key's own indentation is a list.** `deps:` over
   `- ADR-1` was an empty value.
 - **Quoted values are YAML's.** `'it''s'` is `it's`, and `"a\tb"` holds a tab.
