@@ -51,7 +51,7 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "selfcheck": "node ./bin/spec-graph.js check --verbose",
-    "prepublishOnly": "npm run clean && npm run build",
+    "prepublishOnly": "node -e \"if (process.env.GITHUB_ACTIONS !== 'true') { console.error('npm publish is refused outside GitHub Actions: a release is a v* tag, staged by CI with provenance.'); process.exit(1) }\" && npm run clean && npm run build",
     "test:mutation": "stryker run"
   },
   "devDependencies": {
