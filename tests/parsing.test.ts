@@ -106,6 +106,10 @@ describe('front matter', () => {
     expect(problems('+++\ntitle = "A"\n+++\n# ADR-0001: A\n')).toEqual([
       ['front matter: TOML front matter is not read; write YAML between "---" lines', 1, 1],
     ]);
+    // Quoting a list would make it a string, so a list gets advice of its own.
+    expect(problems('---\ntranslators:\n  []\n---\n# ADR-0001: A\n')).toEqual([
+      ['front matter: "translators" is not read: an inline list starts on the line after its key; write it after the colon', 3, 3],
+    ]);
     expect(problems('---\nstatus: accepted\n---\n# ADR-0001: A\n')).toEqual([]);
     // Four dashes open no front matter, so there is none to be wrong.
     expect(problems('----\nstatus: accepted\n----\n# ADR-0001: A\n')).toEqual([]);

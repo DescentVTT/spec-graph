@@ -37,7 +37,8 @@
     "LICENSE",
     "README.md",
     "bin",
-    "dist"
+    "dist",
+    "src/vendor/spec-core/LICENSE"
   ],
   "publishConfig": {
     "access": "public"

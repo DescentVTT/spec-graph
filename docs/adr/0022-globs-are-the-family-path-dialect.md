@@ -47,10 +47,10 @@ What stays spec-graph's is what was never a question of syntax:
   bare pattern matches the target exactly, case is ignored on every host by
   simple case mapping, a `\` escapes, and `.` and `..` are text -
   `../../notes/gone.md` is a link somebody may want left alone. The rows of
-  the table below about syntax - `**`, `[`, a trailing `/`, classes - apply to
-  it as well, `a//b` reads as `a/b`, and two more things are refused: a `\`
-  before a letter or digit or at the end, and a leading `!`, which were
-  literals here and are malformed in every dialect.
+  the table below about syntax - `**`, an extended glob, `[`, a trailing `/`,
+  classes - apply to it as well, `a//b` reads as `a/b`, and two more things are
+  refused: a `\` before a letter or digit or at the end, and a leading `!`,
+  which were literals here and are malformed in every dialect.
 
 ### What a user sees change
 
@@ -62,7 +62,8 @@ differs:
 | --- | --- | --- |
 | `Docs/**` against `docs/a.md` | matched on Windows | never matches |
 | `README.md` against `readme.md` | matched on every host | never matches |
-| `docs/**.md` against `docs/adr/a.md` | matched: `**` crossed directories anywhere | `**` inside a segment is `*` |
+| `docs/**.md`, `**.ts`, `a**b` | `**` crossed directories wherever it was written | refused: `**` is a whole segment - `docs/**/*.md` for any depth, `*.md` for one level |
+| `docs/+(a\|b).md` | the literal text `+(a\|b)` | refused: an extended glob - `{a,b}` for alternatives, `[(]` for a parenthesis |
 | `docs/[draft.md` | a literal `[` | refused: `a "[" is never closed` |
 | `docs/draft*/` | `docs/drafts` itself | what is in `docs/drafts` |
 | `docs/` | `docs` and what is in it | what is in `docs` |
@@ -74,6 +75,13 @@ differs:
 A pattern that does not compile is refused the way a malformed `{` already
 was: the run stops with exit `2` and the pattern named, whether it came from
 the command line or the configuration file.
+
+Two refusals are narrower than they could be, on purpose. `**` inside a name
+is refused rather than read as `*`: the tools the dialect replaced read
+`docs/**.md` three ways, and the quiet reading turned a scope that reached every
+nested file into one that stops at the first level. And a group is an extended
+glob only when it holds a `|`: `C++(notes).md` and `books/*(2017).md` are names
+with parentheses in them, as they were before and as ripgrep reads them.
 
 **The walk finds a directory only as it is spelled on disk.** It starts at
 each pattern's literal prefix, and on a filesystem that ignores case,
@@ -120,10 +128,10 @@ around it.
 
 `tests/glob.test.ts` rebuilds the 0.8.0 matcher on the deprecated
 `globToRegExp` and runs it beside the new one over 400 patterns - generated from
-spec-core's differential pieces, plus case, `[^`, a backslash and negation -
-against every path of a small alphabet. Every difference must fall into one of
-the rows above, and every row must occur, so the table is neither shorter nor
-longer than what happens. The first row is the host's and not the pattern's,
+spec-core's differential pieces, plus case, `[^`, a backslash, negation and
+parentheses with and without a `|` - against every path of a small alphabet.
+Every difference must fall into one of the rows above, and every row must
+occur, so the table is neither shorter nor longer than what happens. The first row is the host's and not the pattern's,
 so it cannot occur in one process; it and each of the others has a test of its
 own by name.
 

@@ -803,6 +803,33 @@ describe('what the shared scan reads differently', () => {
     expect(graph.items.map((n) => n.id)).toEqual(['ADR-0001#after.1']);
   });
 
+  it("reads code four columns past a list item's text, and a fence that deep as no fence", () => {
+    // Inside a list, four columns were never code, so a link in an example
+    // indented under an item was a citation. And a fence opened at any depth:
+    // one indented under a paragraph made the rest of the document code.
+    const text = [
+      '# ADR-0001: A',
+      '',
+      '- An item',
+      '',
+      '    still the item, citing [ADR-0002](0002-b.md)',
+      '',
+      '      [example](0009-missing.md) in code, four columns past the text',
+      '',
+      'A paragraph',
+      '    ```',
+      'that goes on.',
+      '',
+      '## Open Questions',
+      '',
+      '- [ ] open',
+    ].join('\n');
+    const { graph, diagnostics } = analyseSources([{ path: 'docs/adr/0001-a.md', text }, { path: B[0], text: B[1] }]);
+    expect(graph.edges.filter((e) => e.kind !== 'contains').map((e) => e.to)).toEqual(['ADR-0002']);
+    expect(diagnostics.map((d) => d.rule)).toEqual([]);
+    expect(graph.items.filter((n) => n.openness === 'open').map((n) => n.id)).toEqual(['ADR-0001#open-questions.1']);
+  });
+
   it('opens front matter only on exactly three dashes', () => {
     const { graph } = analyseSources([{ path: 'docs/adr/0001-a.md', text: '----\nstatus: accepted\n----\n# ADR-0001: A\n' }]);
     expect(graph.document('ADR-0001')?.rawStatus).toBeNull();

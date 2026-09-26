@@ -104,7 +104,8 @@ spec-core's differential test, and each has a test here: in
 | `[a](<b c.md>)` | a finding one column early, on the `<` | inside the brackets |
 | a delimiter row with fewer cells than its header | a table, and a register | text |
 | a fence opened in a block quote and never closed | code to the end of the document | the fence ends with its quote |
-| an indented fence after a blank line, outside a list | a fence, often to the end | indented code |
+| a fence four columns past the margin, or past its list item's text | a fence, often to the end | indented code after a blank line, text under a paragraph |
+| text four columns past a list item's text, after a blank line | the item's text: nothing in a list was code | indented code |
 | `----` as a file's first line | front matter | a rule |
 | `title: ADR-7: Sharding` | the title `ADR-7: Sharding` | not read, and a parse problem: quote it |
 | a value continued on the next line | its first line | not read, and a parse problem |
