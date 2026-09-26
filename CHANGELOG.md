@@ -117,10 +117,9 @@ where it wrote one of these:
   before it. That text is a document's title, a section's name and the slug in
   the id of every item under it, so an item under `## Notes <!-- x -->` moves
   from `ADR-0001#notes----x---.1` to `ADR-0001#notes.1`, and
-  `## Open Questions <!-- short -->` holds obligations at last. A baseline that
-  accepted a finding on a moved item reports its entry as no longer occurring,
-  which fails a run under `--ratchet`, and the finding as new; one
-  `--record-baseline` settles it.
+  `## Open Questions <!-- short -->` holds obligations at last. A baseline does
+  not notice the move: an entry names the specification and what within it,
+  never an item.
 - **A link to GitHub's anchor for a repeated heading resolves.** GitHub renders
   the second `## Notes` as `#notes-1`, and a link to it was a
   `broken-reference`. The slug still names the first heading, and `#notes-2`
@@ -169,6 +168,19 @@ where it wrote one of these:
   opening `---` closed the block, and now leaves it open: a block that never
   closes is read as a rule and Markdown, none of its keys are read, and a parse
   problem says where it opened.
+
+**What a baseline sees.** A finding the scan no longer produces leaves its
+entry no longer occurring, which fails a run under `--ratchet`. These go: the
+first word of a footnote `[^1]: See ...` or a line `[Note]: prose`, which was
+a broken reference; the `b` of `[a](b c)` and the `not` of
+`[foo](not a link)`; a link to GitHub's `#notes-1`, which was an unknown
+anchor; an `orphaned-obligation` made of boxes held in `<pre>` or in a
+comment; a link inside a code span that a lone backtick earlier in the document
+had knocked out of step, so that it read as text; and a link in an example
+indented under a list item. One `--record-baseline` settles them. What the scan
+sees now and did not - a citation a lone backtick hid, an obligation under a
+heading with a comment on its line, what followed a fence indented under a
+paragraph, the shortcut `[foo]` - is a new finding, as any other is.
 
 For the library API, the scanner's types are spec-core's, exported under the
 names they had. `ScannedDocument` is spec-core's `MarkdownScan`: `masked` is

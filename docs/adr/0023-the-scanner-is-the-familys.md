@@ -145,9 +145,15 @@ spec-core's differential test, and each has a test here: in
 A repository sees the rows above in its first run. The likeliest are a heading
 with a comment on its line and a footnote written `[^1]:`, and the first of
 those moves ids: an item under `## Notes <!-- x -->` was `ADR-0001#notes----x---.1`
-and is `ADR-0001#notes.1`. A baseline that accepted a finding on it reports the
-entry as no longer occurring, and the finding as new; one `--record-baseline`
-settles it.
+and is `ADR-0001#notes.1`. That does not touch a baseline, whose entries name a
+specification and what within it and never an item
+([ADR-0012](0012-a-baseline-is-a-ratchet.md)). What does is a finding the scan
+no longer produces, whose entry is then no longer occurring and fails a run
+under `--ratchet`: a footnote's or a `[Note]: prose` line's first word, the
+destinations `[a](b c)` and `[foo](not a link)` seemed to have, a link to
+GitHub's `-1` anchor, boxes in `<pre>` or a comment that a retired document
+was orphaning, a link in a code span a lone backtick knocked out of step, and a
+link in code indented under a list item. One `--record-baseline` settles them.
 
 `ScannedDocument` is spec-core's `MarkdownScan`, still exported under the old
 name, and its shape changed where spec-core's did: the masked copy is
