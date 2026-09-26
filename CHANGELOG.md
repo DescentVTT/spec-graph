@@ -3,7 +3,7 @@
 Notable changes, newest first. Versions follow [semver](https://semver.org):
 a patch fixes behaviour without asking anything of a repository that upgrades.
 
-## Unreleased
+## 0.9.0
 
 Versions are published by CI from a `v*` tag, through npm's trusted
 publishing, and no longer from a workstation
@@ -23,8 +23,9 @@ step, are code again and go. Text read for the first time can hold a relation,
 and bring a `stale-premise` or a `ghost-handover` with it, and a relation read
 out of code can take an `unreciprocated-supersession` away with it. A
 paragraph indented four columns past its list item's text after a blank line
-is code now, as CommonMark reads it: this repository's ADRs lost seven
-relations that way, and no finding. The glob, `archived` and front-matter
+is code now, as CommonMark reads it, and as GitHub renders it: eleven of this
+repository's ADRs had answers written that way, and they are re-indented as
+paragraphs of their items. The glob, `archived` and front-matter
 changes are narrower, and each is described below; a pattern the dialect
 refuses stops the run with exit `2` and says how to write it. Under
 `--ratchet`, expect to record the baseline once; "What a baseline sees", under

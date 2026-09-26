@@ -952,9 +952,10 @@ tools share, whose code is copied into `src/vendor/` and checked by hash rather
 than installed. So the whole package is auditable in an afternoon — and nothing
 in the pipeline can take longer than its input.
 
-**Verified, not just covered.** 411 tests; 94.2% statement and 96.9% line
+**Verified, not just covered.** 1,053 tests; 96.8% statement and 98.2% line
 coverage. Coverage says a line ran, so the suite is also held to a mutation
-score - 74.05% over 6,150 mutants - because a vocabulary entry or a boundary
+score - 76.73% over 8,400 mutants at 0.9.0, measured incrementally in CI -
+because a vocabulary entry or a boundary
 condition can be weakened by an ordinary-looking refactor without a single test
 going red. [ADR-0007](docs/adr/0007-mutation-testing.md) is straight about what
 that number is and is not.
