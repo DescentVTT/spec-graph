@@ -192,6 +192,11 @@ export function formatReport(result: AnalysisResult, options: ReporterOptions = 
     lines.push('');
   }
 
+  const unread = options.verbose ? 0 : unreadFrontMatter(result);
+  if (unread > 0) {
+    lines.push(`${paint.warn(marks.warn)} ${unreadNotice(unread)}`, '');
+  }
+
   // What the repository told spec-graph to stop looking at. Only under
   // --verbose, and never as a finding: these are not defects, they are the one
   // place a configuration can make the check quieter, and a single over-broad
@@ -296,6 +301,22 @@ function plural(count: number, word: string, plural?: string): string {
   return plural ?? `${word}s`;
 }
 
+/**
+ * How many front-matter values the graph is built from went unread.
+ *
+ * Parse problems are listed only under `--verbose`, and most of them can wait
+ * there. These cannot: `status: Superseded by ADR-3: see notes` is not read,
+ * the document reads as unknown, and a failing check reports that the graph is
+ * consistent. So a default run says how many there are, and where to look.
+ */
+function unreadFrontMatter(result: AnalysisResult): number {
+  return result.problems.filter((problem) => problem.unread === true).length;
+}
+
+function unreadNotice(count: number): string {
+  return `${count} front-matter ${plural(count, 'value')} not read - see --verbose`;
+}
+
 /* -------------------------------------------------------------------------- */
 /* Markdown                                                                   */
 /* -------------------------------------------------------------------------- */
@@ -390,6 +411,9 @@ export function formatMarkdown(result: AnalysisResult, options: ReporterOptions 
       lines.push('');
     }
   }
+
+  const unread = options.verbose ? 0 : unreadFrontMatter(result);
+  if (unread > 0) lines.push(`${unreadNotice(unread)}.`, '');
 
   if (options.verbose && result.problems.length > 0) {
     lines.push('<details><summary>Problems with the input</summary>', '');

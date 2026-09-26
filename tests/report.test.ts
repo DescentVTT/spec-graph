@@ -216,6 +216,34 @@ describe('human report', () => {
     expect(formatReport(withProblem, { ascii: true, verbose: false })).not.toContain('unknown attribute');
   });
 
+  it('says without --verbose how many front-matter values the graph lost', () => {
+    // A status the reader leaves out reads as unknown, and a supersession that
+    // was a finding in 0.8.0 became "consistent" with nothing on screen.
+    const lost = result([
+      { path: 'docs/adr/0001-a.md', text: '---\nstatus: Superseded by ADR-0003: see the notes\n---\n# ADR-0001: A\n' },
+      { path: 'docs/adr/0003-c.md', text: '---\nstatus: accepted\nsupersedes: ADR-0001\n---\n# ADR-0003: C\n' },
+      // Indented under nothing, so no key's: the status is gone.
+      { path: 'docs/adr/0004-d.md', text: '---\n  status: accepted\nid: ADR-0004\n---\n# D\n' },
+      // Never closed: none of it is read.
+      { path: 'docs/adr/0005-e.md', text: '---\nstatus: accepted\n....\n# ADR-0005: E\n' },
+      // Not counted: the graph reads no description, and the last of a key
+      // written twice is read.
+      { path: 'docs/adr/0006-f.md', text: '---\ndescription: a: b\nstatus: draft\nstatus: accepted\n---\n# ADR-0006: F\n' },
+    ]);
+    const quiet = formatReport(lost, { ascii: true });
+    expect(quiet).toContain('! 3 front-matter values not read - see --verbose');
+    expect(quiet).not.toContain('is not read');
+    expect(formatMarkdown(lost)).toContain('3 front-matter values not read - see --verbose.');
+    // Under --verbose every problem is listed, and the count would repeat them.
+    const loud = formatReport(lost, { ascii: true, verbose: true });
+    expect(loud).not.toContain('values not read');
+    expect(loud).toContain('"description" is not read');
+    expect(formatMarkdown(lost, { verbose: true })).not.toContain('values not read');
+    expect(formatReport(result(), { ascii: true })).not.toContain('not read');
+    const one = result([{ path: 'docs/adr/0001-a.md', text: '---\nsupersedes: ADR-2: B\n---\n# ADR-0001: A\n' }]);
+    expect(formatReport(one, { ascii: true })).toContain('! 1 front-matter value not read - see --verbose');
+  });
+
   it('pluralises counts correctly', () => {
     const one = formatReport(result([{ path: 'docs/adr/0001-a.md', text: '# A\n' }]), { ascii: true });
     expect(one).toContain('1 document');

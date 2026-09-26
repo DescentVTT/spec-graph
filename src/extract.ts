@@ -264,6 +264,22 @@ const RELATION_INDEX: ReadonlyMap<string, { kind: EdgeKind; inverted: boolean; c
 );
 
 /**
+ * Whether a front-matter key is one the graph is built from: a status, an id
+ * or an alias, or a relation. Left unread, each changes a verdict - a status
+ * is unknown, a node is named by its path, an edge is missing. A title or a
+ * description left unread changes a label.
+ */
+function buildsGraph(key: string): boolean {
+  return (
+    STATUS_KEYS.includes(key) ||
+    ID_KEYS.includes(key) ||
+    key === 'alias' ||
+    key === 'aliases' ||
+    RELATION_INDEX.has(foldRelationKey(key))
+  );
+}
+
+/**
  * Keys a region must answer for itself, so the file's answer cannot shadow one.
  *
  * Identity and status and title are the three things a register exists to vary
@@ -646,7 +662,12 @@ export function extractDocument(input: ExtractInput): ExtractedDocument | null {
   }
 
   const { entries, problems: unread } = readEntries(scanned);
-  for (const problem of unread) problems.push({ message: problem.message, at: at(problem.start, problem.end) });
+  for (const problem of unread) {
+    // A line that names no key could have held any of them, and so could a
+    // block that was not read at all.
+    const lost = problem.unread && (problem.key === null || buildsGraph(problem.key));
+    problems.push({ message: problem.message, at: at(problem.start, problem.end), ...(lost ? { unread: true } : {}) });
+  }
   const byKey = new Map<string, YamlEntry>();
   for (const entry of entries) byKey.set(entry.key, entry);
   const inherited = inheritableFrontMatter(entries);
