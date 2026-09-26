@@ -27,6 +27,35 @@ all three is told apart by its order.
 `warn` is `minor` and `info` is `info`. The README has the job to add. See
 [ADR-0015](docs/adr/0015-feedback-goes-where-the-tools-already-look.md).
 
+### Breaking (library API)
+
+The command line changes only as the sections below describe. A program that
+imports spec-graph sees these as well:
+
+- **`ScannedDocument.masked` is gone.** `ScannedDocument` is spec-core's
+  `MarkdownScan`, and the masked copy is `masks.structure`, beside
+  `masks.prose` and `masks.directives`.
+- **`ScannedDocument.lines` holds the front matter's lines**, flagged
+  `frontMatter`, where it began at the body. Code that numbers or reads body
+  lines from it skips those.
+- **`ScannedDocument.links` holds images**, flagged `Link.image`. Code that
+  reads it for citations filters them out, as the analysis does but for a wiki
+  embed.
+- **Required fields are new**, so an object built by hand needs them:
+  `ScannedLine` has `frontMatter`, `html` and `comment`; `FrontMatter` has
+  `kind` and `closeLine`; `Link` has `image` and `targetEnd`; `Heading` has
+  `form`, `anchor`, `textStart`, `textEnd` and `endLine`; `ListItem` has
+  `endLine` and `quoteDepth`; `HtmlComment` has `closed`; `DocumentNode` has
+  `history`.
+- **An error from `compilePattern` is named `RegexError`.** `PatternError` is
+  the same class, so `instanceof` holds; a check of `error.name` against
+  `'PatternError'` does not.
+- **`createReferenceFilter` throws on a blank pattern**, which it used to drop,
+  and `compileGlob`, `createGlobMatcher` and `walkFiles` throw on every
+  pattern the dialect refuses.
+
+`ParseProblem` has `unread`, and it is optional.
+
 ### Changed
 
 **The matcher behind `~=` is spec-core's.** It moved, unchanged, to spec-core -
@@ -183,17 +212,13 @@ heading with a comment on its line, what followed a fence indented under a
 paragraph, the shortcut `[foo]` - is a new finding, as any other is.
 
 For the library API, the scanner's types are spec-core's, exported under the
-names they had. `ScannedDocument` is spec-core's `MarkdownScan`: `masked` is
-`masks.structure`, beside `masks.prose` and `masks.directives`, and
-`isMasked(offset, mask?)` asks any of the three; `lines` holds the front
-matter's lines too, flagged `frontMatter`, and a line of raw-text HTML is
-flagged `html`; `blocks`, `codeSpans` and `bom` are new. `scanMarkdown` reports
-images, as `Link.image`, which the analysis leaves out but for wiki embeds, and
-`Link` has `targetEnd`. `Heading` has `form`, `anchor`, `textStart`, `textEnd`
-and `endLine`; `ListItem` has `endLine` and `quoteDepth`; `HtmlComment` has
-`closed`; `FrontMatter` has `kind` and `closeLine`. `parseDirectives` skips a
-comment whose `closed` is `false`. `createLineIndex` is spec-core's, the same
-table. See [ADR-0023](docs/adr/0023-the-scanner-is-the-familys.md).
+names they had, and what that breaks is listed under
+[Breaking (library API)](#breaking-library-api). Beside it, `blocks`,
+`codeSpans` and `bom` are new on `ScannedDocument`, and
+`isMasked(offset, mask?)` asks any of its three masks. The analysis leaves
+images out but for wiki embeds. `parseDirectives` skips a comment whose
+`closed` is `false`. `createLineIndex` is spec-core's, the same table. See
+[ADR-0023](docs/adr/0023-the-scanner-is-the-familys.md).
 
 **Front matter is read by spec-core's reader, and what it does not read says
 why.** Keys are compared in lower case and one level of nesting is read as
@@ -279,9 +304,8 @@ backtick still opens none.
 The same defect read a directive quoted in inline code as a directive. This
 repository's README and ADR-0011 both write `` `<!-- @spec-history -->` `` in a
 sentence, and both were being checked as historical records. They are a
-document and an accepted decision again, and `selfcheck` counts twenty open
-obligations rather than nineteen, because ADR-0011's open question is no longer
-exempt. A document quoting `<!-- @spec-ignore -->` that way was skipped whole,
+document and an accepted decision again, and `selfcheck` counts one more open
+obligation than it did, because ADR-0011's open question is no longer exempt. A document quoting `<!-- @spec-ignore -->` that way was skipped whole,
 and is checked now.
 
 **Unclosed backtick runs cost the document's length once, not once each.** Each
