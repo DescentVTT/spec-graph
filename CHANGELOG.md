@@ -22,12 +22,20 @@ a patch fixes behaviour without asking anything of a repository that upgrades.
   spec-harness 0.1.0 did. The release never runs it: it stages a tarball it
   packed.
 
+### Fixed
+
+- The README's and this changelog's links to the ADRs and to `CLAUDE.md` were
+  relative, and the package ships neither, so on npmjs.com and inside
+  `node_modules` they led nowhere. They are GitHub URLs now. A test holds
+  every link in a shipped document to a file the package ships or to an
+  absolute URL, and every URL into this repository to a file it holds.
+
 ## 0.9.0
 
 Versions are staged by CI from a `v*` tag, through npm's trusted
 publishing, and released by a maintainer with a second factor, no longer
 published from a workstation
-([ADR-0021](docs/adr/0021-releases-are-published-by-ci.md)). There is no
+([ADR-0021](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0021-releases-are-published-by-ci.md)). There is no
 publish token anywhere, and every version from here on carries a provenance
 attestation naming the repository, the commit and the run that built the
 tarball. `npm audit signatures` checks it without taking anyone's word for
@@ -63,7 +71,7 @@ counts move when one of three boxes is ticked; a second finding identical in
 all three is told apart by its order.
 `error` is `critical`, or `major` when only `--strict` made it an error;
 `warn` is `minor` and `info` is `info`. The README has the job to add. See
-[ADR-0015](docs/adr/0015-feedback-goes-where-the-tools-already-look.md).
+[ADR-0015](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0015-feedback-goes-where-the-tools-already-look.md).
 
 ### Breaking (library API)
 
@@ -106,7 +114,7 @@ before. `compilePattern` and `PatternError` are still exported and are the same
 function and class; a caught error's `name` is now `RegexError`. The tests that
 hold the matcher to `RegExp` moved with it, and the copy is left out of this
 repository's mutation sweep and coverage, which spec-core's measure instead.
-See [ADR-0017](docs/adr/0017-a-predicate-must-finish.md).
+See [ADR-0017](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0017-a-predicate-must-finish.md).
 
 **Globs are the dialect every spec-* tool reads.** The patterns to check,
 `--ignore`, `--history` and `historyPatterns` are compiled by spec-core's glob
@@ -166,7 +174,7 @@ and `a//b` reads as `a/b`.
 
 `globToRegExp` is deprecated, and stays as the old reading that the test of
 every difference above runs against; it no longer folds case on Windows. See
-[ADR-0022](docs/adr/0022-globs-are-the-family-path-dialect.md).
+[ADR-0022](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0022-globs-are-the-family-path-dialect.md).
 
 **Documents are read by spec-core's scanner.** It moved to spec-core, built on
 this repository's scanner as its model, and is copied back into
@@ -256,7 +264,7 @@ names they had, and what that breaks is listed under
 `isMasked(offset, mask?)` asks any of its three masks. The analysis leaves
 images out but for wiki embeds. `parseDirectives` skips a comment whose
 `closed` is `false`. `createLineIndex` is spec-core's, the same table. See
-[ADR-0023](docs/adr/0023-the-scanner-is-the-familys.md).
+[ADR-0023](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0023-the-scanner-is-the-familys.md).
 
 **Front matter is read by spec-core's reader, and what it does not read says
 why.** Keys are compared in lower case and one level of nesting is read as
@@ -292,7 +300,7 @@ why.** Keys are compared in lower case and one level of nesting is read as
 
 `parseFrontMatter` keeps its signature and reads with spec-core's reader, so it
 leaves out what the reader does not read. See
-[ADR-0023](docs/adr/0023-the-scanner-is-the-familys.md).
+[ADR-0023](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0023-the-scanner-is-the-familys.md).
 
 **`archived` is a record, not a retired decision.** spec-brief closes a round
 of work by writing `status: archived` and moving the brief to an archive
@@ -325,7 +333,7 @@ retired decision loses the `stale-premise` findings on documents that depend
 on it, and the `orphaned-obligation` findings on its open items, and a baseline
 that accepted one reports that entry as no longer occurring, which fails a run
 under `--ratchet`. See
-[ADR-0011](docs/adr/0011-a-record-is-not-a-specification.md).
+[ADR-0011](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0011-a-record-is-not-a-specification.md).
 
 ### Fixed
 
@@ -536,7 +544,7 @@ the file - `--verbose` now says when it read nothing. Unreadable, as opposed to
 absent, is an error wherever the path was written. A baseline that cannot be
 *parsed* is still reported and ignored: it only ever suppresses, so a row that
 is dropped is a finding reported. See
-[ADR-0012](docs/adr/0012-a-baseline-is-a-ratchet.md).
+[ADR-0012](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0012-a-baseline-is-a-ratchet.md).
 
 ### Fixed
 
@@ -546,7 +554,7 @@ selector under `query`, went to stdout above the report. With `--format json`
 that made the output unparseable; with `--format sarif` it made a file the
 code-scanning uploader rejects over a schema rather than over the command that
 was run. Both now go to stderr, with everything else a run says about itself.
-[ADR-0015](docs/adr/0015-feedback-goes-where-the-tools-already-look.md) already
+[ADR-0015](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0015-feedback-goes-where-the-tools-already-look.md) already
 had the rule - rows "cannot go on stdout beside a JSON document without
 breaking the parse" - and these two lines were the places that did not follow
 it.
@@ -608,7 +616,7 @@ matched against targets read out of documents, which nothing limits the length
 of. Every glob - the patterns to check, `--ignore`, `--ignore-ref`, `--history` -
 now runs on the same automaton as `~=`, verified against the `RegExp` it
 replaces on every glob and path in a differential corpus. See
-[ADR-0017](docs/adr/0017-a-predicate-must-finish.md).
+[ADR-0017](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0017-a-predicate-must-finish.md).
 
 - **An invalid glob names itself.** `docs/{a` used to report
   `Invalid regular expression: /^docs\/(?:a$/i: Unterminated group`, about a
@@ -639,7 +647,7 @@ report a closed question as reopened when nobody touched it. An obligation is
 paired only by a declared id, or by its document, section and title when nothing
 else shares them; anything unpaired is reported as having appeared or
 disappeared. Human, `--format json` or `--format markdown`, and exit 0 either
-way. See [ADR-0020](docs/adr/0020-a-diff-names-what-it-can-tell-apart.md).
+way. See [ADR-0020](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0020-a-diff-names-what-it-can-tell-apart.md).
 
 - The JSON graph export names its `generator`, so a diff can warn when two
   exports came from different versions, and each item says whether its id was
@@ -673,8 +681,8 @@ kills no assertion made: tests writing to fixed paths deleted each other's files
 under Stryker's parallel workers. Race-free, the sweep read 73.42% before
 `spec-graph diff` and 75.25% with this release: `diff.ts` at 98.35%, and
 `directives.ts` from 66.88% to 78.01%. Lose every timeout and it reads 71.89%.
-See [ADR-0007](docs/adr/0007-mutation-testing.md) and
-[ADR-0019](docs/adr/0019-the-sweep-runs-in-shards.md).
+See [ADR-0007](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0007-mutation-testing.md) and
+[ADR-0019](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0019-the-sweep-runs-in-shards.md).
 
 The sweep after the directive fix moved `extract.ts` down 0.18 points, among the
 usual movement in files nobody touched, and this one was real. Four mutants
@@ -711,7 +719,7 @@ A region now carries its file's front matter minus two kinds of key. A
 on behalf of the register, not of each decision in it. So does a key the region
 **answers for itself** — its identifier, status, title and aliases, which are
 precisely the things a register exists to vary row by row.
-[ADR-0009](docs/adr/0009-a-specification-is-a-region.md) carried this as a
+[ADR-0009](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0009-a-specification-is-a-region.md) carried this as a
 narrowed open question and called it a gap. It was a defect, and it was found by
 pointing the binary at a register rather than by reading the code.
 
@@ -724,7 +732,7 @@ that keeps registers and writes rules about front matter.
 ### Added
 
 **`~=` is matched by an automaton that cannot backtrack.**
-[ADR-0016](docs/adr/0016-a-query-needs-a-sentence.md) documented this hazard
+[ADR-0016](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0016-a-query-needs-a-sentence.md) documented this hazard
 with `(a+)+$`, which nobody writes, and priced the fix at "worth it only if a
 real repository hangs". Both were wrong. `^([A-Za-z0-9_]+[ ]?)+$` is what
 somebody writes to check that a title is words separated by single spaces:
@@ -755,8 +763,8 @@ over, on one clause of the language specification read backwards in two
 different places - the word characters `\b` recognises, and whether a character
 whose upper case is ASCII may match `[A-Z]`. The second was found by the
 mutation score pointing at a corpus with a blind spot in it rather than at a
-test. See [ADR-0017](docs/adr/0017-a-predicate-must-finish.md) and
-[ADR-0007](docs/adr/0007-mutation-testing.md).
+test. See [ADR-0017](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0017-a-predicate-must-finish.md) and
+[ADR-0007](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0007-mutation-testing.md).
 
 **Configuration is discovered upward, and the file holding it is the root.**
 
@@ -766,7 +774,7 @@ cd packages/auth && spec-graph check     # the repository's rules, the
                                          # repository's paths
 ```
 
-[ADR-0010](docs/adr/0010-configuration-belongs-to-the-repository.md) worried
+[ADR-0010](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0010-configuration-belongs-to-the-repository.md) worried
 that discovery would make a run depend on where it started. Reading the working
 directory already did, and silently: a check from a package directory found no
 configuration, ran no project rules, used the default include patterns, and
@@ -777,7 +785,7 @@ to a run from the top. The walk stops at the repository — a directory holding
 `.git` — so a stray file in a home directory cannot reach it. `--root` names the
 root yourself and turns discovery off, and a path typed on the command line
 stays relative to where you typed it. See
-[ADR-0018](docs/adr/0018-the-configuration-file-is-the-root.md).
+[ADR-0018](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0018-the-configuration-file-is-the-root.md).
 
 **`spec-graph query project:<rule>` runs a registered rule by name.** The rule
 is already compiled by the time the command runs, and the alternative was
@@ -882,7 +890,7 @@ re-litigated: a **relational diff** between two states of the graph, taken
 between two `--graph-format json` exports rather than between two git revisions,
 because revisions mean spawning a binary underneath a pipeline that is a pure
 function of text. See
-[ADR-0015](docs/adr/0015-feedback-goes-where-the-tools-already-look.md).
+[ADR-0015](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0015-feedback-goes-where-the-tools-already-look.md).
 
 ### Verified
 
@@ -914,7 +922,7 @@ mostly the older formatters.
 Between those two runs `rules.ts` moved from 79.42% to 76.02% and
 `directives.ts` from 77.92% to 74.03%, with neither file touched: the tests added
 in between changed which tests `perTest` believes cover which mutants.
-[ADR-0007](docs/adr/0007-mutation-testing.md) has recorded that shape for two
+[ADR-0007](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0007-mutation-testing.md) has recorded that shape for two
 releases, and it is why a per-file drop is a question and not an answer.
 
 The hosted number is the one that governs, because it is where the build fails:
@@ -924,12 +932,12 @@ points.
 
 The incremental run on the same commit read 0.40 points low - the third
 observation after 3.18 high at 0.3.0 and 1.29 low at 0.4.0, and the reason
-[ADR-0007](docs/adr/0007-mutation-testing.md) calls it a signal rather than a
+[ADR-0007](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0007-mutation-testing.md) calls it a signal rather than a
 figure. The tag's run also logged a cache save, which this entry first read as
 the cache-key fix from 0.4.0 doing its job. *Corrected 2026-09-13:* it saved a
 copy of the stale report it had restored, because the full step never wrote one,
 and an entry saved under a tag cannot be restored on `main` in any case. See
-[ADR-0007](docs/adr/0007-mutation-testing.md).
+[ADR-0007](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0007-mutation-testing.md).
 
 **The rebuild took 168 of its 180 minutes.** 13% more mutants than 0.4.0, and 63%
 longer on the hosted runner against 15% longer locally. At 0.4.0's old cap of
@@ -960,7 +968,7 @@ selector, a message, a hint and a severity, and runs it beside the built-ins:
 }
 ```
 
-[ADR-0005](docs/adr/0005-rules-are-queries.md) claimed for three releases that
+[ADR-0005](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0005-rules-are-queries.md) claimed for three releases that
 the selector language was expressive enough for a team to write the equivalent
 of a built-in rule. It was only true at a prompt: `spec-graph query` could find
 the thing, and nothing could make finding it fail. Three ADRs recorded the same
@@ -979,7 +987,7 @@ nothing answers to is reported when the file is read - a rule that cannot work
 has to say so, because silence from a linter is indistinguishable from health.
 `query` also takes a list, read as a union.
 
-See [ADR-0016](docs/adr/0016-a-query-needs-a-sentence.md).
+See [ADR-0016](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0016-a-query-needs-a-sentence.md).
 
 **A broken reference suggests the document it was probably meant to name.**
 `ARD-0015` gets `did you mean ADR-0015?`; `0002-cacheing.md` gets its sibling
@@ -987,7 +995,7 @@ one letter away. `ADR-0003` in a repository of two ADRs gets nothing, and that
 restraint is the design rather than a limitation of it: a family name is a word
 people misremember, a number *is* the identity, and every number sits one edit
 from its neighbours. Each gate ends the same way - exactly one candidate, or
-silence. See [ADR-0004](docs/adr/0004-reference-resolution.md).
+silence. See [ADR-0004](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0004-reference-resolution.md).
 
 **A stale baseline entry says `paid` or `gone`.** `paid` is the ratchet working.
 `gone` means the document was not in this corpus at all, so nothing is known
@@ -1016,7 +1024,7 @@ UTF-16 read as UTF-8 rather than anybody's keystroke.
 ### Fixed
 
 Nothing that a corpus had hit. Two findings came out of probing rather than out
-of the suite, which is the practice [CLAUDE.md](CLAUDE.md) asks for:
+of the suite, which is the practice [CLAUDE.md](https://github.com/DescentVTT/spec-graph/blob/main/CLAUDE.md) asks for:
 
 - A near-miss gate that suggested a file which had moved **never fired**.
   Resolution already binds a path by its basename, so the suggestion had nothing
@@ -1054,7 +1062,7 @@ of the suite, which is the practice [CLAUDE.md](CLAUDE.md) asks for:
 first time anybody checked. Across 73 keys that Jekyll, Hugo, Docusaurus, Astro,
 MADR, KEP, the IETF datatracker and Obsidian actually write, one edit reads
 *none* of them as a near-miss and two edits reads exactly one: `rfc`, which it
-would tell an author to spell `refs`. [ADR-0014](docs/adr/0014-a-relation-is-spelled-both-ways.md)
+would tell an author to spell `refs`. [ADR-0014](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0014-a-relation-is-spelled-both-ways.md)
 said two edits would catch `dependancies`; one edit already did, along with
 every other typo anybody produced to argue the case. Two buys nothing and costs
 a false positive on a key that carries citations in exactly the corpora this
@@ -1087,7 +1095,7 @@ fails: **75.40%**, up from 75.14% at 0.3.0. Lose every timeout on a loaded runne
 and it reads 71.76%, which is the most margin `break: 70` has ever had.
 
 That run also caught the other half of a claim
-[ADR-0007](docs/adr/0007-mutation-testing.md) narrowed at 0.3.0. The `main` push
+[ADR-0007](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0007-mutation-testing.md) narrowed at 0.3.0. The `main` push
 and the `v0.4.0` tag were the same commit on the same runner, and the incremental
 read **1.29 points low** against the rebuild - having read 3.18 points *high* at
 0.3.0. Two observations, opposite signs. The direction is not a property, and the
@@ -1096,7 +1104,7 @@ leaves it nothing to reuse.
 
 ### Withdrawn
 
-[ADR-0013](docs/adr/0013-the-scanner-hands-back-prose.md) said a lone `\r` was
+[ADR-0013](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0013-the-scanner-hands-back-prose.md) said a lone `\r` was
 not treated as a line ending. It always was - `createLineIndex` has recognised
 all three terminators since 0.1.0 and says so in its own doc comment. The claim
 came from reading the scanner and not the table underneath it, and nobody had
@@ -1113,7 +1121,7 @@ built-ins needs a default arm. `BaselineOutcome.stale` carries `reason`, and
 ## 0.3.0
 
 Found by writing a corpus designed to break the scanner and reading the edges it
-produced, which is the practice [CLAUDE.md](CLAUDE.md) asks for and the reason
+produced, which is the practice [CLAUDE.md](https://github.com/DescentVTT/spec-graph/blob/main/CLAUDE.md) asks for and the reason
 it is there. The mutation score could not have found any of it: a mutant is a
 change to code that exists, and a construct nobody parsed has no code to mutate.
 
@@ -1156,7 +1164,7 @@ GitHub's own copy-link all produce for a file with a space in its name. The
 escapes are read as a fallback, so a filename that genuinely contains one keeps
 resolving by the spelling it was written with, and a stray `100%` is left alone.
 
-See [ADR-0013](docs/adr/0013-the-scanner-hands-back-prose.md).
+See [ADR-0013](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0013-the-scanner-hands-back-prose.md).
 
 **Front matter knew half of each relation.** `depends-on` was a key and
 `depended-on-by` was not, so a repository whose filing convention records
@@ -1167,7 +1175,7 @@ now - twenty-five keys became fifty-six - and a test holds the invariant.
 
 Keys also fold on separators and case, so `depends-on`, `depends_on` and
 `dependsOn` are one key rather than the two that happened to be written out.
-See [ADR-0014](docs/adr/0014-a-relation-is-spelled-both-ways.md).
+See [ADR-0014](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0014-a-relation-is-spelled-both-ways.md).
 
 **`--verbose --format json` printed human lines onto stdout beside the JSON.**
 
@@ -1178,11 +1186,11 @@ See [ADR-0014](docs/adr/0014-a-relation-is-spelled-both-ways.md).
   ignored. Both halves of that gate matter: `deprecated: true` is one edit from
   `deprecates` and a boolean is not a citation. It says what is true - *"the key
   declares no relation"* - and offers the near spellings rather than asserting
-  one. See [ADR-0014](docs/adr/0014-a-relation-is-spelled-both-ways.md).
+  one. See [ADR-0014](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0014-a-relation-is-spelled-both-ways.md).
 - **`--ratchet`**, and `"ratchet": true` in the configuration. The other side of
   a baseline: with it, a declared finding that no longer occurs fails the build,
   named, with `--record-baseline` as the fix. Off by default, because
-  [ADR-0012](docs/adr/0012-a-baseline-is-a-ratchet.md) is right that failing a
+  [ADR-0012](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0012-a-baseline-is-a-ratchet.md) is right that failing a
   build because somebody fixed something is a strange way to encourage them -
   and on for a team that has decided its debt only moves one way, because a note
   on a green build is a line that scrolls past.
@@ -1192,7 +1200,7 @@ See [ADR-0014](docs/adr/0014-a-relation-is-spelled-both-ways.md).
   same rule/specification/citation identity a baseline is keyed on, so an
   annotation survives a reformat. Deterministic and timestamp-free like every
   other output here. See
-  [ADR-0015](docs/adr/0015-feedback-goes-where-the-tools-already-look.md).
+  [ADR-0015](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0015-feedback-goes-where-the-tools-already-look.md).
 
 ### Not added
 
@@ -1202,14 +1210,14 @@ semantics that differ on all three platforms would be the one part of this
 program that could not honour byte-determinism, inside a codebase whose whole
 test strategy rests on everything between the edges being a pure function of
 text. Reasoning in
-[ADR-0015](docs/adr/0015-feedback-goes-where-the-tools-already-look.md).
+[ADR-0015](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0015-feedback-goes-where-the-tools-already-look.md).
 
 ### Measured
 
 684 tests, and a mutation score of **75.14% on the hosted runner** - the figure
 that governs, up from 73.32% at v0.2.0 - against 79.69% over 8,126 mutants on a
 developer machine. The guard stays at `break: 70`. See
-[ADR-0007](docs/adr/0007-mutation-testing.md), which 0.3.0 also amended: an
+[ADR-0007](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0007-mutation-testing.md), which 0.3.0 also amended: an
 incremental run read 3.18 points *high* against a full rebuild of the same
 commit, so the claim that incremental errs low was wrong.
 
@@ -1224,7 +1232,7 @@ spellings held one id per key. A second claimant therefore did not make the link
 ambiguous; it overwrote the first, and the link went to whichever file was
 indexed last.
 
-[ADR-0004](docs/adr/0004-reference-resolution.md) has always said two candidates
+[ADR-0004](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0004-reference-resolution.md) has always said two candidates
 is worse than none, and a reference matching several documents is reported as
 ambiguous rather than bound to whichever was indexed first. That now holds for
 paths too.
@@ -1249,7 +1257,7 @@ keeps no registers is unaffected, and one that does needs no change beyond the
 upgrade.
 
 Since 0.1.3 a register has yielded one specification per row or per section
-([ADR-0009](docs/adr/0009-a-specification-is-a-region.md)), and every one of
+([ADR-0009](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0009-a-specification-is-a-region.md)), and every one of
 those carried the file's path into the resolver's path index. That index keeps
 whichever entry was written last, so the file's own entry was overwritten by its
 final region, and:
@@ -1295,12 +1303,12 @@ requirements table headed `Status` was enough to trigger it.
   `historyPatterns` in the configuration or by `<!-- @spec-history -->`, and
   never guessed from a filename. Its links are still checked and work handed
   *into* it is still a ghost handover; its own obligations and lifecycle are
-  not. See [ADR-0011](docs/adr/0011-a-record-is-not-a-specification.md).
+  not. See [ADR-0011](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0011-a-record-is-not-a-specification.md).
 - **Baselines.** `--record-baseline` writes today's findings as accepted debt;
   `--baseline` reports only what is new since. Keyed on the specification and
   the citation rather than on a line number, so it survives edits, reordering
   and renames. Paid debt is reported, not failed. See
-  [ADR-0012](docs/adr/0012-a-baseline-is-a-ratchet.md).
+  [ADR-0012](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0012-a-baseline-is-a-ratchet.md).
 
 ### Fixed
 
@@ -1315,10 +1323,10 @@ requirements table headed `Status` was enough to trigger it.
 - **A specification is a region of a file, not a file.** A register kept as
   headings or as a table yields one specification per decision, each with its
   own lifecycle, obligations and relations. See
-  [ADR-0009](docs/adr/0009-a-specification-is-a-region.md).
+  [ADR-0009](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0009-a-specification-is-a-region.md).
 - **Repository configuration.** `.spec-graph.json`, `spec-graph.config.json`, or
   a `"spec-graph"` key in `package.json`, with family allow and deny rules. See
-  [ADR-0010](docs/adr/0010-configuration-belongs-to-the-repository.md).
+  [ADR-0010](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0010-configuration-belongs-to-the-repository.md).
 
 ## 0.1.2
 
@@ -1326,7 +1334,7 @@ requirements table headed `Status` was enough to trigger it.
 
 - `--ignore-ref`, for repositories where `[[...]]` tags a concept rather than
   naming a file. See
-  [ADR-0008](docs/adr/0008-wiki-links-carry-no-path.md).
+  [ADR-0008](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0008-wiki-links-carry-no-path.md).
 
 ## 0.1.1
 
