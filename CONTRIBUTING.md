@@ -109,10 +109,12 @@ heuristic, check that a mutant of it dies.
 `src/vendor/spec-core/` is the family's shared library, copied in by spec-core's
 `scripts/vendor.mjs` and held to the SHA-256 of every file by
 `tests/vendor.test.ts`. A change to it is made in spec-core and copied again,
-never made here. It is left out of the mutation sweep and of coverage: its
-mutants are killed by spec-core's own suite
-([its ADR-0001](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0001-one-core-copied-by-hash.md)), and counting
-them here would move this repository's score with code it does not own.
+never made here. spec-core's `LICENSE` is copied beside it, and `package.json`
+ships it with the compiled copies. It is left out of the mutation sweep and of
+coverage: its mutants are killed by spec-core's own suite ([its
+ADR-0001](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0001-one-core-copied-by-hash.md)),
+and counting them here would move this repository's score with code it does not
+own.
 
 CI runs the same sweep in four shards and merges them into one report and one
 score (`scripts/mutation-shards.mjs`, ADR-0019). A new file under `src/` lands
