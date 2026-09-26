@@ -77,6 +77,18 @@ parse problem at the value now, naming the reason and how to write it, and so
 are a line that is not `key: value`, a key written twice - the last still wins -
 and TOML front matter, which was read as nothing, in silence.
 
+**What the graph loses is said without `--verbose`.** Parse problems are
+listed under `--verbose`, and most can wait there. A status, an id, an alias or
+a relation left out cannot: `status: Superseded by ADR-3: see notes` reads as
+`unknown`, which no lifecycle rule holds to anything, and a failing check
+prints "consistent". The same goes for front matter that opens
+and never closes, which the scan reads as a rule and Markdown - `----` and
+`....` closed a block before and close none now - and for a line that belongs
+to no key, such as `status: accepted` indented under nothing. Each of those is
+a parse problem, and a run without `--verbose` counts them in one line above
+its verdict. A title or a description left out changes a label, not a verdict,
+and is not counted.
+
 ### What a user sees change
 
 Each row is a difference between the scan before and after, named by
@@ -107,9 +119,11 @@ spec-core's differential test, and each has a test here: in
 | a fence four columns past the margin, or past its list item's text | a fence, often to the end | indented code after a blank line, text under a paragraph |
 | text four columns past a list item's text, after a blank line | the item's text: nothing in a list was code | indented code |
 | `----` as a file's first line | front matter | a rule |
+| `----` or `....` closing front matter | closed it | leaves it open: nothing in it is read, and a parse problem |
 | `title: ADR-7: Sharding` | the title `ADR-7: Sharding` | not read, and a parse problem: quote it |
 | a value continued on the next line | its first line | not read, and a parse problem |
 | a list at its key's own indentation | an empty value | the list |
+| `status: accepted` indented, as the first key | the status | not read: a line that belongs to no key |
 | `'it''s'` and `"a\tb"` | `it''s` and `atb` | `it's`, and a tab between `a` and `b` |
 | TOML front matter | nothing, in silence | nothing, and a parse problem |
 | a comment that opens a line and never closes | text | a comment to the end, and a parse problem |

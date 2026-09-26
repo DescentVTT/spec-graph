@@ -162,7 +162,11 @@ where it wrote one of these:
   still the item's text. A fence line that deep opens no fence - after a blank
   line it is indented code, and under a paragraph it is text - where it used to
   open one at any depth and, unclosed, run to the end of the document.
-- **Front matter opens on exactly `---` or `+++`.** `----` is a rule.
+- **Front matter opens on exactly `---` or `+++`, and closes on exactly
+  `---`, `...` or `+++`.** `----` is a rule. And `----` or `....` under an
+  opening `---` closed the block, and now leaves it open: a block that never
+  closes is read as a rule and Markdown, none of its keys are read, and a parse
+  problem says where it opened.
 
 For the library API, the scanner's types are spec-core's, exported under the
 names they had. `ScannedDocument` is spec-core's `MarkdownScan`: `masked` is
@@ -192,6 +196,19 @@ why.** Keys are compared in lower case and one level of nesting is read as
   not `key: value`, a key written twice, of which the last still wins, and TOML
   front matter, which was read as nothing in silence. A status left out this way
   is looked for in a `## Status` section, as a missing one always was.
+- **What the graph lost is counted without `--verbose`.** A status, an id, an
+  alias or a relation left out - or a block never closed, or a line that belongs
+  to no key - can turn a failing check into a passing one:
+  `status: Superseded by ADR-3: see notes` reads as unknown, and the
+  supersession finding 0.8.0 reported is gone. So a run without `--verbose` prints one
+  line above its verdict, `! 2 front-matter values not read - see --verbose`, in
+  the terminal and in `--format markdown`. It is not a finding and does not
+  change the exit code. A title or a description left out is not counted.
+  `ParseProblem` says which problems count, as `unread`.
+- **A key indented under nothing is not read.** `status: accepted` indented on
+  the first line of front matter is valid YAML, and 0.8.0 read it. It is a line
+  that belongs to no key now, so the document reads as `unknown`, and the count
+  of values not read includes it. Write the key at the margin.
 - **A list written at its key's own indentation is a list.** `deps:` over
   `- ADR-1` was an empty value.
 - **Quoted values are YAML's.** `'it''s'` is `it's`, and `"a\tb"` holds a tab.

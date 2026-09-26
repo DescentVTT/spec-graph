@@ -113,6 +113,15 @@ describe('front matter', () => {
     expect(problems('---\nstatus: accepted\n---\n# ADR-0001: A\n')).toEqual([]);
     // Four dashes open no front matter, so there is none to be wrong.
     expect(problems('----\nstatus: accepted\n----\n# ADR-0001: A\n')).toEqual([]);
+    // Nor do they close it, and neither do four dots: both did before, and a
+    // block left open is read as nothing, status and relations included.
+    const open = 'front matter: opened here and never closed, so none of it is read - close it with "---" on a line of its own';
+    for (const closer of ['----', '....']) {
+      const text = `---\nstatus: superseded\n${closer}\n# ADR-0001: A\n`;
+      expect(problems(text), closer).toEqual([[open, 1, 1]]);
+      expect(analyseSources([{ path: 'docs/adr/0001-a.md', text }]).graph.document('ADR-0001')?.phase).toBe('unknown');
+    }
+    expect(problems('+++\ntitle = "A"\n# ADR-0001: A\n')[0]?.[0]).toContain('close it with "+++"');
   });
 
   it('flattens values to a list regardless of how they were written', () => {

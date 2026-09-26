@@ -460,6 +460,14 @@ export interface Diagnostic {
 export interface ParseProblem {
   readonly message: string;
   readonly at: SourceRef;
+  /**
+   * Front matter held something the graph is built from - a status, an id, an
+   * alias or a relation, or the whole block - and it was not read. Problems
+   * are listed under `--verbose`, and these are counted without it: a status
+   * left out reads as unknown, which can turn a failing check into a passing
+   * one.
+   */
+  readonly unread?: boolean | undefined;
 }
 
 export interface AnalysisSummary {

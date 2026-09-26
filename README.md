@@ -128,7 +128,12 @@ onto four phases, chosen so one question can be answered from the phase alone:
 The status is found wherever your team writes it — front matter (`status:`,
 `state:`, `stage:`), a `## Status` section, `**Accepted** (2026-03-01) ✅`, or a
 `docs/adr/archive/` directory. `Accepted, later superseded by ADR-0009` is
-retired: retirement is terminal, so a retirement word anywhere wins.
+retired: retirement is terminal, so a retirement word anywhere wins. Front
+matter is read as YAML reads it, and a value YAML would not read -
+`status: Superseded by ADR-9: see notes`, where a plain value cannot hold `: ` -
+is left out rather than guessed at. Every run says how many statuses, ids and
+relations it left out that way, and `--verbose` says where and why: quote the
+value and it is read.
 
 `archived` is none of the four. It is what spec-brief writes on a round of work
 it has closed, and every spec-* tool reads it as a **record**: depending on it
