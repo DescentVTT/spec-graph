@@ -13,6 +13,23 @@ attestation naming the repository, the commit and the run that built the
 tarball. `npm audit signatures` checks it without taking anyone's word for
 anything. 0.2.0 to 0.8.0 have none and never will.
 
+**What to expect on upgrading.** More findings rather than fewer, and nearly
+all of them from one change: a code span ends with its paragraph. Over a large
+repository of hand-written decisions and logs that 0.8.0 checked, almost every
+difference was a `broken-reference`. Bare identifiers that a lone backtick
+earlier in a paragraph or a table had hidden are read now, and many name
+nothing; a few that 0.8.0 read out of real code spans, its backticks out of
+step, are code again and go. Text read for the first time can hold a relation,
+and bring a `stale-premise` or a `ghost-handover` with it, and a relation read
+out of code can take an `unreciprocated-supersession` away with it. A
+paragraph indented four columns past its list item's text after a blank line
+is code now, as CommonMark reads it: this repository's ADRs lost seven
+relations that way, and no finding. The glob, `archived` and front-matter
+changes are narrower, and each is described below; a pattern the dialect
+refuses stops the run with exit `2` and says how to write it. Under
+`--ratchet`, expect to record the baseline once; "What a baseline sees", under
+Changed, lists the entries that go stale.
+
 ### Added
 
 **`--format gitlab`**, the Code Quality report a GitLab merge request reads,
@@ -376,6 +393,23 @@ documents into identical graph exports and identical findings. Over a corpus
 written to hit each difference above, every difference in their output was one
 of them. The scanner's own mutants, 72% to 77% here, are spec-core's sweep's
 now, at 98% there; what the move left here is measured by CI's sweep.
+
+Then the review of those rounds: `npm run lint`, 1,053 tests, `npm run build`
+and `npm run selfcheck`, with spec-core copied again at cbe2223. Every new test
+fails against the source the review read but one, which holds what an archived
+document is still exempt from. They cover spec-core's licence in the package,
+`**` inside a name and an extended glob, code past a list item's text, an empty
+`--ignore` and `--ignore-ref`, what an archived document still answers for, the
+count of front-matter values not read, front matter that never closes, and a
+GitLab fingerprint across a ticked box. A baseline recorded by 0.8.0 over a
+corpus holding each scanner difference, run under `--ratchet`, accepted the
+finding on a moved item and went stale only on findings the scan no longer
+produces. Against 0.8.0 over the review's corpora for `archived`, the difference
+is the stale premise and the orphaned obligation the change is for. Over the
+large repository above, this branch and the one reviewed report identical
+findings. spec-core's documents and the seven fixture corpora read into the same
+graph export as before the copy; this repository's lost the seven relations
+above.
 
 ## 0.8.0
 
