@@ -61,11 +61,28 @@ what the scan reports, which no other tool has to agree with:
 Everywhere else the shared scan reads a document differently, spec-graph
 follows it.
 
+### Front matter
+
+**spec-graph reads front matter through spec-core's reader**, asking it for the
+one level of nesting spec-graph always flattened to `parent.child`. `src/yaml.ts`
+keeps the shape the rest of spec-graph reads: a key in lower case, as a relation
+key, a status key and `fm.<key>` in a selector were always compared, and a value
+that is a string or a list of them.
+
+**A value the reader does not read is not read.** For a value continued onto
+the next line, a plain value holding `: `, a block scalar, an anchor or a tag,
+the old reader kept the text on the key's line: not what YAML says the value
+is, and GitHub's rendering of the same block shows an error instead. Each is a
+parse problem at the value now, naming the reason and how to write it, and so
+are a line that is not `key: value`, a key written twice - the last still wins -
+and TOML front matter, which was read as nothing, in silence.
+
 ### What a user sees change
 
 Each row is a difference between the scan before and after, named by
 spec-core's differential test, and each has a test here: in
-`tests/markdown.test.ts`, and for anchors in `tests/resolve.test.ts`.
+`tests/markdown.test.ts`, and for anchors and front matter in
+`tests/resolve.test.ts` and `tests/parsing.test.ts`.
 
 | Written | Before | Now |
 | --- | --- | --- |
@@ -89,6 +106,11 @@ spec-core's differential test, and each has a test here: in
 | a fence opened in a block quote and never closed | code to the end of the document | the fence ends with its quote |
 | an indented fence after a blank line, outside a list | a fence, often to the end | indented code |
 | `----` as a file's first line | front matter | a rule |
+| `title: ADR-7: Sharding` | the title `ADR-7: Sharding` | not read, and a parse problem: quote it |
+| a value continued on the next line | its first line | not read, and a parse problem |
+| a list at its key's own indentation | an empty value | the list |
+| `'it''s'` and `"a\tb"` | `it''s` and `atb` | `it's`, and a tab between `a` and `b` |
+| TOML front matter | nothing, in silence | nothing, and a parse problem |
 | a comment that opens a line and never closes | text | a comment to the end, and a parse problem |
 | a fence inside a comment | code from there on | text in a comment |
 | a list marker inside a comment, then an indented block | the block continued a list | indented code |
@@ -101,6 +123,7 @@ spec-core's differential test, and each has a test here: in
 | Read images as references | A diagram of a decision becomes a relation to it, and a moved PNG a broken reference. |
 | Resolve the slug alone, as before | A link copied from the rendered page to a repeated heading is reported broken, and it works. |
 | Resolve GitHub's anchor alone | The same for every heading but a repeat, and a region's anchors would depend on the headings of the regions before it. |
+| Keep the first line of a value continued onto the next | It is not the value, and the rest of it went missing in silence. |
 
 ## Consequences
 
@@ -116,12 +139,12 @@ name, and its shape changed where spec-core's did: the masked copy is
 `masks.structure`, front-matter lines are in `lines`, and links, headings,
 items and comments carry more than they did. The changelog lists each.
 
-The scanner and the line table were 1,278 lines here, and spec-graph's
-reading of what the scan reports is 136, most of them comments. The scanner's
-mutants are spec-core's sweep now; this repository's measures the reading
-([ADR-0007](0007-mutation-testing.md)). The shard that held `markdown.ts` holds
-less than [ADR-0019](0019-the-sweep-runs-in-shards.md) measured until the next
-sweep re-measures it.
+The scanner, the front-matter reader and the line table were 1,544 lines here,
+and spec-graph's reading of what they report is 269, most of them comments.
+Their mutants are spec-core's sweep now; this repository's measures the reading
+([ADR-0007](0007-mutation-testing.md)). The shards that held `markdown.ts` and
+`yaml.ts` hold less than [ADR-0019](0019-the-sweep-runs-in-shards.md) measured
+until the next sweep re-measures them.
 
 The shared scan is slower. Over this repository's documents, its fixtures and
 spec-core's documents, 325 KB, one pass took 17 ms before and 44 ms now, and

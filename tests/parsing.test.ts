@@ -25,6 +25,7 @@ import {
 } from '../src/lifecycle.js';
 import { scanMarkdown } from '../src/markdown.js';
 import { basenamePosix, dirnamePosix, joinPosix, normalisePosix, resolveFrom, toPosix } from '../src/paths.js';
+import { analyseSources } from '../src/runner.js';
 import type { EdgeKind } from '../src/types.js';
 import { parseFrontMatter, toRecord, valuesOf } from '../src/yaml.js';
 
@@ -71,6 +72,43 @@ describe('front matter', () => {
 
   it('survives an empty value', () => {
     expect(parse('status:\n')).toEqual({ status: '' });
+  });
+
+  it('does not read a value YAML does not say, rather than read its first line', () => {
+    // Each was read as the text on the key's line: `A: colonised title`,
+    // `first`, and the literal `|`.
+    expect(parse(['title: A: colonised title', 'summary: first', '  second', 'body: |', '  text', 'status: accepted'].join('\n'))).toEqual({
+      status: 'accepted',
+    });
+  });
+
+  it('reads a list written at the indentation of its key, as YAML allows', () => {
+    // This one was read as an empty value.
+    expect(parse('deps:\n- ADR-1\n- ADR-2\n')).toEqual({ deps: ['ADR-1', 'ADR-2'] });
+  });
+
+  it('reads quoted values as YAML does', () => {
+    expect(parse(`a: 'it''s'\nb: "tab\\tthen \\"quoted\\""\n`)).toEqual({ a: "it's", b: 'tab\tthen "quoted"' });
+  });
+
+  it('keeps the last of a key written twice', () => {
+    expect(parse('status: draft\nStatus: accepted\n')).toEqual({ status: 'accepted' });
+  });
+
+  it('says why a key in a document says nothing, at the value', () => {
+    const problems = (text: string) =>
+      analyseSources([{ path: 'docs/adr/0001-a.md', text }]).corpus.problems.map((p) => [p.message, p.at.span.start.line, p.at.span.start.column]);
+    expect(problems('---\nstatus: accepted\ntitle: A: b\nsummary: one\n  two\nstatus: draft\n---\n# ADR-0001: A\n')).toEqual([
+      ['front matter: "title" is not read: a plain value cannot contain ": "; quote it', 3, 8],
+      ['front matter: "summary" is not read: the value continues on the next line; keep it on one line, or quote it', 4, 10],
+      ['front matter: "status" is declared twice (first on line 2)', 6, 1],
+    ]);
+    expect(problems('+++\ntitle = "A"\n+++\n# ADR-0001: A\n')).toEqual([
+      ['front matter: TOML front matter is not read; write YAML between "---" lines', 1, 1],
+    ]);
+    expect(problems('---\nstatus: accepted\n---\n# ADR-0001: A\n')).toEqual([]);
+    // Four dashes open no front matter, so there is none to be wrong.
+    expect(problems('----\nstatus: accepted\n----\n# ADR-0001: A\n')).toEqual([]);
   });
 
   it('flattens values to a list regardless of how they were written', () => {

@@ -33,7 +33,7 @@ files ─▶ markdown.ts ─▶ extract.ts ─▶ resolve.ts ─▶ graph.ts ─
 | --- | --- |
 | `source.ts` | Offset ↔ line/column, on spec-core's line table. Everything user-visible carries a `SourceRef`. |
 | `markdown.ts` | What spec-graph reads out of spec-core's scan: which links are references, which anchors a heading answers to, which lines are Markdown. |
-| `yaml.ts` | Front matter, with the offset of every value. |
+| `yaml.ts` | Front matter as spec-graph reads it from spec-core's reader: keys in lower case, a value a string or a list, and why a value was not read. |
 | `directives.ts` | `<!-- @spec-* -->` annotations, the override escape hatch. |
 | `lifecycle.ts` | Status vocabulary → four-phase lattice. |
 | `identity.ts` | Document ids and the aliases that resolve to them. |
@@ -48,7 +48,7 @@ files ─▶ markdown.ts ─▶ extract.ts ─▶ resolve.ts ─▶ graph.ts ─
 | `diff.ts` | Two JSON exports compared, naming only the changes it can tell apart. |
 | `glob.ts` / `paths.ts` | Pattern lists, the walk and reference-target matching; POSIX path arithmetic. |
 | `runner.ts` / `cli.ts` | Orchestration and the command line. |
-| `vendor/spec-core/` | spec-core's modules, copied byte for byte: the Markdown scanner, the line table, the glob dialect and the matcher behind `~=`. Never edited here: see below. |
+| `vendor/spec-core/` | spec-core's modules, copied byte for byte: the Markdown scanner and front-matter reader, the line table, the glob dialect and the matcher behind `~=`. Never edited here: see below. |
 
 ## Where changes usually go
 
