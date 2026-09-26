@@ -705,7 +705,7 @@ recorded on a Windows checkout holds in Linux CI:
 | pattern | matches |
 | --- | --- |
 | `docs/**/*.md` | Markdown anywhere under `docs`; `**` is whole directories, none or more |
-| `docs/**.md` | `docs/a.md` only: `**` inside a name is `*` |
+| `docs/**.md` | refused: `**` is whole directories or nothing, so write `docs/**/*.md` or `docs/*.md` |
 | `docs` | a file called `docs`, or everything under the directory |
 | `docs/` | everything under `docs`, and not `docs` itself |
 | `{docs,specs}` | two literals, so both directories and what they hold |
@@ -714,8 +714,10 @@ recorded on a Windows checkout holds in Linux CI:
 | `docs\adr\*.md` | the same as `docs/adr/*.md`: a `\` is a separator |
 
 A class never matches a `/`, and a pattern that cannot mean a path under the
-root — an unclosed `[` or `{`, `..`, a lone `.` — stops the run with exit `2`
-and names the pattern, wherever it was written. A `..` typed below the root,
+root — an unclosed `[` or `{`, `..`, a lone `.`, an empty one — stops the run
+with exit `2` and names the pattern, wherever it was written. So does an
+extended glob, `+(a|b)`: write `{a,b}`. A parenthesis with no `|` in its group
+is itself, so `C++(notes).md` names that file. A `..` typed below the root,
 `spec-graph "../*.md"` from `docs/deep`, is resolved against where you typed
 it. A bare `--ignore` name, `--ignore drafts`, still prunes that directory at
 any depth.
