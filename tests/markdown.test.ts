@@ -367,6 +367,29 @@ describe('links', () => {
     expect(diagnostics.map((d) => d.rule)).not.toContain('broken-reference');
   });
 
+  it('reads a badge wrapped in a link as the link alone', () => {
+    // spec-core lists the image inside a link's text after the link, since
+    // CommonMark renders it there. A badge cites nothing: neither its picture
+    // nor its alt text may reach the graph, and the link around it must.
+    const badge = '[![ADR-0003 badge](0003-pictured.md)](0002-target.md)';
+    const scanned = scanMarkdown(badge);
+    expect(scanned.links.map((l) => [l.image, l.target])).toEqual([
+      [false, '0002-target.md'],
+      [true, '0003-pictured.md'],
+    ]);
+    expect(referenceLinks(scanned).map((l) => l.target)).toEqual(['0002-target.md']);
+
+    const { graph, diagnostics } = analyseSources([
+      { path: 'docs/adr/0001-badges.md', text: `# ADR-0001: Badges\n\n${badge}\n[![status](missing.svg)](0002-target.md)\n` },
+      { path: 'docs/adr/0002-target.md', text: '# ADR-0002: Target\n' },
+      { path: 'docs/adr/0003-pictured.md', text: '# ADR-0003: Pictured\n' },
+    ]);
+    expect(graph.edges.filter((e) => e.kind !== 'contains').map((e) => [e.from, e.to, e.declaredAt.span.start.line])).toEqual([
+      ['ADR-0001', 'ADR-0002', 3],
+    ]);
+    expect(diagnostics).toEqual([]);
+  });
+
   it('handles nested brackets in a label', () => {
     expect(targets('[see [ADR-3] here](0003.md)')).toEqual(['0003.md']);
   });

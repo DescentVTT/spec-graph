@@ -7,6 +7,16 @@ a patch fixes behaviour without asking anything of a repository that upgrades.
 
 ### Changed
 
+- **spec-core 8840d36.** An image inside a link's text, a badge wrapped in a
+  link such as `[![build](badge.svg)](actions)`, is listed in
+  `ScannedDocument.links` after the link around it, where CommonMark renders
+  it; the scan used to skip it. spec-graph reads no image as a reference but a
+  wiki embed, so no finding and no edge moves: run over the same documents,
+  this repository's, its fixtures' and the rest of the family's, every `check`
+  format and every graph export is byte for byte what 0.9.0 wrote. A program
+  that reads `links` for images sees the badges it missed. `links`,
+  `listItems` and `masks.directives` are made the first time they are read,
+  and kept, rather than for every document; they hold what they held.
 - `npm publish` in a checkout refuses to run outside GitHub Actions, so a
   version cannot reach npm from a workstation by mistake, without provenance;
   spec-harness 0.1.0 did. The release never runs it: it stages a tarball it
