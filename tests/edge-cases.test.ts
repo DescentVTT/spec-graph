@@ -473,6 +473,22 @@ describe('obligation promotion', () => {
     expect(corpus.items[0]?.text).toBe('Which policy? Deferred to ADR-0002, and see the notes.');
   });
 
+  it('quotes a badge wrapped in a link as its alt text, and an image as its alt text', () => {
+    // One pattern for both used to match from the link's `[` to the image's
+    // `)`, and left `![icon](0002-b.md)` in the finding.
+    const { corpus } = analyse({
+      'docs/adr/0002-b.md': '# B\n',
+      'docs/adr/0001-a.md': [
+        '# A',
+        '',
+        '## Open Questions',
+        '',
+        '- [ ] Settle [![icon](icon.png)](0002-b.md) first, then ![chart](c.png) the rest.',
+      ].join('\n'),
+    });
+    expect(corpus.items[0]?.text).toBe('Settle icon first, then chart the rest.');
+  });
+
   it('truncates a very long obligation rather than flooding the report', () => {
     const { corpus } = analyse({
       'docs/adr/0001-a.md': ['# A', '', '## Open Questions', '', `- [ ] ${'word '.repeat(60)}`].join('\n'),

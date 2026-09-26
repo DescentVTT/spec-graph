@@ -105,6 +105,18 @@ export const RULE_DECISIONS: Readonly<Record<RuleId, string>> = Object.freeze({
 });
 
 /**
+ * Where a reader opens the ADR a rule's decision is written in. The paths in
+ * `RULE_DECISIONS` are the repository's - selfcheck reads them, and a rename
+ * breaks the pointer in the same run - but no package ships `docs/`, so a path
+ * printed to somebody who installed spec-graph named nothing they had. The tag
+ * of the release they run is the ADR as it stood for the rules they got.
+ */
+export function decisionUrl(path: string, version: string): string {
+  return `https://github.com/DescentVTT/spec-graph/blob/v${version}/${path}`;
+}
+
+
+/**
  * The severity map `--strict` implies, and which rules it actually moved.
  *
  * Strict raises `warn` to `error` and leaves `info` alone. That asymmetry is

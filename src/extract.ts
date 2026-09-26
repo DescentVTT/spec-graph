@@ -1136,7 +1136,10 @@ function normaliseHeading(text: string): string {
  */
 function summarise(text: string): string {
   const flat = text
-    .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
+    // An image first, so that a badge wrapped in a link, `[![icon](i.png)](x)`,
+    // leaves `[icon](x)` for the link's pattern rather than a stray `![icon](x)`.
+    .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
     // `[[target|display]]` keeps the display half: that is the text a reader
     // of the rendered document actually sees.
     .replace(/\[\[(?:[^\]|]*\|)?([^\]]*)\]\]/g, '$1')
