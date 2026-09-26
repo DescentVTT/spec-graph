@@ -7,7 +7,7 @@ itself; what follows is the map that is hard to recover by reading.
 
 ```bash
 npm install
-npm test          # 1010 tests
+npm test          # vitest, the whole suite, in seconds
 npm run lint      # tsc --noEmit, strict
 npm run build     # emits dist/
 npm run selfcheck # spec-graph checks its own ADRs
