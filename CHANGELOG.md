@@ -3,7 +3,15 @@
 Notable changes, newest first. Versions follow [semver](https://semver.org):
 a patch fixes behaviour without asking anything of a repository that upgrades.
 
-## Unreleased
+## 0.9.1
+
+Nothing to do on upgrading. The same documents give the same findings, in
+every format, and the same graph exports as they did under 0.9.0; the one
+difference a program that imports spec-graph can see is a badge wrapped in a
+link, which `ScannedDocument.links` now lists. The scanner is spec-core
+8840d36, the README's and this changelog's links to the ADRs work on
+npmjs.com and in `node_modules`, and `npm publish` refuses to run from a
+checkout.
 
 ### Changed
 
