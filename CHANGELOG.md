@@ -5,8 +5,9 @@ a patch fixes behaviour without asking anything of a repository that upgrades.
 
 ## 0.9.0
 
-Versions are published by CI from a `v*` tag, through npm's trusted
-publishing, and no longer from a workstation
+Versions are staged by CI from a `v*` tag, through npm's trusted
+publishing, and released by a maintainer with a second factor, no longer
+published from a workstation
 ([ADR-0021](docs/adr/0021-releases-are-published-by-ci.md)). There is no
 publish token anywhere, and every version from here on carries a provenance
 attestation naming the repository, the commit and the run that built the
