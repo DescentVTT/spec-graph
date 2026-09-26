@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+
 import { describe, expect, it } from 'vitest';
 
 import { EXIT_ERROR, EXIT_FAILED, EXIT_OK, main, parseArgs, UsageError } from '../src/cli.js';
@@ -867,8 +869,13 @@ describe('rules', () => {
     // is written down once, in an ADR this corpus checks, and pointed at from
     // here - a second copy would be the drift this tool exists to catch.
     const result = await run('rules', '--explain');
-    expect(result.out).toContain('docs/adr/0002-lifecycle-lattice.md');
-    expect(result.out).toContain('docs/adr/0014-a-relation-is-spelled-both-ways.md');
+    // Where a reader who installed spec-graph can open it: no package ships
+    // docs/, and the tag of the running release is the ADR its rules were cut from.
+    const { version } = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { version: string };
+    const at = `https://github.com/DescentVTT/spec-graph/blob/v${version}/docs/adr/`;
+    expect(result.out).toContain(`${at}0002-lifecycle-lattice.md`);
+    expect(result.out).toContain(`${at}0014-a-relation-is-spelled-both-ways.md`);
+    expect(result.out).not.toMatch(/^\s+docs\/adr\//m);
   });
 
   it('narrows to one rule when asked for one', async () => {

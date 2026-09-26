@@ -3,6 +3,26 @@
 Notable changes, newest first. Versions follow [semver](https://semver.org):
 a patch fixes behaviour without asking anything of a repository that upgrades.
 
+## 0.9.2
+
+Three small fixes found when 0.9.1 was read as a user reads it: `rules
+--explain` points at ADRs a reader can open, a badge wrapped in a link reads
+as its alt text in a finding, and the tarball carries one README.
+
+### Fixed
+
+- **`rules --explain` names each ADR by its address on GitHub**, at the tag
+  of the running release, `https://github.com/DescentVTT/spec-graph/blob/v0.9.2/docs/adr/...`.
+  It printed the repository path, `docs/adr/0002-lifecycle-lattice.md`, and
+  no package ships `docs/`, so the path named nothing a user had.
+- **A badge wrapped in a link reads as its alt text** in the obligation a
+  finding quotes. One pattern for images and links matched from the link's
+  `[` to the image's `)` and left `![icon](x.md)` in the text; images are
+  now read first, so `[![icon](icon.png)](x.md)` reads `icon`.
+- **The package ships one README, its own.** `files` named `README.md`,
+  which npm reads as a name at any depth, so the tarball carried spec-core's
+  vendored README beside the licence it ships; the entry is `/README.md`.
+
 ## 0.9.1
 
 Nothing to do on upgrading. The same documents give the same findings, in

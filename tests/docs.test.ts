@@ -95,17 +95,20 @@ describe('the source tree', () => {
 describe('the documents the package ships', () => {
   const REPOSITORY = 'https://github.com/DescentVTT/spec-graph/blob/main/';
   const { files } = JSON.parse(readFileSync('package.json', 'utf8')) as { files: string[] };
-  const ships = (path: string): boolean => files.some((entry) => path === entry || path.startsWith(`${entry}/`));
-  // npm reads an entry with no slash in it as a name at any depth, so
-  // `README.md` packs spec-core's README too, beside the licence it is told to
-  // ship. That one is spec-core's to write, and is held here all the same.
-  const documents = ['README.md', 'CHANGELOG.md', 'src/vendor/spec-core/README.md'];
+  // npm reads an entry with no slash in it as a name at any depth, so a bare
+  // `README.md` packed spec-core's vendored README beside the licence it is
+  // told to ship. `/README.md` is the root's alone.
+  const entries = files.map((entry) => entry.replace(/^\//, ''));
+  const ships = (path: string): boolean => entries.some((entry) => path === entry || path.startsWith(`${entry}/`));
+  const documents = ['README.md', 'CHANGELOG.md'];
   // Read as a renderer reads them: a link written out in a code span, as the
   // changelog does to show one, is text there and never followed.
   const linksOf = (document: string) => scanMarkdown(readFileSync(document, 'utf8')).links;
 
   it('are every Markdown file package.json names', () => {
-    expect(files.filter((entry) => entry.endsWith('.md')).filter((entry) => !documents.includes(entry))).toEqual([]);
+    expect(entries.filter((entry) => entry.endsWith('.md')).filter((entry) => !documents.includes(entry))).toEqual([]);
+    expect(files).toContain('/README.md');
+    expect(ships('src/vendor/spec-core/README.md')).toBe(false);
   });
 
   it('link only to files it ships, or by absolute URL, so that a link works in node_modules and on npmjs.com', () => {

@@ -46,6 +46,7 @@ import {
   DEFAULT_SEVERITIES,
   resolveStrict,
   RULE_DECISIONS,
+  decisionUrl,
   RULE_DESCRIPTIONS,
   RULE_IDS,
   RULE_QUERIES,
@@ -678,7 +679,7 @@ export async function main(io: CliIO = {}): Promise<number> {
       );
       return EXIT_ERROR;
     }
-    out(renderRules(options.verbose, projectRules, wanted ?? null, loaded.source));
+    out(renderRules(options.verbose, await readVersion(), projectRules, wanted ?? null, loaded.source));
     return EXIT_OK;
   }
 
@@ -961,6 +962,7 @@ interface RuleRow {
 
 function renderRules(
   explain: boolean,
+  version: string,
   projectRules: readonly ProjectRule[] = [],
   only: string | null = null,
   configSource: string | null = null,
@@ -973,7 +975,7 @@ function renderRules(
       severity: DEFAULT_SEVERITIES[id],
       description: RULE_DESCRIPTIONS[id],
       query: RULE_QUERIES[id],
-      decided: RULE_DECISIONS[id],
+      decided: decisionUrl(RULE_DECISIONS[id], version),
     })),
     ...projectRules.map((rule): RuleRow => ({
       id: rule.id,
