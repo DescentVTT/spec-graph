@@ -632,12 +632,16 @@ type GitlabSeverity = 'critical' | 'major' | 'minor' | 'info';
  * the five fields GitLab reads and nothing else.
  *
  * `fingerprint` is how GitLab matches a finding in the merge request to the
- * same finding on the target branch, so it holds what the finding is and not
- * where it sits: the rule, the file and the message, hashed. A paragraph moved
- * above a finding does not make it new. Two findings that agree on all three -
- * one broken link written twice in a file - are told apart by their order, the
- * second hashed with a `2`: GitLab tells issues apart by fingerprint, and two
- * that shared one would be read as one.
+ * same finding on the target branch, so it holds what the finding is about and
+ * nothing that moves when something else changes: the rule, the specification
+ * and what within it, hashed - the identity a baseline counts by. Not the line,
+ * so a paragraph moved above a finding does not make it new. Not the message,
+ * which carries counts: ticking one of three boxes turned "holds 3 open
+ * obligations" into "holds 2", and GitLab showed one finding resolved and one
+ * introduced. Two findings that agree on all three - one broken link written
+ * twice in a document - are told apart by their order, the second hashed with a
+ * `2`: GitLab tells issues apart by fingerprint, and two that shared one would
+ * be read as one.
  */
 export function formatGitlab(
   result: AnalysisResult,
@@ -646,7 +650,8 @@ export function formatGitlab(
   const escalated = options.escalated ?? EMPTY_RULES;
   const occurrences = new Map<string, number>();
   const issues = result.diagnostics.map((diagnostic) => {
-    const identity = [diagnostic.rule, diagnostic.at.file, diagnostic.message];
+    const { document, subject } = fingerprintOf(result.graph, diagnostic);
+    const identity = [diagnostic.rule, document, subject];
     const key = JSON.stringify(identity);
     const occurrence = (occurrences.get(key) ?? 0) + 1;
     occurrences.set(key, occurrence);

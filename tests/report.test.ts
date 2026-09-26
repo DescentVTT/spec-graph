@@ -404,7 +404,7 @@ describe('gitlab code quality report', () => {
     expect(ghost).toEqual({
       description: `${diagnostic.message}. ${diagnostic.hint}`,
       check_name: 'ghost-handover',
-      fingerprint: sha256(['ghost-handover', 'docs/adr/0004-cache.md', diagnostic.message]),
+      fingerprint: sha256(['ghost-handover', 'ADR-0004', 'ADR-0002']),
       severity: 'critical',
       location: { path: 'docs/adr/0004-cache.md', lines: { begin: diagnostic.at.span.start.line } },
     });
@@ -433,30 +433,44 @@ describe('gitlab code quality report', () => {
     expect(issues(formatGitlab(reporting([finding({ rule: 'ambiguous-reference' })])))[0]?.severity).toBe('critical');
   });
 
-  it('fingerprints what a finding is, not where it sits', () => {
+  it('fingerprints what a finding is about, not where it sits or how it is worded', () => {
     const at = (line: number): string => issues(formatGitlab(reporting([finding({}, line)])))[0]?.fingerprint as string;
-    expect(at(3)).toBe(sha256(['broken-reference', 'docs/adr/0001-a.md', '"x.md" does not resolve to any document']));
+    // The baseline's identity: the rule, the specification, and what within it.
+    expect(at(3)).toBe(sha256(['broken-reference', 'ADR-0001', 'x.md']));
     // A paragraph added above it moves the line and nothing else.
     expect(at(40)).toBe(at(3));
     expect(at(3)).toMatch(/^[0-9a-f]{64}$/);
     const other = (overrides: Partial<Diagnostic>): string =>
       issues(formatGitlab(reporting([finding(overrides)])))[0]?.fingerprint as string;
     expect(other({ rule: 'ambiguous-reference' })).not.toBe(at(3));
-    expect(other({ at: { file: 'docs/adr/0002-b.md', span: finding().at.span } })).not.toBe(at(3));
-    expect(other({ message: '"y.md" does not resolve to any document' })).not.toBe(at(3));
+    expect(other({ nodes: ['ADR-0009'] })).not.toBe(at(3));
+    expect(other({ target: 'y.md' })).not.toBe(at(3));
+    expect(other({ message: '"x.md" matches 2 documents' })).toBe(at(3));
     expect(other({ hint: 'another hint' })).toBe(at(3));
   });
 
-  it('tells apart two findings that agree on rule, file and message', () => {
-    // The same broken link written twice in one file: GitLab tells issues
+  it('keeps a fingerprint when a count in the message changes', () => {
+    // Ticking one of three boxes changed "holds 3 open obligations" to "holds
+    // 2", and GitLab showed the finding resolved and a new one introduced.
+    const retired = (boxes: string[]): AnalysisResult =>
+      result([{ path: 'docs/adr/0001-a.md', text: ['---', 'status: retired', '---', '# ADR-0001: A', '', ...boxes].join('\n') }]);
+    const three = issues(formatGitlab(retired(['- [ ] one', '- [ ] two', '- [ ] three'])));
+    const two = issues(formatGitlab(retired(['- [x] one', '- [ ] two', '- [ ] three'])));
+    expect(three.map((issue) => issue.check_name)).toEqual(['orphaned-obligation']);
+    expect(two[0]?.description).not.toBe(three[0]?.description);
+    expect(two[0]?.fingerprint).toBe(three[0]?.fingerprint);
+  });
+
+  it('tells apart two findings that agree on rule, document and target', () => {
+    // The same broken link written twice in one document: GitLab tells issues
     // apart by fingerprint, and one shared would show as one.
     const prints = issues(formatGitlab(reporting([finding({}, 3), finding({}, 9), finding({}, 12)]))).map(
       (issue) => issue.fingerprint,
     );
-    const identity = ['broken-reference', 'docs/adr/0001-a.md', '"x.md" does not resolve to any document'];
+    const identity = ['broken-reference', 'ADR-0001', 'x.md'];
     expect(prints).toEqual([sha256(identity), sha256([...identity, 2]), sha256([...identity, 3])]);
-    const different = issues(formatGitlab(reporting([finding({}, 3), finding({ message: 'another' }, 9)])));
-    expect(different[1]?.fingerprint).toBe(sha256(['broken-reference', 'docs/adr/0001-a.md', 'another']));
+    const different = issues(formatGitlab(reporting([finding({}, 3), finding({ target: 'y.md' }, 9)])));
+    expect(different[1]?.fingerprint).toBe(sha256(['broken-reference', 'ADR-0001', 'y.md']));
   });
 
   it('keeps every fingerprint when the document around the findings is edited', () => {
