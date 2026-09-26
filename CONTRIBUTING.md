@@ -149,15 +149,17 @@ Versions are published by CI from a tag, never from a workstation
    ```
 
 The release workflow runs the whole CI matrix again on that commit, packs,
-publishes to npm with provenance, and creates the GitHub release with the
-changelog section as its notes. A prerelease (`0.9.0-rc.1`) goes out under the
+stages the version on npm with provenance, and creates the GitHub release with
+the changelog section as its notes. Then a maintainer releases it with a second
+factor: `npm stage list @descent-vtt/spec-graph`, `npm stage view <id>`,
+`npm stage approve <id>`. A prerelease (`0.9.0-rc.1`) goes out under the
 `next` dist-tag and never becomes `latest`. To try the workflow without
 publishing, run it by hand from main (Actions, Release, Run workflow): it does
 everything but the upload and the GitHub release.
 
-Nobody runs `npm publish`. npmjs.com is set to accept a publish from this
-repository's `release.yml`, running in the `npm` environment, and otherwise
-only from a person holding a second factor.
+Nobody runs `npm publish`. npmjs.com accepts a staged version from this
+repository's `release.yml`, running in the `npm` environment, and releases it
+only on the word of a person holding a second factor.
 
 ## Style
 

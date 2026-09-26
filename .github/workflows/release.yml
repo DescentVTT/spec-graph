@@ -6,6 +6,14 @@ name: Release
 # naming the commit and the run that built it. The reasoning is in
 # docs/adr/0021-releases-are-published-by-ci.md; what a maintainer does, and
 # the one-time setup on npmjs.com, are in CONTRIBUTING.md.
+#
+# A tag stages the version rather than publishing it. `npm stage publish` puts
+# it in a queue on npmjs.com, installable by nobody, and `npm stage approve`,
+# which takes a person's second factor, releases it. A trusted publisher
+# configured after 2026-09-03 permits staging by default and a direct publish
+# only where the package opts in; 0.9.0 was refused at the upload for that
+# reason, and staging keeps a person with 2FA as the last step, as spec-guard
+# does.
 on:
   push:
     tags: ['v*']
@@ -111,34 +119,56 @@ jobs:
 
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
-          # 24 bundles npm 11.5.1 or later, the first that can publish by OIDC.
           node-version: '24'
           registry-url: https://registry.npmjs.org
 
-      - name: Check npm can publish by OIDC
+      # The npm bundled with Node 24 is not reliably new enough to stage, and
+      # when it is not the failure reads as an authentication error. Pinned
+      # inside 11.x: 12 is newer, which is not the same as proven.
+      - name: An npm new enough to stage
         run: |
-          node -e '
-            const [major, minor, patch] = process.argv[1].split(".").map(Number);
-            if (major > 11 || (major === 11 && (minor > 5 || (minor === 5 && patch >= 1)))) process.exit(0);
-            console.error(`::error::npm ${process.argv[1]} cannot publish by OIDC; trusted publishing needs 11.5.1`);
-            process.exit(1);
-          ' "$(npm --version)"
+          npm install -g 'npm@^11.15.0'
+          installed="$(npm --version)"
+          required=11.15.0
+          if [ "$(printf '%s\n%s\n' "$required" "$installed" | sort -V | head -1)" != "$required" ]; then
+            echo "::error::npm $installed is older than $required, which npm stage publish needs"
+            exit 1
+          fi
+          echo "npm $installed on node $(node --version)"
 
-      - name: Publish with provenance
+      - name: Stage with provenance
         env:
           VERSION: ${{ needs.pack.outputs.version }}
           TARBALL: ${{ needs.pack.outputs.tarball }}
           DIST_TAG: ${{ needs.pack.outputs.dist-tag }}
         run: |
           if [ "$GITHUB_EVENT_NAME" = push ]; then
-            npm publish "./$TARBALL" --tag "$DIST_TAG" --provenance --ignore-scripts
+            npm stage publish "./$TARBALL" --tag "$DIST_TAG" --provenance --access public --ignore-scripts
           elif [ -n "$(npm view "@descent-vtt/spec-graph@$VERSION" version 2>/dev/null)" ]; then
             # npm refuses even a dry run over a published version, which would
             # say nothing about this workflow.
             echo "::notice::$VERSION is on npm already; the rehearsal stopped short of the upload"
           else
-            npm publish "./$TARBALL" --tag "$DIST_TAG" --provenance=false --ignore-scripts --dry-run
+            npm stage publish "./$TARBALL" --tag "$DIST_TAG" --provenance=false --access public --ignore-scripts --dry-run
           fi
+
+      - name: Say that it is staged, and how to release it
+        if: github.event_name == 'push'
+        env:
+          VERSION: ${{ needs.pack.outputs.version }}
+        run: |
+          {
+            echo '### Staged, not published'
+            echo
+            echo "@descent-vtt/spec-graph@$VERSION is queued on npmjs.com and installable by nobody."
+            echo 'To release it, with 2FA:'
+            echo
+            echo '```'
+            echo 'npm stage list @descent-vtt/spec-graph'
+            echo 'npm stage view <stage-id>'
+            echo 'npm stage approve <stage-id>'
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
   github-release:
     needs: [pack, publish]
