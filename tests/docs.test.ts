@@ -156,6 +156,7 @@ describe('the documented selector vocabulary', () => {
     path: 'a.md',
     aliases: ['adr0001'],
     phase: 'active',
+    history: false,
     rawStatus: 'accepted',
     statusAt: null,
     frontMatter: { owner: 'platform' },

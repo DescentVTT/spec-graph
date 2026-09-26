@@ -711,6 +711,7 @@ export function extractDocument(input: ExtractInput): ExtractedDocument | null {
     path: input.path,
     aliases: identity.aliases,
     phase,
+    history: record,
     rawStatus: status.raw,
     statusAt: status.at,
     frontMatter: toRecord(entries),
@@ -869,6 +870,7 @@ function buildRegion(context: RegionInput): BuiltRegion {
     // wrote for itself. Being a record is a statement about the file made from
     // outside it, and it does not stop at a heading.
     phase: record ? 'record' : declaredPhase !== 'unknown' ? declaredPhase : pathPhase,
+    history: record,
     rawStatus,
     statusAt,
     frontMatter: inherited,
