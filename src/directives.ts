@@ -18,7 +18,7 @@
  * an override is visible rather than mysterious.
  */
 
-import type { HtmlComment, ListItem, ScannedDocument } from './markdown.js';
+import { isMarkdownLine, type HtmlComment, type ListItem, type ScannedDocument } from './markdown.js';
 
 export type DirectiveName = 'spec-node' | 'spec-item' | 'spec-edge' | 'spec-ignore' | 'spec-history';
 
@@ -61,10 +61,18 @@ const SCHEMA: Readonly<Record<DirectiveName, readonly string[]>> = {
   'spec-ignore': ['reason'],
 };
 
-/** Reads every spec-graph directive out of a document's HTML comments. */
+/**
+ * Reads every spec-graph directive out of a document's HTML comments.
+ *
+ * Only out of a comment that closes. One that opens a line and never does runs
+ * to the end of the document, and read as a directive, a stray
+ * `<!-- @spec-ignore` would drop the file, and a stray `<!-- @spec-node` would
+ * take every `name=value` in the rest of it as an attribute.
+ */
 export function parseDirectives(comments: readonly HtmlComment[]): Directive[] {
   const out: Directive[] = [];
   for (const comment of comments) {
+    if (comment.closed === false) continue;
     const head = DIRECTIVE_HEAD.exec(comment.inner);
     if (!head) continue;
     const name = head[1] as string;
@@ -178,16 +186,17 @@ export function bindItemDirectives(
   // how long this takes and nothing else.
   if (wanted.length === 0) return bound;
 
-  const { lines, listItems, masked } = scanned;
+  const { lines, listItems } = scanned;
+  const masked = scanned.masks.structure;
   // The indentation of each line holding nothing but whitespace and comments.
-  // Code is masked too, so a fence has to be told apart by its flag.
+  // Code and raw-text HTML are masked too, so they are told apart by their flags.
   const quiet = new Map<number, number>();
   // For every other line, where the run of quiet lines directly above it began,
   // when there was one.
   const quietFrom = new Map<number, number | undefined>();
   let run: number | undefined;
   for (const line of lines) {
-    if (!line.code && masked.slice(line.contentStart, line.end).trim() === '') {
+    if (isMarkdownLine(line) && masked.slice(line.contentStart, line.end).trim() === '') {
       quiet.set(line.line, line.indent);
       run ??= line.start;
       continue;

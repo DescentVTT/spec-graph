@@ -84,6 +84,79 @@ and `a//b` reads as `a/b`.
 every difference above runs against; it no longer folds case on Windows. See
 [ADR-0022](docs/adr/0022-globs-are-the-family-path-dialect.md).
 
+**Documents are read by spec-core's scanner.** It moved to spec-core, built on
+this repository's scanner as its model, and is copied back into
+`src/vendor/spec-core/` and checked by hash, so spec-graph still installs
+nothing. It follows CommonMark wherever CommonMark decides what is code or a
+comment, and where that reads a document differently from before, spec-graph
+follows it. Over this repository, its test corpora and spec-core's documents,
+the graph and the findings are what they were. A repository sees a difference
+where it wrote one of these:
+
+- **A code span ends with its paragraph.** A lone backtick hid everything up to
+  the next run of its length, however many paragraphs on, citations included.
+- **A heading reads as a renderer shows it.** A comment on its line is not part
+  of its text, and `# C#` is about `C#`: a closing run of `#` needs a space
+  before it. That text is a document's title, a section's name and the slug in
+  the id of every item under it, so an item under `## Notes <!-- x -->` moves
+  from `ADR-0001#notes----x---.1` to `ADR-0001#notes.1`, and
+  `## Open Questions <!-- short -->` holds obligations at last. A baseline that
+  accepted a finding on a moved item reports its entry as no longer occurring,
+  which fails a run under `--ratchet`, and the finding as new; one
+  `--record-baseline` settles it.
+- **A link to GitHub's anchor for a repeated heading resolves.** GitHub renders
+  the second `## Notes` as `#notes-1`, and a link to it was a
+  `broken-reference`. The slug still names the first heading, and `#notes-2`
+  beside two headings is still broken.
+- **Nothing inside `<pre>`, `<script>`, `<style>` or `<textarea>` is
+  structure.** Their links were masked already; now no heading, list item, table
+  or `Status:` line is read from one either, so `- [ ] example` in a `<pre>`
+  block is not an open obligation, and a status section that opens with one
+  declares no status. A `@spec-item` above one does not reach an item below it,
+  as it never reached across a fence.
+- **Nothing inside a comment opens a block.** A fence inside a comment opened
+  one, and with no closer everything after it was code; a list marker inside one
+  decided whether an indented block after it was code. Neither does now. A
+  comment that opens a line and never closes runs to the end of the document, as
+  it renders, and a parse problem says where it opened; no directive is read from
+  it, so a stray `<!-- @spec-ignore` does not drop the file.
+- **Headings, rules and list items as CommonMark reads them.** A setext underline
+  is not used twice - `Title`, `===`, `---` is one heading and a rule, not a
+  second heading called `===` - and does not underline a line in a block quote.
+  `* * *` is a rule, not a list item. A list item ends at a fence or a block
+  quote no deeper than its marker, so a relation written after an unindented
+  fence is the document's and not the item's. And a heading closes every list,
+  so an item indented under a list a heading closed is at depth 0, and an
+  obligation when its section holds them.
+- **Links as CommonMark reads them.** `[a](b c)` is text, not a link to `b`.
+  `[foo](not a link)` is the shortcut `[foo]` when `foo` is defined, not a link
+  to `not`. A footnote `[^1]: text` and a line `[Note]: prose` are not
+  definitions, so `[^1]` and `[Note]` are no longer links to the first word
+  after them, which were broken references. A link inside brackets that are not
+  one, `[see [ADR-7](0007.md) here]`, is read. Labels match with case and
+  whitespace folded, so `[Two  Words][]` finds `[TWO WORDS]:`. A finding on
+  `[a](<b c.md>)` points inside the angle brackets, a column later than it did.
+- **A table needs a delimiter row with as many cells as its header.** One
+  without was read as a table, and as a register when its columns said so.
+- **A fence ends with its block quote.** One opened in a quote and never closed
+  made the rest of the document code. And a fence indented four columns after a
+  blank line, outside a list, is indented code, not a fence that can run to the
+  end.
+- **Front matter opens on exactly `---` or `+++`.** `----` is a rule.
+
+For the library API, the scanner's types are spec-core's, exported under the
+names they had. `ScannedDocument` is spec-core's `MarkdownScan`: `masked` is
+`masks.structure`, beside `masks.prose` and `masks.directives`, and
+`isMasked(offset, mask?)` asks any of the three; `lines` holds the front
+matter's lines too, flagged `frontMatter`, and a line of raw-text HTML is
+flagged `html`; `blocks`, `codeSpans` and `bom` are new. `scanMarkdown` reports
+images, as `Link.image`, which the analysis leaves out but for wiki embeds, and
+`Link` has `targetEnd`. `Heading` has `form`, `anchor`, `textStart`, `textEnd`
+and `endLine`; `ListItem` has `endLine` and `quoteDepth`; `HtmlComment` has
+`closed`; `FrontMatter` has `kind` and `closeLine`. `parseDirectives` skips a
+comment whose `closed` is `false`. `createLineIndex` is spec-core's, the same
+table. See [ADR-0023](docs/adr/0023-the-scanner-is-the-familys.md).
+
 **`archived` is a record, not a retired decision.** spec-brief closes a round
 of work by writing `status: archived` and moving the brief to an archive
 directory, and every spec-* tool reads that word as a finished round which it

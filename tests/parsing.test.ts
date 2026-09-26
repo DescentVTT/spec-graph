@@ -456,6 +456,8 @@ describe('directives', () => {
     expect(boundIds('<!-- @spec-item id="one" -->', 'Prose.', '- [ ] first')).toEqual([null]);
     expect(boundIds('<!-- @spec-item id="one" -->', '## Next', '- [ ] first')).toEqual([null]);
     expect(boundIds('<!-- @spec-item id="one" -->', '```', '', '```', '- [ ] first')).toEqual([null]);
+    // A <pre> block is no more Markdown than a fence is.
+    expect(boundIds('<!-- @spec-item id="one" -->', '<pre>', '</pre>', '- [ ] first')).toEqual([null]);
     // Ending a paragraph, it stands above nothing, whatever follows the blank line.
     expect(boundIds('Prose. <!-- @spec-item id="one" -->', '', '- [ ] first')).toEqual([null]);
   });
@@ -502,6 +504,14 @@ describe('directives', () => {
     // The checklist commented out is not an item, so the directive above it
     // reaches across the comment to the item that is.
     expect(boundIds('<!-- @spec-item id="one" -->', '<!--', '- [ ] parked', '-->', '- [ ] first')).toEqual(['one']);
+  });
+
+  it('reads no directive from a comment that never closes', () => {
+    // One that opens a line runs to the end of the document, and all of it
+    // would be read as the directive's attributes.
+    expect(parse('<!-- @spec-ignore\n\n# Title\n')).toHaveLength(0);
+    expect(parse('<!-- @spec-node id="A" title=x\n\nkey=value\n')).toHaveLength(0);
+    expect(parse('<!-- @spec-ignore -->\n\n# Title\n')).toHaveLength(1);
   });
 
   it('does not read a directive quoted in inline code', () => {

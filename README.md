@@ -903,7 +903,7 @@ exported. Reporters, editor extensions and custom rules are all first-class.
 
 ## Design
 
-Twenty-two ADRs, which `spec-graph` validates on every CI run:
+Twenty-three ADRs, which `spec-graph` validates on every CI run:
 
 - [ADR-0001 — A hand-written Markdown scanner](docs/adr/0001-hand-written-markdown-scanner.md)
 - [ADR-0002 — A four-phase lifecycle lattice](docs/adr/0002-lifecycle-lattice.md)
@@ -927,6 +927,7 @@ Twenty-two ADRs, which `spec-graph` validates on every CI run:
 - [ADR-0020 — A diff names only what it can tell apart](docs/adr/0020-a-diff-names-what-it-can-tell-apart.md)
 - [ADR-0021 — Releases are published by CI, with provenance](docs/adr/0021-releases-are-published-by-ci.md)
 - [ADR-0022 — Globs are the family's path dialect](docs/adr/0022-globs-are-the-family-path-dialect.md)
+- [ADR-0023 — The scanner is the family's](docs/adr/0023-the-scanner-is-the-familys.md)
 
 **Zero runtime dependencies.** Node 22+, native ESM, TypeScript strict with
 `noUncheckedIndexedAccess` and `exactOptionalPropertyTypes`. The Markdown

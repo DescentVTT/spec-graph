@@ -42,6 +42,11 @@ import { calculateMutationTestMetrics } from 'mutation-testing-metrics';
 // Split this way, the first two sweeps (09f16ad) took 26 to 36 minutes a shard,
 // and shard 1 - extract.ts alone - was among the slowest both times.
 //
+// markdown.ts has held only spec-graph's reading of spec-core's scanner since
+// the scanner moved there (ADR-0023). Its minutes above are the scanner's, which
+// spec-core's sweep measures now, so shard 2 finishes early until a sweep
+// re-measures it.
+//
 // 166 minutes in all, and nearly all of extract.ts and markdown.ts is static
 // mutants, each of which runs the whole suite. A shard cannot be smaller than
 // its largest file, so no number of shards gets under extract.ts's 42.5; four is

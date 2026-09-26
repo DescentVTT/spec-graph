@@ -31,8 +31,8 @@ files ─▶ markdown.ts ─▶ extract.ts ─▶ resolve.ts ─▶ graph.ts ─
 
 | Module | Responsibility |
 | --- | --- |
-| `source.ts` | Offset ↔ line/column. Everything user-visible carries a `SourceRef`. |
-| `markdown.ts` | The scanner. Masks code, blocks out list items, extracts links. |
+| `source.ts` | Offset ↔ line/column, on spec-core's line table. Everything user-visible carries a `SourceRef`. |
+| `markdown.ts` | What spec-graph reads out of spec-core's scan: which links are references, which anchors a heading answers to, which lines are Markdown. |
 | `yaml.ts` | Front matter, with the offset of every value. |
 | `directives.ts` | `<!-- @spec-* -->` annotations, the override escape hatch. |
 | `lifecycle.ts` | Status vocabulary → four-phase lattice. |
@@ -48,7 +48,7 @@ files ─▶ markdown.ts ─▶ extract.ts ─▶ resolve.ts ─▶ graph.ts ─
 | `diff.ts` | Two JSON exports compared, naming only the changes it can tell apart. |
 | `glob.ts` / `paths.ts` | Pattern lists, the walk and reference-target matching; POSIX path arithmetic. |
 | `runner.ts` / `cli.ts` | Orchestration and the command line. |
-| `vendor/spec-core/` | spec-core's modules, copied byte for byte: the glob dialect and the matcher behind `~=`, automata that cannot backtrack. Never edited here: see below. |
+| `vendor/spec-core/` | spec-core's modules, copied byte for byte: the Markdown scanner, the line table, the glob dialect and the matcher behind `~=`. Never edited here: see below. |
 
 ## Where changes usually go
 

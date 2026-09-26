@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { scanMarkdown, slugify } from '../src/markdown.js';
+import { anchorsOf, referenceLinks, scanMarkdown, slugify } from '../src/markdown.js';
 import { analyseSources } from '../src/runner.js';
 import { compareRefs, createLineIndex } from '../src/source.js';
 
@@ -190,9 +190,9 @@ describe('code masking', () => {
   it('keeps the masked copy the same length and line shape as the source', () => {
     const md = 'x\n```\nhidden\n```\ny <!-- c -->\n';
     const doc = scanMarkdown(md);
-    expect(doc.masked).toHaveLength(doc.text.length);
-    expect(doc.masked.split('\n')).toHaveLength(doc.text.split('\n').length);
-    expect(doc.masked).not.toContain('hidden');
+    expect(doc.masks.structure).toHaveLength(doc.text.length);
+    expect(doc.masks.structure.split('\n')).toHaveLength(doc.text.split('\n').length);
+    expect(doc.masks.structure).not.toContain('hidden');
   });
 });
 
@@ -332,8 +332,39 @@ describe('links', () => {
     expect(targets('<https://example.com/adr-7>')).toEqual(['https://example.com/adr-7']);
   });
 
-  it('skips images', () => {
-    expect(targets('![diagram](diagram.png) and [spec](spec.md)')).toEqual(['spec.md']);
+  it('reports an image as one, and spec-graph reads no image as a reference', () => {
+    const doc = scanMarkdown('![diagram](diagram.png) and [spec](spec.md) and ![alt][d]\n\n[d]: d.png');
+    expect(doc.links.filter((l) => l.image).map((l) => l.target)).toEqual(['diagram.png', 'd.png']);
+    expect(referenceLinks(doc).map((l) => [l.form, l.target])).toEqual([
+      ['inline', 'spec.md'],
+      ['definition', 'd.png'],
+    ]);
+  });
+
+  it('reads a wiki embed as a reference to the note it embeds', () => {
+    // Obsidian's `![[note]]` transcludes the note, which cites it as surely as
+    // `[[note]]` does. spec-graph read it as a wiki link before the scan knew
+    // images, and still does now that the scan calls it one.
+    const doc = scanMarkdown('![[0007-sharding]] and [[0008-queues|Queues]]');
+    expect(doc.links.map((l) => l.image)).toEqual([true, false]);
+    expect(referenceLinks(doc).map((l) => [l.form, l.target])).toEqual([
+      ['wiki', '0007-sharding'],
+      ['wiki', '0008-queues'],
+    ]);
+  });
+
+  it('draws an edge to an embedded note, and none to a pictured one', () => {
+    const { graph, diagnostics } = analyseSources([
+      {
+        path: 'docs/adr/0001-embeds.md',
+        text: '# ADR-0001: Embeds\n\n![[0002-target]]\n\n![a diagram](0002-target.md)\n![gone](missing.png)\n',
+      },
+      { path: 'docs/adr/0002-target.md', text: '# ADR-0002: Target\n' },
+    ]);
+    expect(graph.edges.filter((e) => e.kind !== 'contains').map((e) => [e.from, e.to, e.declaredAt.span.start.line])).toEqual([
+      ['ADR-0001', 'ADR-0002', 3],
+    ]);
+    expect(diagnostics.map((d) => d.rule)).not.toContain('broken-reference');
   });
 
   it('handles nested brackets in a label', () => {
@@ -354,6 +385,16 @@ describe('links', () => {
     const [link] = scanMarkdown(md).links;
     expect(md.slice(link?.targetStart ?? 0, (link?.targetStart ?? 0) + 9)).toBe('target.md');
     expect(link?.line).toBe(1);
+  });
+
+  it('points a finding at an angle-bracketed destination inside its brackets', () => {
+    // The span is the destination as written, so an editor that selects it
+    // selects the path and not the `<` before it.
+    const { diagnostics } = analyseSources([
+      { path: 'docs/adr/0001-a.md', text: '# ADR-0001: A\n\nSee [it](<0009 missing.md>).\n' },
+    ]);
+    const [broken] = diagnostics.filter((d) => d.rule === 'broken-reference');
+    expect([broken?.at.span.start.column, broken?.at.span.end.column]).toEqual([11, 26]);
   });
 
   it('keeps line numbers correct after a fenced block', () => {
@@ -479,10 +520,29 @@ describe('comments and code spans, read left to right', () => {
     expect(doc.links.map((l) => l.target)).toEqual(['https://example.com/a']);
   });
 
-  it('keeps a `<!--` that never closes as text, and reads the spans after it', () => {
-    const doc = scanMarkdown('<!-- open\n\n`[fake](fake.md)` and <!-- again [real](real.md)');
+  it('keeps a `<!--` that never closes in the middle of a line as text, and reads the spans after it', () => {
+    const doc = scanMarkdown('Text <!-- open\n\n`[fake](fake.md)` and <!-- again [real](real.md)');
     expect(doc.comments).toEqual([]);
     expect(doc.links.map((l) => l.target)).toEqual(['real.md']);
+  });
+
+  it('runs a `<!--` that opens a line and never closes to the end, as CommonMark does', () => {
+    // An HTML block: a renderer hides everything after it, and so does the scan.
+    const doc = scanMarkdown('[before](before.md)\n\n<!-- open\n\n# Hidden\n\n[after](after.md)');
+    expect(doc.comments.map((c) => [c.line, c.closed])).toEqual([[3, false]]);
+    expect(doc.links.map((l) => l.target)).toEqual(['before.md']);
+    expect(doc.headings).toEqual([]);
+  });
+
+  it('says so when a comment that opens a line never closes, and reads no directive from it', () => {
+    // A stray `<!-- @spec-ignore` read as a directive would drop the file.
+    const text = '# ADR-0001: Open\n\n<!-- @spec-ignore\n\n- [ ] hidden\n';
+    const { graph, corpus } = analyseSources([{ path: 'docs/adr/0001-open.md', text }]);
+    expect(graph.documents.map((n) => n.id)).toEqual(['ADR-0001']);
+    expect(corpus.problems.map((p) => [p.message, p.at.span.start.line, p.at.span.start.column])).toEqual([
+      ['a comment opened here is never closed, so nothing after it is read - close it with -->', 3, 1],
+    ]);
+    expect(analyseSources([{ path: 'docs/adr/0001-shut.md', text: '# ADR-0001: Shut <!-- x -->\n' }]).corpus.problems).toEqual([]);
   });
 
   it('still closes a span after runs that never did, each a different length', () => {
@@ -509,7 +569,8 @@ describe('comments and code spans, read left to right', () => {
 describe('what a comment holds is not structure', () => {
   it('reads no heading in a comment, and every heading around it', () => {
     const doc = scanMarkdown(['# Title', '<!--', '## Hidden', '   # Also hidden', '-->', '## Shown <!-- aside -->'].join('\n'));
-    expect(doc.headings.map((h) => h.text)).toEqual(['Title', 'Shown <!-- aside -->']);
+    // A comment on a heading's line is not its text, as a renderer shows it.
+    expect(doc.headings.map((h) => h.text)).toEqual(['Title', 'Shown']);
     expect(doc.lines.map((l) => l.comment)).toEqual([false, true, true, true, true, false]);
   });
 
@@ -562,6 +623,197 @@ describe('what a comment holds is not structure', () => {
   it('marks a line by its first character, not by where a comment on it starts', () => {
     const doc = scanMarkdown(['Prose <!-- a', '', 'still a -->', '', '  <!-- b --> after', 'x'].join('\n'));
     expect(doc.lines.map((l) => l.comment)).toEqual([false, false, true, false, true, false]);
+  });
+});
+
+/**
+ * ADR-0013 left three questions open, each a place where the scan found code
+ * blocks before comments and so read structure out of what was not Markdown.
+ * spec-core's scan finds comments while it finds blocks, so each is answered by
+ * construction, and these hold the answers.
+ */
+describe('what ADR-0013 left open', () => {
+  it('opens no fence inside a comment', () => {
+    // It used to open one, and with no closer the rest of the document was code.
+    const md = ['# ADR-0001: Title', '', '<!--', '```', '-->', '', '## Decision', '', 'Depends on [ADR-0002](0002-b.md).'];
+    const doc = scanMarkdown(md.join('\n'));
+    expect(doc.blocks).toEqual([]);
+    expect(doc.headings.map((h) => h.text)).toEqual(['ADR-0001: Title', 'Decision']);
+    expect(doc.links.map((l) => l.target)).toEqual(['0002-b.md']);
+  });
+
+  it('sets no list context from a marker inside a comment, so an indented block after it is code', () => {
+    const md = ['<!--', '- a list marker', '-->', '', '    [ADR-0002](0002-b.md) in indented code'];
+    const doc = scanMarkdown(md.join('\n'));
+    expect(doc.blocks.map((b) => [b.kind, b.line])).toEqual([['indented', 5]]);
+    expect(doc.links).toEqual([]);
+    // Outside a comment the same marker does set it, and the line continues the item.
+    const listed = scanMarkdown(['- a list marker', '', '    [ADR-0002](0002-b.md) continues it'].join('\n'));
+    expect(listed.blocks).toEqual([]);
+    expect(listed.links.map((l) => l.target)).toEqual(['0002-b.md']);
+  });
+
+  it('reads no heading, item, table or status inside <pre> or <script>', () => {
+    const text = [
+      '# ADR-0001: Raw',
+      '',
+      '<pre>',
+      '## Not a heading',
+      '- [ ] not an obligation',
+      '| ID | Status |',
+      '|----|--------|',
+      '| R-1 | accepted |',
+      '</pre>',
+      '',
+      '<script>',
+      '# Nor this',
+      '- [ ] nor this',
+      '</script>',
+      '',
+      '## R-2: A section',
+      '',
+      '<pre>',
+      'Status: accepted',
+      '</pre>',
+    ].join('\n');
+    const doc = scanMarkdown(text);
+    expect(doc.headings.map((h) => h.text)).toEqual(['ADR-0001: Raw', 'R-2: A section']);
+    expect(doc.listItems).toEqual([]);
+    expect(doc.tables).toEqual([]);
+    // A status shown in a <pre> block is an example, so R-2 declares none and
+    // is not a specification of its own.
+    const { graph } = analyseSources([{ path: 'docs/adr/0001-raw.md', text }]);
+    expect(graph.documents.map((n) => n.id)).toEqual(['ADR-0001']);
+    const declared = analyseSources([{ path: 'docs/adr/0001-raw.md', text: text.replace('<pre>\nStatus', 'Status') }]);
+    expect(declared.graph.documents.map((n) => n.id)).toEqual(['ADR-0001', 'R-2']);
+  });
+
+  it('reads no status from a status section that opens with raw HTML', () => {
+    const status = (body: string) =>
+      analyseSources([{ path: 'docs/adr/0001-a.md', text: `# ADR-0001: A\n\n## Status\n\n${body}\n` }]).graph.document('ADR-0001')
+        ?.rawStatus;
+    expect(status('<pre>\naccepted\n</pre>')).toBeNull();
+    expect(status('Accepted')).toBe('Accepted');
+  });
+});
+
+/**
+ * Where spec-core's scan reads a document differently from the one it replaced,
+ * spec-graph follows it, and a repository sees the difference in its graph.
+ * Each is in the changelog; these hold what a user sees.
+ */
+describe('what the shared scan reads differently', () => {
+  const edges = (...texts: [string, string][]) =>
+    analyseSources(texts.map(([path, text]) => ({ path, text }))).graph.edges.filter((e) => e.kind !== 'contains');
+  const B = ['docs/adr/0002-b.md', '# ADR-0002: B\n'] as [string, string];
+
+  it('ends a code span with its paragraph, so a stray backtick hides nothing after it', () => {
+    const text = '# ADR-0001: A\n\nAn unclosed `tick.\n\nDepends on [ADR-0002](0002-b.md).\n\nAnother tick` here.\n';
+    expect(edges(['docs/adr/0001-a.md', text], B).map((e) => [e.kind, e.to])).toEqual([['depends-on', 'ADR-0002']]);
+  });
+
+  it('reads a heading as a renderer shows it, which moves the ids of the items under it', () => {
+    const text = [
+      '# ADR-0001: A <!-- draft -->',
+      '',
+      '## Open Questions <!-- short -->',
+      '',
+      '- Which?',
+      '',
+      '## Notes <!-- x -->',
+      '',
+      '- [ ] Checked?',
+      '',
+      '# C#',
+    ].join('\n');
+    const { graph } = analyseSources([{ path: 'docs/adr/0001-a.md', text }]);
+    expect(graph.document('ADR-0001')?.title).toBe('ADR-0001: A');
+    // The comment kept the first section from reading as "Open Questions" at
+    // all, and gave the second item the id `ADR-0001#notes----x---.1`.
+    expect(graph.items.map((n) => n.id)).toEqual(['ADR-0001#open-questions.1', 'ADR-0001#notes.1']);
+    // A closing run of `#` needs a space before it.
+    expect(scanMarkdown(text).headings.map((h) => h.text)).toEqual(['ADR-0001: A', 'Open Questions', 'Notes', 'C#']);
+  });
+
+  it('reuses no setext underline, crosses no block quote with one, and reads `* * *` as a rule', () => {
+    const doc = scanMarkdown(['Title', '===', '---', '', '> quoted', '---', '', '* * *'].join('\n'));
+    expect(doc.headings.map((h) => h.text)).toEqual(['Title']);
+    expect(doc.listItems).toEqual([]);
+  });
+
+  it('ends an item at a fence or a block quote no deeper than its marker', () => {
+    const fenced = scanMarkdown(['- [ ] item', '```', 'code', '```', 'After [ADR-0002](0002-b.md).'].join('\n'));
+    expect(fenced.listItems.map((i) => i.endLine)).toEqual([1]);
+    const quoted = scanMarkdown(['- [ ] item', '> quote'].join('\n'));
+    expect(quoted.listItems.map((i) => i.endLine)).toEqual([1]);
+    // What followed the fence was the item's, and a relation written there was the item's too.
+    const text = '# ADR-0001: A\n\n- [ ] item\n```\ncode\n```\nDepends on [ADR-0002](0002-b.md).\n';
+    expect(edges(['docs/adr/0001-a.md', text], B).map((e) => e.from)).toEqual(['ADR-0001']);
+  });
+
+  it('closes every list at a heading, so an item after one is at depth 0', () => {
+    const text = '# ADR-0001: A\n\n## Open Questions\n\n- a\n\n## Open Questions\n  - b\n';
+    const { graph } = analyseSources([{ path: 'docs/adr/0001-a.md', text }]);
+    expect(graph.items.map((n) => n.title)).toEqual(['a', 'b']);
+  });
+
+  it('reads links as CommonMark does where spec-graph read them otherwise', () => {
+    const text = [
+      '# ADR-0001: A',
+      '',
+      'A [spaced](0002-b.md title-without-quotes) link is text.',
+      '',
+      '[foo](not a link) is a shortcut.',
+      '',
+      'A footnote[^1] and a note [Note] cite nothing.',
+      '',
+      '[^1]: 0002-b.md is where this came from.',
+      '[Note]: this is prose, not a definition.',
+      '[foo]: 0003-c.md',
+      '',
+      'See [outer [inner](0004-d.md) text].',
+      '',
+      'Label [Mixed   Case][] folded.',
+      '',
+      '[MIXED CASE]: 0005-e.md',
+    ].join('\n');
+    const others = ['0002-b', '0003-c', '0004-d', '0005-e'].map((name, k) => ({
+      path: `docs/adr/${name}.md`,
+      text: `# ADR-000${k + 2}: X\n`,
+    }));
+    const { graph, diagnostics } = analyseSources([{ path: 'docs/adr/0001-a.md', text }, ...others]);
+    expect(graph.edges.filter((e) => e.kind !== 'contains').map((e) => [e.to, e.declaredAt.span.start.line])).toEqual([
+      ['ADR-0003', 11],
+      ['ADR-0004', 13],
+      ['ADR-0005', 17],
+    ]);
+    expect(diagnostics).toEqual([]);
+  });
+
+  it('reads a table only under a delimiter row with as many cells as its header', () => {
+    const text = '# ADR-0001: A\n\n| ID | Status | Depends on |\n|----|--------|\n| R-1 | accepted | ADR-0002 |\n';
+    const { graph } = analyseSources([{ path: 'docs/adr/0001-a.md', text }, { path: B[0], text: B[1] }]);
+    expect(graph.documents.map((n) => n.id)).toEqual(['ADR-0001', 'ADR-0002']);
+  });
+
+  it('ends a fence with its block quote, and reads an indented fence after a blank line as indented code', () => {
+    const text = '# ADR-0001: A\n\n> ```\n> never closed\n\nDepends on [ADR-0002](0002-b.md).\n\n    ```\n    code\n\n## After\n\n- [ ] open\n';
+    const { graph } = analyseSources([{ path: 'docs/adr/0001-a.md', text }, { path: B[0], text: B[1] }]);
+    expect(graph.edges.filter((e) => e.kind !== 'contains').map((e) => e.to)).toEqual(['ADR-0002']);
+    expect(graph.items.map((n) => n.id)).toEqual(['ADR-0001#after.1']);
+  });
+
+  it('opens front matter only on exactly three dashes', () => {
+    const { graph } = analyseSources([{ path: 'docs/adr/0001-a.md', text: '----\nstatus: accepted\n----\n# ADR-0001: A\n' }]);
+    expect(graph.document('ADR-0001')?.rawStatus).toBeNull();
+  });
+});
+
+describe('anchorsOf', () => {
+  it('answers to each slug, and to GitHub\'s anchor for a repeat of one', () => {
+    const doc = scanMarkdown(['# Notes', '## Notes', '## Notes', '## Other'].join('\n'));
+    expect([...anchorsOf(doc.headings)].sort()).toEqual(['notes', 'notes-1', 'notes-2', 'other']);
+    expect([...anchorsOf(doc.headings.slice(2))].sort()).toEqual(['notes', 'notes-2', 'other']);
   });
 });
 
