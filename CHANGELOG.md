@@ -208,17 +208,29 @@ depended on an archived one was reported as a `stale-premise`, and an archived
 brief with a task left unticked as an `orphaned-obligation`. It is the `record`
 phase now, as a file declared by `historyPatterns` is - its links are still
 checked, its unticked boxes are nobody's work and leave the open count, and
-live work handed to it is still a `ghost-handover`. So is the status word
-`archive`.
+live work handed to it is still a `ghost-handover`, which says it is archived.
+So is the status word `archive`.
+
+It is a closed round and not a log, so that is all that changes. The claims an
+archived document makes are still checked as they were when it read as
+retired: a supersession it declares (`live-supersession` on what it
+supersedes), a cycle it closes (`circular-delegation`) and a link to itself
+(`self-reference`). What it hands on and what it rests on are still not held
+against it. An archived document that something supersedes and that never
+says so is an `unreciprocated-supersession`, whose hint is now to make its
+status `archived, superseded by X` - which retires it, so what depends on it
+is a `stale-premise` again. A document declared by `historyPatterns` or
+`<!-- @spec-history -->` is exempt from all of it, as before; `DocumentNode`
+says which kind of record a document is, as `history`.
 
 A document still retires by saying `superseded`, `deprecated` or `retired`,
 and `archived, superseded by B-7` is retired, since a retirement word wins
 wherever it is written. A document under an `archive/` directory that declares
 no status is retired as before. A repository that wrote `archived` for a
 retired decision loses the `stale-premise` findings on documents that depend
-on it, and a baseline that accepted one reports that entry as no longer
-occurring, which fails a run under `--ratchet`. `historyPatterns` and
-`<!-- @spec-history -->` are unchanged. See
+on it, and the `orphaned-obligation` findings on its open items, and a baseline
+that accepted one reports that entry as no longer occurring, which fails a run
+under `--ratchet`. See
 [ADR-0011](docs/adr/0011-a-record-is-not-a-specification.md).
 
 ### Fixed

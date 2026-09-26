@@ -134,9 +134,12 @@ retired: retirement is terminal, so a retirement word anywhere wins.
 it has closed, and every spec-* tool reads it as a **record**: depending on it
 is normal, its unticked boxes are not anyone's work, its links are still
 checked, and new work handed to it is still a ghost handover. See
-[Journals, changelogs and minutes](#journals-changelogs-and-minutes). To retire
-a decision, say `superseded` or `deprecated`; a document under an `archive/`
-directory that says nothing about itself is still retired.
+[Journals, changelogs and minutes](#journals-changelogs-and-minutes). Unlike a
+journal, it still answers for what it claims: a supersession it declares, a
+cycle it closes and a link to itself are reported as they would be anywhere.
+To retire a decision, say `superseded` or `deprecated` -
+`archived, superseded by ADR-0009` is retired - and a document under an
+`archive/` directory that says nothing about itself is still retired.
 
 An unrecognised status becomes `unknown`, and rules treat it permissively. It
 never guesses.
@@ -518,7 +521,9 @@ had:
 ```
 
 or, for one file, `<!-- @spec-history -->` at the top of it. A brief whose
-status is `archived` is one already, with nothing declared.
+status is `archived` is a record already, with nothing declared, though not a
+log: the supersessions, cycles and self-references it declares are still
+checked.
 
 |  |  |
 | --- | --- |

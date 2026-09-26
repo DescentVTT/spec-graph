@@ -227,7 +227,8 @@ describe('an archived round of work is a record', () => {
       'briefs/0002-sessions.md': `${LIVE}\n\n## Tasks\n\n- [ ] Expire idle sessions? Deferred to [B-0001](archive/0001-sign-in.md).\n`,
     };
     const ghost = analyse(handed).diagnostics.find((diagnostic) => diagnostic.rule === 'ghost-handover');
-    expect(ghost?.message).toContain('a historical record');
+    expect(ghost?.message).toContain('which is archived');
+    expect(ghost?.hint).toBe('B-0001 is a closed round of work and will never act - re-home this in a live document');
   });
 
   it('leaves a retirement word retiring, archived or not', () => {
@@ -252,6 +253,74 @@ describe('an archived round of work is a record', () => {
     const declared = analyse(accepted, { isRecord: createHistoryMatcher(['briefs/archive/**']) });
     expect(declared.graph.document('B-0001')?.phase).toBe('record');
     expect(declared.graph.document('B-0002')?.phase).toBe('active');
+  });
+});
+
+describe('an archived document is a closed round, not a log', () => {
+  // `archived` reaches the record phase, and with it the exemption written for
+  // journals - which covered the supersessions it declared, the cycles it
+  // closed and the links it made to itself. Those are claims an archived
+  // brief or decision makes and somebody can still correct, and 0.8.0, which
+  // read the word as retired, reported each. What it owes and what it rests
+  // on are all it is exempt from. ADR-0011.
+  const doc = (id: string, status: string, ...extra: string[]): string =>
+    ['---', `id: ${id}`, `status: ${status}`, ...extra, '---', '', `# ${id}: ${id}`].join('\n');
+
+  it('declares a supersession, so what it supersedes is told it is not live', () => {
+    const files = { 'briefs/0001.md': doc('B-0001', 'accepted'), 'briefs/0002.md': doc('B-0002', 'archived', 'supersedes: B-0001') };
+    const found = analyse(files).diagnostics;
+    expect(found.map((d) => d.rule)).toEqual(['live-supersession']);
+    expect(found[0]?.message).toBe('B-0001 is superseded by B-0002 but still reads as active');
+    // A log saying the same thing is narrating it, as before.
+    expect(rules(files, asHistory('briefs/0002.md'))).toEqual([]);
+  });
+
+  it('is told to say what replaced it, in the words that make it retired', () => {
+    const files = {
+      'docs/adr/0001.md': doc('ADR-0001', 'archived'),
+      'docs/adr/0002.md': doc('ADR-0002', 'accepted', 'supersedes: ADR-0001'),
+      'docs/adr/0003.md': doc('ADR-0003', 'accepted', 'depends-on: ADR-0001'),
+    };
+    const found = analyse(files).diagnostics;
+    expect(found.map((d) => [d.rule, d.nodes[0]])).toEqual([['unreciprocated-supersession', 'ADR-0001']]);
+    expect(found[0]?.message).toBe('ADR-0001 is archived but never says that ADR-0002 replaced it');
+    expect(found[0]?.hint).toBe(
+      'make the status of docs/adr/0001.md "archived, superseded by ADR-0002" so a reader who lands there is redirected',
+    );
+    // Following the hint retires it, and what rests on it hears so.
+    const followed = { ...files, 'docs/adr/0001.md': doc('ADR-0001', 'archived, superseded by ADR-0002') };
+    expect(rules(followed)).toEqual(['stale-premise']);
+  });
+
+  it('closes a cycle, which a log in the same place would not', () => {
+    const files = {
+      'docs/adr/0004.md': doc('ADR-0004', 'archived', 'supersedes: ADR-0005'),
+      'docs/adr/0005.md': doc('ADR-0005', 'superseded', 'supersedes: ADR-0004'),
+    };
+    const found = analyse(files).diagnostics.map((d) => [d.rule, d.nodes[0]]);
+    expect(found).toEqual([
+      ['circular-delegation', 'ADR-0004'],
+      ['unreciprocated-supersession', 'ADR-0004'],
+      ['unreciprocated-supersession', 'ADR-0005'],
+    ]);
+    expect(rules(files, asHistory('docs/adr/0004.md'))).toEqual([]);
+  });
+
+  it('can link to itself, which a log is not held to', () => {
+    const files = { 'docs/B-0001.md': doc('B-0001', 'archived', 'depends-on: B-0001') };
+    expect(rules(files)).toEqual(['self-reference']);
+    expect(rules(files, asHistory('docs/B-0001.md'))).toEqual([]);
+  });
+
+  it('hands on no work and rests on no premise, as when it read as retired', () => {
+    const files = {
+      'docs/adr/0001.md': doc('ADR-0001', 'retired'),
+      'docs/adr/0002.md': [doc('ADR-0002', 'archived', 'depends-on: ADR-0001'), '', '## Open Questions', '', '- [ ] Deferred to ADR-0001.'].join('\n'),
+    };
+    expect(rules(files)).toEqual([]);
+    // The same document, live, is held to both.
+    const live = { ...files, 'docs/adr/0002.md': files['docs/adr/0002.md'].replace('status: archived', 'status: accepted') };
+    expect(rules(live).sort()).toEqual(['ghost-handover', 'stale-premise']);
   });
 });
 

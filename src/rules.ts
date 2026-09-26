@@ -71,7 +71,7 @@ export const RULE_DESCRIPTIONS: Readonly<Record<RuleId, string>> = Object.freeze
   'circular-delegation': 'obligations or supersessions form a cycle, so none of them can ever land',
   'orphaned-obligation': 'a retired or frozen document still holds open obligations',
   'live-supersession': 'a document has been superseded but still presents itself as current',
-  'unreciprocated-supersession': 'a retired document does not say what replaced it',
+  'unreciprocated-supersession': 'a retired or archived document does not say what replaced it',
   'state-conflict': 'an item declares two states that disagree about whether work remains',
   'self-reference': 'a document delegates to or depends on itself',
   'unknown-relation-key': 'a front-matter key reads as a relation but declares none',
@@ -235,13 +235,29 @@ const REFERENCE_RULES: ReadonlySet<AnyRuleId> = new Set<AnyRuleId>([
  * Stated once, here, rather than as a guard repeated in eight rules: the
  * exemption is a property of what counts as a finding, not of any one rule, and
  * a rule added later inherits it without having to remember. See ADR-0011.
+ *
+ * All of that is a log's, declared by `historyPatterns` or `@spec-history`. A
+ * document that is a record because it says `archived` is a closed round of
+ * work, and nothing about it makes its claims history: a supersession it
+ * declares, a cycle it closes and a link to itself are still somebody's to
+ * correct. What it owes and what it rests on are history, as they were when
+ * `archived` read as retired, and that is all it is exempt from.
  */
 function exempt(graph: SpecGraph, rule: AnyRuleId, nodes: readonly string[]): boolean {
   if (REFERENCE_RULES.has(rule)) return false;
   const subject = nodes[0];
   if (subject === undefined) return false;
-  return graph.owningDocument(subject)?.phase === 'record';
+  const owner = graph.owningDocument(subject);
+  if (owner?.phase !== 'record') return false;
+  return owner.history || CLOSED_ROUND_RULES.has(rule);
 }
+
+/**
+ * The rules an archived document is exempt from as their subject: work it
+ * hands on and premises it rests on. Their queries left a retired source out,
+ * and `archived` was retired until it became a record.
+ */
+const CLOSED_ROUND_RULES: ReadonlySet<AnyRuleId> = new Set<AnyRuleId>(['ghost-handover', 'stale-premise']);
 
 /* -------------------------------------------------------------------------- */
 /* Ghost handovers                                                            */
@@ -268,7 +284,8 @@ function ghostHandovers(graph: SpecGraph, emit: Emit): Set<string> {
     const targetDocument = graph.owningDocument(target.id);
     if (!targetDocument) continue;
 
-    const sealed = SEALED_WORD[targetDocument.phase] ?? 'frozen';
+    const seal = sealOf(targetDocument);
+    const sealed = SEALED_WORD[seal] ?? 'frozen';
     const what = source.kind === 'item' ? 'open obligation' : 'obligation';
     const verb = EDGE_TRAITS[edge.kind].phrase;
     claimed.add(edgeKey(edge));
@@ -281,16 +298,22 @@ function ghostHandovers(graph: SpecGraph, emit: Emit): Set<string> {
         related(targetDocument.statusAt ?? targetDocument.at, `${targetDocument.id} is ${sealed}${statusSuffix(targetDocument)}`),
         ...(source.kind === 'item' ? [related(source.at, `the obligation: ${source.text}`)] : []),
       ],
-      hint: HANDOVER_HINT[targetDocument.phase]?.(targetDocument.id) ?? FROZEN_HINT(targetDocument.id),
+      hint: HANDOVER_HINT[seal]?.(targetDocument.id) ?? FROZEN_HINT(targetDocument.id),
     }));
   }
   return claimed;
+}
+
+/** Which kind of sealed document this is: its phase, or `archived` for a closed round. */
+function sealOf(document: DocumentNode): string {
+  return document.phase === 'record' && !document.history ? 'archived' : document.phase;
 }
 
 /** How a sealed target is described in a ghost-handover message. */
 const SEALED_WORD: Readonly<Partial<Record<string, string>>> = {
   retired: 'retired',
   record: 'a historical record',
+  archived: 'archived',
 };
 
 const FROZEN_HINT = (id: string): string =>
@@ -300,6 +323,7 @@ const FROZEN_HINT = (id: string): string =>
 const HANDOVER_HINT: Readonly<Partial<Record<string, (id: string) => string>>> = {
   retired: (id) => `nothing will be read from ${id} again - re-home this in a live document, or close it here`,
   record: (id) => `${id} is a log of what happened and will never act - re-home this in a live document`,
+  archived: (id) => `${id} is a closed round of work and will never act - re-home this in a live document`,
 };
 
 /** Identity of a relation, for the hand-off between overlapping rules. */
@@ -493,9 +517,10 @@ function circularDelegations(graph: SpecGraph, emit: Emit): void {
       .filter((node): node is DocumentNode => node !== undefined);
     if (members.length < 2) continue;
     // A cycle is a set, not a subject, so the exemption at `emit` cannot see it.
-    // One record in the loop means the loop is partly a report of what was once
-    // said, and nothing in it is owed by anybody.
-    if (members.some((member) => member.phase === 'record')) continue;
+    // One log in the loop means the loop is partly a report of what was once
+    // said, and nothing in it is owed by anybody. An archived document in it
+    // is not a log: its half of the loop is a claim it still makes.
+    if (members.some((member) => member.history)) continue;
 
     const edges = cycleEdges(graph, component, kinds);
     const onlySupersession = edges.length > 0 && edges.every((edge) => edge.kind === 'supersedes');
@@ -573,14 +598,19 @@ function supersessions(graph: SpecGraph, emit: Emit): void {
     const superseded = graph.document(edge.to);
     const superseding = graph.document(edge.from);
     if (!superseded || !superseding) continue;
-    // A record narrating "ADR-0005 replaced ADR-0001" is reporting a
+    // A log narrating "ADR-0005 replaced ADR-0001" is reporting a
     // supersession, not declaring one. Both hints below ask somebody to edit
     // the document that made the claim, and a log is the one document nobody
     // can edit - it says what was true when it was written. The exemption at
-    // `emit` cannot see this: the subject here is the *other* document.
-    if (superseding.phase === 'record') continue;
+    // `emit` cannot see this: the subject here is the *other* document. An
+    // archived brief that says it supersedes another is declaring it.
+    if (superseding.history) continue;
 
-    if (superseded.phase !== 'retired' && superseded.phase !== 'unknown') {
+    // Closed either way: an archived document is not live, and like a retired
+    // one it can fail to say what replaced it. A log in its place is the
+    // subject, and exempt at `emit`.
+    const archived = superseded.phase === 'record';
+    if (superseded.phase !== 'retired' && !archived && superseded.phase !== 'unknown') {
       emit('live-supersession', () => ({
         // The fix belongs in the superseded document, so that is where the
         // finding points - not at the document that made the claim.
@@ -593,13 +623,18 @@ function supersessions(graph: SpecGraph, emit: Emit): void {
       continue;
     }
 
-    if (superseded.phase === 'retired' && !edge.declaredIn.includes(superseded.path)) {
+    if ((superseded.phase === 'retired' || archived) && !edge.declaredIn.includes(superseded.path)) {
       emit('unreciprocated-supersession', () => ({
-        message: `${superseded.id} is retired but never says that ${superseding.id} replaced it`,
+        message: `${superseded.id} is ${archived ? 'archived' : 'retired'} but never says that ${superseding.id} replaced it`,
         at: superseded.statusAt ?? superseded.at,
         nodes: [superseded.id, superseding.id],
         related: [related(edge.declaredAt, `only ${superseding.id} records the relationship`)],
-        hint: `add "superseded-by: ${superseding.id}" to ${superseded.path} so a reader who lands there is redirected`,
+        // Archived and superseded is retired, so that status also tells what
+        // rests on the document that it no longer holds, which a
+        // `superseded-by` key beside `archived` would not.
+        hint: archived
+          ? `make the status of ${superseded.path} "archived, superseded by ${superseding.id}" so a reader who lands there is redirected`
+          : `add "superseded-by: ${superseding.id}" to ${superseded.path} so a reader who lands there is redirected`,
       }));
     }
   }

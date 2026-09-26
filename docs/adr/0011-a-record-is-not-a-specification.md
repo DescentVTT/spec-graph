@@ -74,6 +74,21 @@ links are checked and its open items are nobody's, and a document resting on
 it is no longer told it rests on something retired. `superseded`, `deprecated`
 or `retired` says that.
 
+**An archived document is a closed round, not a log.** The exemption below was
+written for logs, and reached through the status word it covered more than the
+word means: a supersession an archived brief declares, a cycle it closes and a
+link it makes to itself are claims somebody can still correct, and 0.8.0, which
+read the word as retired, reported each. So a document says which way it became
+a record - `history` is true when it was declared - and an archived one is
+exempt only from what it was exempt from as retired: the work it hands on and
+the premises it rests on. What changes from retired is what the rest of the
+graph is told about it, which is the point of the amendment: what depends on it
+rests on nothing stale, and its open items are orphaned from nobody. And one
+thing about itself: an archived document something else supersedes, and that
+never says so, is told to make its status `archived, superseded by ADR-0002`,
+which retires it and tells what rests on it, rather than to add a
+`superseded-by` key beside `archived`, which would do neither.
+
 **Being a record outranks a status word written inside the file**, at the file
 level and at the section level both. It is a categorical statement about what
 the document is, made deliberately from outside it; a `Status: accepted` line in
@@ -105,7 +120,10 @@ In one place: the boundary where a finding becomes a finding.
 ```ts
 function exempt(graph, rule, nodes) {
   if (REFERENCE_RULES.has(rule)) return false;
-  return graph.owningDocument(nodes[0])?.phase === 'record';
+  const owner = graph.owningDocument(nodes[0]);
+  if (owner?.phase !== 'record') return false;
+  // A log is exempt from all of it; an archived round, from two rules.
+  return owner.history || CLOSED_ROUND_RULES.has(rule);
 }
 ```
 
@@ -114,9 +132,12 @@ counts as a finding at all - spec-graph reports work a human can do, and a
 record documents work already done - so it is stated once and every rule
 inherits it, including rules written later that would have forgotten.
 
-The one exception is `circular-delegation`, whose subject is a set rather than a
-node. A cycle with a record in it is partly a report of what was once said, and
-nothing in it is owed by anybody, so the traversal skips it there.
+Two cannot be exempted there. One is `circular-delegation`, whose subject is a
+set rather than a node. A cycle with a log in it is partly a report of what was
+once said, and nothing in it is owed by anybody, so the traversal skips it
+there. The other is a supersession a log declares, whose finding lands on the
+document it names, so `supersessions` skips that one itself. Neither skip
+applies to an archived document, whose claims are its own.
 
 ## Alternatives considered
 

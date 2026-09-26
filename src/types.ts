@@ -258,6 +258,14 @@ export interface DocumentNode extends NodeBase {
   /** Every spelling that resolves to this document, lowercased. */
   readonly aliases: readonly string[];
   readonly phase: Phase;
+  /**
+   * Declared a historical record from outside the file, by `historyPatterns`
+   * or `<!-- @spec-history -->`: a log, exempt from every finding about work.
+   * A document that reaches `record` by the status word `archived` is a closed
+   * round rather than a log, and answers for its supersessions, its cycles and
+   * its self-references still (ADR-0011).
+   */
+  readonly history: boolean;
   /** The status string as written, before normalisation. `null` if absent. */
   readonly rawStatus: string | null;
   /** Where the status was declared, when it was declared anywhere. */
