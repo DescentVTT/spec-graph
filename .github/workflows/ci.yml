@@ -10,8 +10,13 @@ on:
   # commit may never have finished one.
   workflow_call:
 
+# A newer run of the same pull request or ref cancels the older one. Called by
+# the release, `github.workflow` is the caller's name, Release, so its CI has a
+# group of its own: a push to main cannot cancel a release rehearsal's CI
+# halfway, and a rehearsal cannot cancel main's. A tag's release keys on the
+# tag, which nothing else runs CI for.
 concurrency:
-  group: ci-${{ github.event.pull_request.number || github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 # Nothing here writes to the repository. Stated rather than inherited, because
