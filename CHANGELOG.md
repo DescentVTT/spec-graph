@@ -3,6 +3,15 @@
 Notable changes, newest first. Versions follow [semver](https://semver.org):
 a patch fixes behaviour without asking anything of a repository that upgrades.
 
+## Unreleased
+
+### Changed
+
+- `npm publish` in a checkout refuses to run outside GitHub Actions, so a
+  version cannot reach npm from a workstation by mistake, without provenance;
+  spec-harness 0.1.0 did. The release never runs it: it stages a tarball it
+  packed.
+
 ## 0.9.0
 
 Versions are staged by CI from a `v*` tag, through npm's trusted
