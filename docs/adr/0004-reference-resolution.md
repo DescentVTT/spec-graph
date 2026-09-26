@@ -141,27 +141,27 @@ on the superseded one with no redirect, and that is a finding
       Distance alone was the wrong question; what a suggestion needs is distance
       in the part of the spelling that is not the identity.
 - [x] Should a family prefix be allowed to contain a hyphen, so that `OI-V-05`
-      and `KEP-SIG-1` parse as a family and a number rather than staying
-      verbatim? **Declined (2026-09-16).** `PREFIXED_ID` is not only the shape
-      of an identity: it is half the gate in `looksLikeCitation`, and it decides
-      what a bare token in prose may be. Widening the prefix to admit a hyphen
-      was measured against a corpus of ordinary hyphenated values, and of the
-      eighteen strings it newly matched, sixteen were words: `og-image-2`,
-      `font-weight-400`, `x-frame-options-1`, `end-to-end-2`, `ci-cd-1`,
-      `top-level-0`. Two were the intended ones.
+  and `KEP-SIG-1` parse as a family and a number rather than staying
+  verbatim? **Declined (2026-09-16).** `PREFIXED_ID` is not only the shape
+  of an identity: it is half the gate in `looksLikeCitation`, and it decides
+  what a bare token in prose may be. Widening the prefix to admit a hyphen
+  was measured against a corpus of ordinary hyphenated values, and of the
+  eighteen strings it newly matched, sixteen were words: `og-image-2`,
+  `font-weight-400`, `x-frame-options-1`, `end-to-end-2`, `ci-cd-1`,
+  `top-level-0`. Two were the intended ones.
 
-      What it would buy is small and the other way round from the cost. An
-      unhyphenated declaration is kept verbatim and already resolves from every
-      spelling `normaliseRef` folds - `oi-v-05`, `OI V 05`, `oi_v_05` - so what
-      is lost is the zero-padding variants, `OI-V-5` for `OI-V-05`, and a bare
-      `05` resolving within an `OI-V` family. Both are misses, and a miss is
-      what this repository trades false positives for.
+  What it would buy is small and the other way round from the cost. An
+  unhyphenated declaration is kept verbatim and already resolves from every
+  spelling `normaliseRef` folds - `oi-v-05`, `OI V 05`, `oi_v_05` - so what
+  is lost is the zero-padding variants, `OI-V-5` for `OI-V-05`, and a bare
+  `05` resolving within an `OI-V` family. Both are misses, and a miss is
+  what this repository trades false positives for.
 
-      What would reopen it: a corpus where the padded and unpadded spellings of
-      a hyphenated family are both in use, at which point the convention is
-      being read rather than guessed at - and the widening would belong to
-      `identify`, which knows it is looking at a declaration, rather than to the
-      regular expression that also reads prose.
+  What would reopen it: a corpus where the padded and unpadded spellings of
+  a hyphenated family are both in use, at which point the convention is
+  being read rather than guessed at - and the widening would belong to
+  `identify`, which knows it is looking at a declaration, rather than to the
+  regular expression that also reads prose.
 - [x] Is zero-padding part of an identity? **Resolved (2026-09-16): no, and one
       comparison had assumed otherwise.** `ADR-40`, `ADR-040` and `ADR-0040`
       already resolve to one document everywhere references are read, but the

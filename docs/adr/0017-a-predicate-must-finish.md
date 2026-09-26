@@ -212,46 +212,46 @@ much as a rule nobody tested.**
 ## Open Questions
 
 - [x] Should the matcher be reused for `--ignore` globs? `glob.ts` compiles a
-      glob to a `RegExp`, and a glob has no nested quantifiers, so there is no
-      hazard to remove - only one fewer engine in the package. Not obviously
-      worth a rewrite of working code.
-      **Resolved (2026-09-13): yes, and the reason given for no was false.**
-      Nobody had timed it. Nesting is what makes a pattern exponential, and a
-      glob's stars are not nested - but each is a `[^/]*`, and a subject that
-      fails to match is divided between them every way there is, which costs
-      its length to the power of the stars. `**/*-*-*-*.md` took `RegExp` 2.3
-      seconds over a 643-character file name, and `*-*-*-x` took 120 over a
-      10,000-character reference target. A file name is capped by its
-      filesystem. A target is read out of a document and capped by nothing.
+  glob to a `RegExp`, and a glob has no nested quantifiers, so there is no
+  hazard to remove - only one fewer engine in the package. Not obviously
+  worth a rewrite of working code.
+  **Resolved (2026-09-13): yes, and the reason given for no was false.**
+  Nobody had timed it. Nesting is what makes a pattern exponential, and a
+  glob's stars are not nested - but each is a `[^/]*`, and a subject that
+  fails to match is divided between them every way there is, which costs
+  its length to the power of the stars. `**/*-*-*-*.md` took `RegExp` 2.3
+  seconds over a 643-character file name, and `*-*-*-x` took 120 over a
+  10,000-character reference target. A file name is capped by its
+  filesystem. A target is read out of a document and capped by nothing.
 
-      Every glob now compiles to this automaton, which answers those two in 0.2
-      and 0.9 milliseconds, and agrees with `RegExp` on every glob and path in
-      a differential corpus, refusals included. The matcher gained one option
-      for it: a path on a case-sensitive filesystem must not fold, so
-      `ignoreCase` can be turned off, and the reading without it is checked
-      against `RegExp` without the flag.
+  Every glob now compiles to this automaton, which answers those two in 0.2
+  and 0.9 milliseconds, and agrees with `RegExp` on every glob and path in
+  a differential corpus, refusals included. The matcher gained one option
+  for it: a path on a case-sensitive filesystem must not fold, so
+  `ignoreCase` can be turned off, and the reading without it is checked
+  against `RegExp` without the flag.
 
-      It was not free, and the first measurement said so. Tested against every
-      path in a walk, the automaton cost 3.5 microseconds a path to `RegExp`'s
-      0.06 - most of it one loop reading the type off instruction objects of
-      five shapes, and a table allocated per subject. Flattening the program
-      into typed arrays and keeping the buffers brought that to 0.6, which is
-      under a tenth of a second for every hundred thousand paths tested. The
-      bound is worth that; it was not worth the first figure without trying.
+  It was not free, and the first measurement said so. Tested against every
+  path in a walk, the automaton cost 3.5 microseconds a path to `RegExp`'s
+  0.06 - most of it one loop reading the type off instruction objects of
+  five shapes, and a table allocated per subject. Flattening the program
+  into typed arrays and keeping the buffers brought that to 0.6, which is
+  under a tenth of a second for every hundred thousand paths tested. The
+  bound is worth that; it was not worth the first figure without trying.
 
-      Writing the reference filter's call turned up one more thing. It
-      lower-cased both sides, which is its whole case rule, and then compiled
-      with the `i` flag on Windows only - so the micro sign and the Greek mu
-      were one target on one platform and two on the others, in the function
-      whose comment says its answer must not depend on the machine. It no
-      longer folds anywhere.
+  Writing the reference filter's call turned up one more thing. It
+  lower-cased both sides, which is its whole case rule, and then compiled
+  with the `i` flag on Windows only - so the micro sign and the Greek mu
+  were one target on one platform and two on the others, in the function
+  whose comment says its answer must not depend on the machine. It no
+  longer folds anywhere.
 
-      *Amended 2026-09-26.* Globs have moved again, off this automaton and
-      onto spec-core's glob engine, which reads the syntax the way every
-      spec-* tool does and is built for it rather than translated into a
-      regular expression. The bound is the same. Path globs stopped folding
-      case on Windows too, and [ADR-0022](0022-globs-are-the-family-path-dialect.md)
-      lists what else a user sees change.
+  *Amended 2026-09-26.* Globs have moved again, off this automaton and
+  onto spec-core's glob engine, which reads the syntax the way every
+  spec-* tool does and is built for it rather than translated into a
+  regular expression. The bound is the same. Path globs stopped folding
+  case on Windows too, and [ADR-0022](0022-globs-are-the-family-path-dialect.md)
+  lists what else a user sees change.
 - [ ] Should a pattern that compiles to more than a few hundred states warn?
       The ceiling refuses the pathological case and nothing between "fine" and
       "refused" has been observed, so a warning would be a number invented to
