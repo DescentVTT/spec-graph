@@ -18,9 +18,11 @@ anything. 0.2.0 to 0.8.0 have none and never will.
 **`--format gitlab`**, the Code Quality report a GitLab merge request reads,
 so the family is not GitHub's alone. `check` only, like SARIF. One issue per
 finding: the rule as `check_name`, message and hint as `description`, the file
-and line as `location`, and a `fingerprint` that is a SHA-256 of the rule, the
-file and the message - no line, so moving a paragraph does not make a finding
-new, and a second finding identical in all three is told apart by its order.
+and line as `location`, and a `fingerprint` that is a SHA-256 of the rule,
+the specification and what within it - the identity a baseline counts by. No
+line, so moving a paragraph does not make a finding new, and no message, whose
+counts move when one of three boxes is ticked; a second finding identical in
+all three is told apart by its order.
 `error` is `critical`, or `major` when only `--strict` made it an error;
 `warn` is `minor` and `info` is `info`. The README has the job to add. See
 [ADR-0015](docs/adr/0015-feedback-goes-where-the-tools-already-look.md).

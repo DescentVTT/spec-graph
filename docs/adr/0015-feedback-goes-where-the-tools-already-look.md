@@ -68,12 +68,15 @@ and a file and line, and no field GitLab does not read.
 
 - **The fingerprint is what the finding is.** It is how GitLab matches a
   finding in a merge request to the one on the target branch, so it is a
-  SHA-256 of the rule, the file and the message, and moving a paragraph does
-  not make a finding new. Two findings identical in all three - one broken
-  link written twice - are told apart by their order, since GitLab tells
-  issues apart by fingerprint. It is not the baseline's identity, which SARIF
-  carries: that names a specification rather than a file, and a GitLab issue
-  is a place in a file.
+  SHA-256 of the baseline's identity - the rule, the specification and what
+  within it, which SARIF carries too - and moving a paragraph does not make a
+  finding new. Two findings identical in all three - one broken link written
+  twice - are told apart by their order, since GitLab tells issues apart by
+  fingerprint. It was the rule, the file and the message at first, on the
+  grounds that a GitLab issue is a place in a file; but the message carries
+  counts, and ticking one of three boxes showed an `orphaned-obligation` as
+  resolved and a new one introduced. The place is in `location`, which
+  GitLab reads for that.
 - **Severity says what `--strict` did.** An error is `critical`, a warning
   `minor`, a note `info`, and an error only `--strict` made is `major`. The
   format has no field for escalation, and a reviewer should be able to tell a

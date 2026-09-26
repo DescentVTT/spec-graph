@@ -637,9 +637,11 @@ Each finding is an issue with its rule as `check_name`, its message and hint as
 `description`, and its file and line as `location`. Severities map as `error`
 to `critical` - or `major` when only `--strict` made it an error - `warn` to
 `minor` and `info` to `info`. The `fingerprint` is a SHA-256 of the rule, the
-file and the message, with no line in it, so a finding a paragraph moved is not
-reported as new; the second of two findings identical in all three is told
-apart by its order. `when: always` keeps the report when the job fails, which
+specification and what within it - a citation's target, or the document at the
+other end - which is what a baseline counts by. There is no line in it, so a
+finding a paragraph moved is not reported as new, and no message, so ticking
+one of three open boxes does not make an `orphaned-obligation` new either; the
+second of two findings identical in all three is told apart by its order. `when: always` keeps the report when the job fails, which
 it does, with exit `1`, whenever there is an error to report.
 
 `--format json` is the machine-readable output to parse if you are building
