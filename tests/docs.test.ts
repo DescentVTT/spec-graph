@@ -1,7 +1,9 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { posix } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { HELP } from '../src/cli.js';
+import { scanMarkdown } from '../src/markdown.js';
 import { DEFAULT_SEVERITIES, RULE_DECISIONS, RULE_IDS } from '../src/rules.js';
 import { attributesOf, SELECTOR_KEYS } from '../src/select.js';
 import { EDGE_KINDS, OPENNESS_OF, type Disposition, type DocumentNode, type ItemNode } from '../src/types.js';
@@ -87,6 +89,53 @@ describe('the source tree', () => {
     // for an interpreter named "node\r".
     const offenders = files.filter((file) => readFileSync(file, 'utf8').includes('\r\n'));
     expect(offenders).toEqual([]);
+  });
+});
+
+describe('the documents the package ships', () => {
+  const REPOSITORY = 'https://github.com/DescentVTT/spec-graph/blob/main/';
+  const { files } = JSON.parse(readFileSync('package.json', 'utf8')) as { files: string[] };
+  const ships = (path: string): boolean => files.some((entry) => path === entry || path.startsWith(`${entry}/`));
+  // npm reads an entry with no slash in it as a name at any depth, so
+  // `README.md` packs spec-core's README too, beside the licence it is told to
+  // ship. That one is spec-core's to write, and is held here all the same.
+  const documents = ['README.md', 'CHANGELOG.md', 'src/vendor/spec-core/README.md'];
+  // Read as a renderer reads them: a link written out in a code span, as the
+  // changelog does to show one, is text there and never followed.
+  const linksOf = (document: string) => scanMarkdown(readFileSync(document, 'utf8')).links;
+
+  it('are every Markdown file package.json names', () => {
+    expect(files.filter((entry) => entry.endsWith('.md')).filter((entry) => !documents.includes(entry))).toEqual([]);
+  });
+
+  it('link only to files it ships, or by absolute URL, so that a link works in node_modules and on npmjs.com', () => {
+    const dead: string[] = [];
+    for (const document of documents) {
+      for (const { target, line } of linksOf(document)) {
+        if (/^(?:[a-z][a-z+.-]*:|#)/i.test(target)) continue;
+        const path = posix.join(posix.dirname(document), target.split('#')[0] as string);
+        if (!ships(path) || !existsSync(path)) dead.push(`${document}:${line}: ${target}`);
+      }
+    }
+    expect(dead).toEqual([]);
+  });
+
+  it('link into this repository only at files it holds', () => {
+    // The selfcheck read the README's links to the ADRs while they were
+    // relative, and a renamed ADR broke it. It follows no URL, so this does.
+    const missing: string[] = [];
+    let checked = 0;
+    for (const document of documents) {
+      for (const { target, line } of linksOf(document)) {
+        if (!target.startsWith(REPOSITORY)) continue;
+        checked += 1;
+        if (!existsSync(decodeURIComponent(target.slice(REPOSITORY.length).split('#')[0] as string))) {
+          missing.push(`${document}:${line}: ${target}`);
+        }
+      }
+    }
+    expect(missing).toEqual([]);
+    expect(checked).toBeGreaterThan(0);
   });
 });
 
