@@ -11,7 +11,9 @@
  * Anything richer is recognised and not guessed at: a value continued on the
  * next line, a plain value holding `: `, a block scalar, an anchor. Such a value
  * is not read, and the reason is a parse problem at the value, so a key that
- * says nothing to the graph says why under `--verbose`.
+ * says nothing to the graph says why under `--verbose`. Each problem says
+ * whether it left something out and which key, for the count a run prints
+ * without `--verbose`.
  *
  * What stays here is the shape the rest of spec-graph reads: a key in lower
  * case, which is how a relation key, a status key and `fm.<key>` in a selector
@@ -63,8 +65,8 @@ const KEY_SHAPE = /^[ \t]*([A-Za-z_][\w.-]*)[ \t]*:/;
 /** Reads a scanned document's front matter. */
 export function readEntries(scanned: ScannedDocument): FrontMatterReading {
   const block = scanned.frontMatter;
-  const index = scanned.index;
   if (block === null) return neverClosed(scanned);
+  const index = scanned.index;
   // The block and nothing after it: the reader splits what it is given into
   // lines, and the body is none of its business.
   const read = readFrontMatter(scanned.text.slice(0, block.bodyStart), { nested: true });
