@@ -207,24 +207,24 @@ gate down with it.
 ## Open Questions
 
 - [x] Should `spec-graph query project:no-drafts` run a named rule by its id?
-      **Resolved (2026-09-13):** yes, shipped. The rule is already compiled by
-      the time the command runs, and the namespace that made everything else
-      free makes this free too - no selector begins with a word and a colon, so
-      there is nothing to disambiguate and nothing added to the grammar.
+  **Resolved (2026-09-13):** yes, shipped. The rule is already compiled by
+  the time the command runs, and the namespace that made everything else
+  free makes this free too - no selector begins with a word and a colon, so
+  there is nothing to disambiguate and nothing added to the grammar.
 
-      Two details are deliberate. A rule with several selectors runs them as
-      the same union `projectFindings` does, deduped on the path, so what this
-      prints is the set `check` reports on rather than a longer one. And
-      `--verbose` names the selectors, because the question a team debugging a
-      convention is actually asking is "what did I write".
+  Two details are deliberate. A rule with several selectors runs them as
+  the same union `projectFindings` does, deduped on the path, so what this
+  prints is the set `check` reports on rather than a longer one. And
+  `--verbose` names the selectors, because the question a team debugging a
+  convention is actually asking is "what did I write".
 
-      Built-in rules are **not** addressable this way. A project rule *is* its
-      selector; a built-in is a selector plus judgement - the hand-off between
-      `ghost-handover` and `stale-premise`, the record exemption, the related
-      cap - so `query rule:ghost-handover` would print a set that differs from
-      the findings and invite somebody to conclude the rule is broken.
-      `rules --explain` already shows those selectors, labelled as what they
-      are.
+  Built-in rules are **not** addressable this way. A project rule *is* its
+  selector; a built-in is a selector plus judgement - the hand-off between
+  `ghost-handover` and `stale-premise`, the record exemption, the related
+  cap - so `query rule:ghost-handover` would print a set that differs from
+  the findings and invite somebody to conclude the rule is broken.
+  `rules --explain` already shows those selectors, labelled as what they
+  are.
 - [ ] Should a project rule be able to name its own `related` locations? It gets
       every edge after the first, which is the right default and is not
       configurable.

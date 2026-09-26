@@ -147,31 +147,31 @@ contains it.
 ## Open Questions
 
 - [x] A lone `\r` is not treated as a line ending, so a classic-Mac file reports
-      every position on one line. **Resolved (2026-09-12): the question was
-      wrong.** It always was a line ending. `createLineIndex` has recognised all
-      three terminators since 0.1.0 and says so in its own doc comment; the
-      claim was written from reading the scanner and not the table underneath
-      it, and nothing measured it either way. A test now feeds one corpus
-      through `\n`, `\r\n` and `\r` and asserts the three produce identical
-      items, findings and line numbers, so the next person to wonder gets an
-      answer instead of a note.
+  every position on one line. **Resolved (2026-09-12): the question was
+  wrong.** It always was a line ending. `createLineIndex` has recognised all
+  three terminators since 0.1.0 and says so in its own doc comment; the
+  claim was written from reading the scanner and not the table underneath
+  it, and nothing measured it either way. A test now feeds one corpus
+  through `\n`, `\r\n` and `\r` and asserts the three produce identical
+  items, findings and line numbers, so the next person to wonder gets an
+  answer instead of a note.
 
-      The useful lesson is the one this ADR already makes about mutation scores:
-      an open question is a claim, and a claim nobody executed is worth exactly
-      as much as a rule nobody tested.
+  The useful lesson is the one this ADR already makes about mutation scores:
+  an open question is a claim, and a claim nobody executed is worth exactly
+  as much as a rule nobody tested.
 - [x] A NUL byte in a scanned file is read through in silence.
-      **Resolved (2026-09-12):** it is reported, as a parse problem rather than
-      as a finding. That is the answer to the scope question it was really
-      asking - nothing about the *graph* is wrong, and a NUL is whitespace to
-      every rule here, so it is a problem with the input and belongs where the
-      other problems with input already go. It never fails a build over somebody
-      else's encoding.
+  **Resolved (2026-09-12):** it is reported, as a parse problem rather than
+  as a finding. That is the answer to the scope question it was really
+  asking - nothing about the *graph* is wrong, and a NUL is whitespace to
+  every rule here, so it is a problem with the input and belongs where the
+  other problems with input already go. It never fails a build over somebody
+  else's encoding.
 
-      It earns the line because spec-graph is likely the only tool that got this
-      far: grep, diff and every review interface read the file as binary and
-      show nothing at all. And the cause is almost always an encoding rather
-      than a keystroke - UTF-16 read as UTF-8 puts a NUL between every
-      character - so the message names that instead of just pointing.
+  It earns the line because spec-graph is likely the only tool that got this
+  far: grep, diff and every review interface read the file as binary and
+  show nothing at all. And the cause is almost always an encoding rather
+  than a keystroke - UTF-16 read as UTF-8 puts a NUL between every
+  character - so the message names that instead of just pointing.
 - [x] Code blocks are found line by line before comments are, because a
       comment is defined as being outside code. So a fence inside a comment
       still opens one, and an odd number of them turns the prose after the
