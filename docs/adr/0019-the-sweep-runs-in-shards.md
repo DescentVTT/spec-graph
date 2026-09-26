@@ -69,12 +69,12 @@ list, so a file added later is mutated without anyone remembering to assign it.
 spec-core ([ADR-0017](0017-a-predicate-must-finish.md)), and the copy under
 `src/vendor/` is mutated by no shard, because spec-core's sweep measures it.
 
-*Amended again the same day.* The scanner moved there too
-([ADR-0023](0023-the-scanner-is-the-familys.md)). `markdown.ts` stays in its
-shard, holding only spec-graph's reading of what spec-core's copy reports, so
-shard 2 is nearer ten minutes than forty-one
-until a sweep measures it again, and the wall time is still `extract.ts`'s, in
-shard 1.
+*Amended again the same day.* The scanner and the front-matter reader moved
+there too ([ADR-0023](0023-the-scanner-is-the-familys.md)). `markdown.ts` and
+`yaml.ts` stay in their shards, holding only spec-graph's reading of what
+spec-core's copies report, so shard 2 is nearer ten minutes than forty-one and
+shard 3 some eight minutes lighter until a sweep measures them again. The wall
+time is still `extract.ts`'s, in shard 1.
 
 ### Not splitting `extract.ts`
 

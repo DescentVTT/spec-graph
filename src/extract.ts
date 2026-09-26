@@ -52,7 +52,7 @@ import type {
   Phase,
   SourceRef,
 } from './types.js';
-import { parseFrontMatter, toRecord, valuesOf, type YamlEntry } from './yaml.js';
+import { readEntries, toRecord, valuesOf, type YamlEntry } from './yaml.js';
 
 /* -------------------------------------------------------------------------- */
 /* Output                                                                     */
@@ -645,7 +645,8 @@ export function extractDocument(input: ExtractInput): ExtractedDocument | null {
     }
   }
 
-  const entries = scanned.frontMatter ? parseFrontMatter(scanned.frontMatter.raw, scanned.frontMatter.start) : [];
+  const { entries, problems: unread } = readEntries(scanned);
+  for (const problem of unread) problems.push({ message: problem.message, at: at(problem.start, problem.end) });
   const byKey = new Map<string, YamlEntry>();
   for (const entry of entries) byKey.set(entry.key, entry);
   const inherited = inheritableFrontMatter(entries);

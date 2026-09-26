@@ -157,6 +157,27 @@ and `endLine`; `ListItem` has `endLine` and `quoteDepth`; `HtmlComment` has
 comment whose `closed` is `false`. `createLineIndex` is spec-core's, the same
 table. See [ADR-0023](docs/adr/0023-the-scanner-is-the-familys.md).
 
+**Front matter is read by spec-core's reader, and what it does not read says
+why.** Keys are compared in lower case and one level of nesting is read as
+`parent.child`, as before. Where the reader and YAML part from the old one:
+
+- **A value YAML does not say is not read.** A plain value holding `: ` -
+  `title: ADR-7: Sharding`, which YAML reads as an error - a value continued onto
+  the next line, which was read as its first line, a block scalar, an anchor and
+  a tag are left out rather than guessed at. Quote the value and it is read.
+  Each is a parse problem at the value, under `--verbose` and in
+  `--format json`, naming the reason; so are a line that is not `key: value`, a
+  key written twice, of which the last still wins, and TOML front matter, which
+  was read as nothing in silence. A status left out this way is looked for in a
+  `## Status` section, as a missing one always was.
+- **A list written at its key's own indentation is a list.** `deps:` over
+  `- ADR-1` was an empty value.
+- **Quoted values are YAML's.** `'it''s'` is `it's`, and `"a\tb"` holds a tab.
+
+`parseFrontMatter` keeps its signature and reads with spec-core's reader, so it
+leaves out what the reader does not read. See
+[ADR-0023](docs/adr/0023-the-scanner-is-the-familys.md).
+
 **`archived` is a record, not a retired decision.** spec-brief closes a round
 of work by writing `status: archived` and moving the brief to an archive
 directory, and every spec-* tool reads that word as a finished round which it
@@ -255,6 +276,17 @@ second. Of the mutants left alive on new lines, seven are equivalent and say
 so where they are; the rest are on the ignore filter, whose reading did not
 change, and on the symlink branch of the walk, which no test reaches, as
 before.
+
+Then spec-core's scanner and front-matter reader: `npm run lint`, 1,041 tests,
+`npm run build` and `npm run selfcheck`. Of the 27 new tests, 23 fail against
+the source before the move; the other four hold what must not move - an embed's
+edge, the last of a key written twice, no directive from a comment that never
+closes, and no suffix for a heading that is not repeated. The binaries before
+and after read this repository, its seven fixture corpora and spec-core's
+documents into identical graph exports and identical findings. Over a corpus
+written to hit each difference above, every difference in their output was one
+of them. The scanner's own mutants, 72% to 77% here, are spec-core's sweep's
+now, at 98% there; what the move left here is measured by CI's sweep.
 
 ## 0.8.0
 
