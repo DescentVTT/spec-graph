@@ -98,6 +98,32 @@ describe('anchors', () => {
     expect(dangling).toHaveLength(0);
   });
 
+  it('binds a repeated heading by its slug and by the anchor GitHub gives it', () => {
+    // GitHub renders the second `## Notes` as `#notes-1`, and a link copied
+    // from the rendered page says so. The slug still names the first.
+    const repeated = ['# Target', '', '## Notes', '', 'First.', '', '## Notes', '', 'Second.'].join('\n');
+    const cite = (anchor: string) =>
+      resolve({
+        'docs/adr/0001-target.md': repeated,
+        'docs/adr/0002-src.md': `# Src\n\nSee [it](0001-target.md#${anchor}).\n`,
+      });
+    for (const anchor of ['notes', 'notes-1']) {
+      const { edges, dangling } = cite(anchor);
+      expect(dangling, anchor).toHaveLength(0);
+      expect(edges.some((edge) => edge.to === 'ADR-0001' && edge.from === 'ADR-0002'), anchor).toBe(true);
+    }
+    // No more suffixes than there are repeats.
+    expect(cite('notes-2').dangling[0]?.reason).toBe('unknown-anchor');
+  });
+
+  it('gives a heading that is not repeated no suffix', () => {
+    const { dangling } = resolve({
+      'docs/adr/0001-target.md': target,
+      'docs/adr/0002-src.md': '# Src\n\nSee [it](0001-target.md#open-questions-1).\n',
+    });
+    expect(dangling[0]?.reason).toBe('unknown-anchor');
+  });
+
   it('reports an anchor that names nothing', () => {
     const { dangling } = resolve({
       'docs/adr/0001-target.md': target,

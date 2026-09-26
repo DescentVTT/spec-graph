@@ -12,8 +12,8 @@ These are not preferences. Breaking one is a decision that needs an ADR.
   written here, or in spec-core - the library the spec-* tools share, copied
   into `src/vendor/spec-core/` byte for byte and held to its hashes by
   `tests/vendor.test.ts`, never installed. Nothing under `src/vendor/` is edited
-  here: change spec-core and copy it again. The glob matcher and the
-  regular-expression matcher are spec-core's. A documentation linter a security team has to audit is one that
+  here: change spec-core and copy it again. The Markdown scanner, the glob
+  matcher and the regular-expression matcher are spec-core's. A documentation linter a security team has to audit is one that
   never gets installed.
 - **Nothing in the pipeline may take longer than its input.** Every stage has a
   stated cost in the size of what it reads. `~=` and globs used to be the

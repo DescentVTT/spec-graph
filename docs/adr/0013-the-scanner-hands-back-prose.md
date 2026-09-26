@@ -172,7 +172,7 @@ contains it.
       show nothing at all. And the cause is almost always an encoding rather
       than a keystroke - UTF-16 read as UTF-8 puts a NUL between every
       character - so the message names that instead of just pointing.
-- [ ] Code blocks are found line by line before comments are, because a
+- [x] Code blocks are found line by line before comments are, because a
       comment is defined as being outside code. So a fence inside a comment
       still opens one, and an odd number of them turns the prose after the
       comment into code and the next real code block into prose; a list marker
@@ -182,6 +182,13 @@ contains it.
       obligation. CommonMark answers the first two by recognising a line that
       begins with `<!--` as an HTML block while the line scan runs, and the
       third by the same flag this amendment gives a comment.
+      **Resolved (2026-09-26): by construction.** spec-graph reads documents
+      through spec-core's scan now ([ADR-0023](0023-the-scanner-is-the-familys.md)),
+      which finds comments in the same pass as blocks, as CommonMark does: a
+      line inside a comment opens no fence and sets no list context. It flags
+      each line of a raw-text element, and nothing is read from one - no
+      heading, item, table or status. `tests/markdown.test.ts` holds one test
+      for each of the three.
 
 ## See also
 

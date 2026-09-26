@@ -28,7 +28,17 @@ import {
   ID_KEYS,
 } from './identity.js';
 import { isStatusHeading, phaseFromPath, phaseOf, STATUS_KEYS, supersessionTargetsIn } from './lifecycle.js';
-import { isOnlyComment, scanMarkdown, slugify, type Link, type ListItem, type ScannedDocument } from './markdown.js';
+import {
+  anchorsOf,
+  isMarkdownLine,
+  isOnlyComment,
+  referenceLinks,
+  scanMarkdown,
+  slugify,
+  type Link,
+  type ListItem,
+  type ScannedDocument,
+} from './markdown.js';
 import { findSpecificationRegions, regionAt, type SpecificationRegion } from './sections.js';
 import { resolveItemState } from './state.js';
 import { refOf, type LineIndex } from './source.js';
@@ -89,7 +99,7 @@ export interface ExtractedDocument {
    * about the graph: the edge the author wrote down is not in it.
    */
   readonly misreadKeys: readonly MisreadKey[];
-  /** Heading slugs, for resolving `#anchor` references into this document. */
+  /** Heading slugs and GitHub's anchors, for resolving `#anchor` references into this document. */
   readonly anchors: ReadonlySet<string>;
   readonly identity: DocumentIdentity;
   readonly scanned: ScannedDocument;
@@ -614,6 +624,18 @@ export function extractDocument(input: ExtractInput): ExtractedDocument | null {
     });
   }
 
+  // CommonMark reads a comment that opens a line and never closes as running
+  // to the end of the document, and so does the scan: nothing after it is a
+  // heading, an item or a link. A renderer hides it all, so the author may see
+  // it, but the graph would lose it without a word.
+  const unclosed = scanned.comments.find((comment) => !comment.closed);
+  if (unclosed !== undefined) {
+    problems.push({
+      message: 'a comment opened here is never closed, so nothing after it is read - close it with -->',
+      at: at(unclosed.start, unclosed.start + 4),
+    });
+  }
+
   for (const directive of directives) {
     for (const unknown of directive.unknownAttributes) {
       problems.push({
@@ -747,7 +769,7 @@ export function extractDocument(input: ExtractInput): ExtractedDocument | null {
   const ownItems = allItems.filter((item) => item.document === identity.id);
   const ownReferences = allReferences.filter((reference) => belongsTo(reference, identity.id, allItems));
   const misreadKeys = misreadRelationKeys(byKey, identity.id, at);
-  const anchors = new Set<string>(scanned.headings.map((h) => h.slug));
+  const anchors = anchorsOf(scanned.headings);
 
   const filled = subSpecifications.map((spec) => ({
     ...spec.extracted,
@@ -851,9 +873,7 @@ function buildRegion(context: RegionInput): BuiltRegion {
     frontMatter: inherited,
   };
 
-  const anchors = new Set<string>(
-    scanned.headings.filter((h) => h.start >= region.start && h.start < region.end).map((h) => h.slug),
-  );
+  const anchors = anchorsOf(scanned.headings.filter((h) => h.start >= region.start && h.start < region.end));
 
   // Relations a table declares by column, typed by the header the author wrote.
   const references: ReferenceCandidate[] = region.relations.map((relation) => ({
@@ -958,7 +978,7 @@ function statusSectionBody(
   for (const line of scanned.lines) {
     if (line.line <= headingLine) continue;
     if (line.blank || isOnlyComment(scanned, line)) continue;
-    if (line.code) return null;
+    if (!isMarkdownLine(line)) return null;
     const trimmed = line.content.trim();
     // A heading immediately after means the section is empty.
     if (trimmed.startsWith('#')) return null;
@@ -1209,7 +1229,8 @@ function extractReferences(context: ReferenceContext): ReferenceCandidate[] {
   // so `| ADR-0002 | ... | [ADR-0001](0001.md) |` yields one typed edge rather
   // than a typed edge and a neutral citation beside it.
   const linked = new Set<string>();
-  for (const link of scanned.links) {
+  const links = referenceLinks(scanned);
+  for (const link of links) {
     if (link.form === 'definition') continue;
     if (isClaimed(claimed, link.start)) continue;
     const target = cleanTarget(link.target);
@@ -1218,7 +1239,7 @@ function extractReferences(context: ReferenceContext): ReferenceCandidate[] {
 
     const owner = ownerOf(items, link.start) ?? documentAt(link.start).id;
     const section = sectionPathAt(scanned, link.start);
-    const classified = classifyReference(scanned.masked, link.start, link.end, section);
+    const classified = classifyReference(scanned.masks.structure, link.start, link.end, section);
 
     linked.add(normaliseRef(stripAnchor(target)));
     out.push({
@@ -1226,7 +1247,7 @@ function extractReferences(context: ReferenceContext): ReferenceCandidate[] {
       from: owner,
       target,
       origin: 'link',
-      declaredAt: at(link.targetStart, link.targetStart + link.target.length),
+      declaredAt: at(link.targetStart, link.targetEnd),
       raw: renderLink(link),
       inverted: classified.inverted,
       opportunistic: false,
@@ -1235,13 +1256,13 @@ function extractReferences(context: ReferenceContext): ReferenceCandidate[] {
 
   // Bare identifiers in prose. Everything already covered by a link is skipped
   // so a citation written as `[ADR-7](0007.md)` is not counted twice.
-  for (const bare of findBareReferences(scanned)) {
+  for (const bare of findBareReferences(scanned, links)) {
     const key = normaliseRef(bare.text);
     if (linked.has(key)) continue;
     if (isClaimed(claimed, bare.start)) continue;
     const owner = ownerOf(items, bare.start) ?? documentAt(bare.start).id;
     const section = sectionPathAt(scanned, bare.start);
-    const classified = classifyReference(scanned.masked, bare.start, bare.end, section);
+    const classified = classifyReference(scanned.masks.structure, bare.start, bare.end, section);
     out.push({
       kind: classified.kind,
       from: owner,
@@ -1435,15 +1456,16 @@ interface BareReference {
  * Link constructs are blanked first. Without that, `[ADR-7](https://x/adr-7)`
  * would yield three references to the same thing - one real and two harvested
  * out of a URL - which is precisely the mis-match that makes hand-rolled regex
- * checks untrustworthy.
+ * checks untrustworthy. Images are not blanked, since they are not references:
+ * an identifier in one's text is prose, as it always was here.
  */
-function findBareReferences(scanned: ScannedDocument): BareReference[] {
+function findBareReferences(scanned: ScannedDocument, links: readonly Link[]): BareReference[] {
   // Slice-based for the same reason as the scanner's masking: this runs over
   // every document, and a per-character array is the wrong shape for the job.
-  const source = scanned.masked;
+  const source = scanned.masks.structure;
   let text = '';
   let cursor = 0;
-  for (const link of scanned.links) {
+  for (const link of links) {
     const start = Math.max(link.start, cursor);
     const end = Math.min(link.end, source.length);
     if (end <= start) continue;

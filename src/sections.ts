@@ -25,6 +25,7 @@ import { attr, type Directive } from './directives.js';
 import { isExternal, parsePrefixedRef } from './identity.js';
 import { isStatusHeading } from './lifecycle.js';
 import {
+  isMarkdownLine,
   isOnlyComment,
   type Heading,
   type Range,
@@ -392,8 +393,9 @@ function readLabelledStatus(scanned: ScannedDocument, start: number, end: number
     if (line.contentStart < start) continue;
     if (line.contentStart >= end) break;
     // A template's commented-out `Status: proposed | accepted` is a hint to
-    // whoever fills it in, not a status the region declares.
-    if (line.code || line.blank || line.comment) continue;
+    // whoever fills it in, not a status the region declares, and one in code or
+    // a <pre> block is an example.
+    if (!isMarkdownLine(line) || line.blank || line.comment) continue;
     const match = INLINE_STATUS.exec(line.content);
     if (!match) continue;
     // `**Status:** Accepted` closes its emphasis *after* the colon, so the
@@ -415,7 +417,7 @@ function readHeadedStatus(scanned: ScannedDocument, start: number, end: number):
     if (line.line <= heading.line) continue;
     if (line.contentStart >= end) break;
     if (line.blank || isOnlyComment(scanned, line)) continue;
-    if (line.code) return null;
+    if (!isMarkdownLine(line)) return null;
     const trimmed = line.content.trim();
     if (trimmed.startsWith('#')) return null;
     // A bullet list under Status is a status history; the first entry is current.
