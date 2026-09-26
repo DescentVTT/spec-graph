@@ -426,6 +426,26 @@ describe('a configuration that did not load', () => {
     expect(typed.err).toContain('invalid glob "docs/[a"');
   });
 
+  it('refuses an empty pattern wherever a pattern is read', async () => {
+    // Four of these were refused and `--ignore ""` was a directory nothing is
+    // called. An empty pattern is a typo or an unset variable, whichever list
+    // it is in.
+    const project = ['--root', 'tests/fixtures/project', '--no-config'];
+    for (const argv of [['docs/**/*.md', ''], ['--ignore', ''], ['--history', ''], ['--ignore-ref', '']]) {
+      const result = await run('check', ...argv, ...project);
+      expect(result.code, argv.join(' ')).toBe(EXIT_ERROR);
+      expect(result.err).toContain('invalid glob "": the pattern is empty');
+      expect(result.out).toBe('');
+    }
+    for (const key of ['patterns', 'ignore', 'historyPatterns', 'ignoreReferences']) {
+      await withConfig(`cli-empty-${key}`, `{ "${key}": [""] }\n`, async (root) => {
+        const result = await run('check', '--root', root);
+        expect(result.code, key).toBe(EXIT_ERROR);
+        expect(result.err).toContain('invalid glob "": the pattern is empty');
+      });
+    }
+  });
+
   it('is what --no-config turns off, over the same broken file', async () => {
     await withConfig('cli-no-config', '{ "ignoreReference": ["trap *"], "nope": 1 }\n', async (root) => {
       const result = await run('check', 'docs/**/*.md', '--root', root, '--no-config');

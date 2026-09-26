@@ -75,6 +75,12 @@ spec-graph's old one, a repository will see it:
   the root. A `.` segment inside a pattern is dropped, as it was. A `..` typed
   below the root is resolved against where it was typed, so
   `spec-graph "../*.md"` in `docs/deep` still means `docs/*.md`.
+- **An empty pattern is refused**, in every list: the patterns to check,
+  `--ignore`, `--history`, `--ignore-ref` and their keys in the configuration
+  file. Each was read as nothing, or dropped - an unset variable in
+  `--history "$LOGS"` checked the logs as specifications, and nothing said
+  why. A pattern of spaces is empty to `--ignore-ref`, which trims what it
+  reads, and a name to the others.
 - **The walk finds a directory only as it is spelled on disk.** It starts at a
   pattern's literal prefix, and on a filesystem that ignores case `Docs/` found
   `docs/` and reported its files as `Docs/...`. A pattern rooted at `/` is not

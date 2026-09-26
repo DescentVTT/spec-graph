@@ -48,9 +48,10 @@ What stays spec-graph's is what was never a question of syntax:
   simple case mapping, a `\` escapes, and `.` and `..` are text -
   `../../notes/gone.md` is a link somebody may want left alone. The rows of
   the table below about syntax - `**`, an extended glob, `[`, a trailing `/`,
-  classes - apply to it as well, `a//b` reads as `a/b`, and two more things are
-  refused: a `\` before a letter or digit or at the end, and a leading `!`,
-  which were literals here and are malformed in every dialect.
+  classes, the empty pattern - apply to it as well, and a pattern of spaces is
+  empty once trimmed. `a//b` reads as `a/b`, and two more things are refused: a
+  `\` before a letter or digit or at the end, and a leading `!`, which were
+  literals here and are malformed in every dialect.
 
 ### What a user sees change
 
@@ -71,6 +72,7 @@ differs:
 | `a[!b]c` against `a/c` | matched: the class took the `/` | a class never matches a separator |
 | `[^a]` | `^` or `a` | anything but `a`, as `[!a]` is |
 | `.`, `./`, `docs/../specs`, `../other/**` | read as nothing, resolved, or walked outside the root | refused: a pattern names a path under the root |
+| `""`, in any list | read as nothing, or dropped | refused: `the pattern is empty` |
 
 A pattern that does not compile is refused the way a malformed `{` already
 was: the run stops with exit `2` and the pattern named, whether it came from

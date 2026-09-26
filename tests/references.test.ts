@@ -28,12 +28,11 @@ describe('the reference filter', () => {
     expect(filter('anything')).toBe(false);
   });
 
-  it('ignores blank patterns rather than matching everything', () => {
+  it('refuses a blank pattern rather than matching everything', () => {
     // A trailing comma in a config, or an empty --ignore-ref, must not silence
-    // the entire corpus.
-    const filter = createReferenceFilter(['', '   ']);
-    expect(filter('trap 55')).toBe(false);
-    expect(filter('')).toBe(false);
+    // the entire corpus - and dropping one quietly let the mistake stand.
+    expect(() => createReferenceFilter(['trap *', ''])).toThrow('the pattern is empty');
+    expect(() => createReferenceFilter(['   '])).toThrow('the pattern is empty');
   });
 
   it('matches a literal name exactly, not as a prefix', () => {

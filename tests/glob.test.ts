@@ -279,7 +279,7 @@ describe('the dialect spec-graph read before, against the one it reads now', () 
 
   const PATTERNS = (() => {
     const rand = random(7);
-    const out = new Set<string>(['docs', 'docs/', 'README.md', '*.md', 'docs/**', 'a/**/b', '**/b', '**.b', 'a**b', 'a/[!b]', '*[!a]*', '{a,b}/**', 'a/', 'A', '[^a]/b', '{.,a}/b', 'a/../b', '.', './', 'a(b)', '@(a|b)']);
+    const out = new Set<string>(['docs', 'docs/', 'README.md', '*.md', 'docs/**', 'a/**/b', '**/b', '**.b', 'a**b', 'a/[!b]', '*[!a]*', '{a,b}/**', 'a/', 'A', '[^a]/b', '{.,a}/b', 'a/../b', '.', './', '', 'a(b)', '@(a|b)']);
     while (out.size < 400) {
       const segments = 1 + Math.floor(rand() * 3);
       const parts: string[] = [];
@@ -316,6 +316,7 @@ describe('the dialect spec-graph read before, against the one it reads now', () 
   /** The change that explains a difference, or null when none does. */
   function explain(pattern: string, path: string, legacy: boolean | 'error', core: boolean | 'error'): string | null {
     if (core === 'error') {
+      if (pattern === '') return 'an empty pattern is an error';
       if (UNCLOSED_CLASS.test(pattern)) return 'an unclosed class is an error';
       if (GLOBSTAR_IN_NAME.test(pattern)) return 'a globstar inside a name is an error';
       if (EXTGLOB.test(pattern)) return 'an extended glob is an error';
@@ -379,6 +380,7 @@ describe('the dialect spec-graph read before, against the one it reads now', () 
       "a literal no longer ignores case",
       "a pattern that names no path, or climbs out, is an error",
       "a trailing slash names a directory's contents",
+      "an empty pattern is an error",
       "an extended glob is an error",
       "an unclosed class is an error",
       "braces expand to literals",
@@ -428,13 +430,12 @@ describe('reference filter', () => {
   });
 
   it('matches a bare pattern literally, and nothing beneath it', () => {
-    const filter = createReferenceFilter(['trap 55', '  ', 'docs/notes']);
+    const filter = createReferenceFilter(['trap 55', 'docs/notes']);
     expect(filter('trap 55')).toBe(true);
     expect(filter('  Trap 55  ')).toBe(true);
     expect(filter('trap 5')).toBe(false);
     expect(filter('docs/notes/a.md')).toBe(false);
     expect(createReferenceFilter([])('anything')).toBe(false);
-    expect(createReferenceFilter(['   '])('anything')).toBe(false);
   });
 
   it('reads . and .. as the text of a link, not as directions', () => {
@@ -624,5 +625,15 @@ describe('walking', () => {
     await expect(walkFiles({ root: ROOT, patterns: ['docs/**/*.md'], ignore: ['docs/[a'] })).rejects.toThrow(
       'invalid glob "docs/[a": a "[" is never closed',
     );
+  });
+
+  it('refuses an empty pattern, whether it is an include or an ignore', async () => {
+    // An empty ignore is not a bare directory name: no directory is called
+    // that, so it ignored nothing while an empty include was refused.
+    const empty = 'invalid glob "": the pattern is empty';
+    await expect(walkFiles({ root: ROOT, patterns: ['docs/**/*.md', ''] })).rejects.toThrow(empty);
+    await expect(walkFiles({ root: ROOT, patterns: ['docs/**/*.md'], ignore: ['drafts', ''] })).rejects.toThrow(empty);
+    // A name of spaces is still a name: a directory can be called that.
+    expect(await paths(['docs/**/*.md'], ['  '])).toContain('docs/drafts/0003.md');
   });
 });
