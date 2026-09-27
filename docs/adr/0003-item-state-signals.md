@@ -65,6 +65,15 @@ acceptable: an unrecognised marker degrades to the checkbox, which is the
 behaviour every other tool has anyway. Being wrong in the direction of "still
 open" is the safe direction.
 
+*Amended 2026-09-27.* A marker is read however its writer typed it, as long as
+the qualification holds. `IN_PROGRESS:` is `in progress`, `Won’t fix:` with a
+curly apostrophe is `won't fix`, and `Resolved – one node` punctuates the marker
+with an en dash as `Resolved - one node` does with a hyphen. The pattern already
+found the en and em dash; the check that followed it asked only for a hyphen,
+so an editor that typographs its dashes left every such marker as prose. None
+of the three widens what counts as a statement's start, and a dash that runs
+into the next word still qualifies nothing.
+
 ## Open Questions
 
 - [ ] Should `narrowed` items carry the *remaining* scope as structured data

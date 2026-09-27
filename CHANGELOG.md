@@ -52,6 +52,16 @@ a patch fixes behaviour without asking anything of a repository that upgrades.
   repository with an `ES` family was told `ES2015` did not resolve. The
   prefix is now read as resolution reads it, `ES` and 2015. The README lists
   what is never a citation.
+- **`not_planned` and `in_progress` read as `not planned` and `in progress`.**
+  The underscore was stripped as emphasis and ran the two words into one, so
+  a status spelled that way was `unknown` and a marker spelled that way was
+  prose. Every status word and marker of more than one word may be joined by
+  an underscore now; an underscore around a word is still emphasis.
+- **`Won’t fix:` with a curly apostrophe is accepted debt**, as `Won't fix:`
+  is, and **a marker followed by an en or em dash is punctuated**, as one
+  followed by a hyphen is: `Resolved – one node` closes the item. The pattern
+  already found both dashes and the check after it asked for a hyphen. A
+  status reading `Superseded – ADR-0009` names its successor.
 
 ### Documentation
 

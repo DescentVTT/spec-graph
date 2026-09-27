@@ -226,6 +226,40 @@ describe('the documented checkboxes, markers and state words', () => {
     }
   });
 
+  // "A marker of more than one word may be spaced, hyphenated or joined by an
+  // underscore, whichever the table has ... An apostrophe may be straight or
+  // curly."
+  it('each marker of more than one word, joined by underscores, decides its row', () => {
+    const joined = documentedSignals().marker.filter(([, marker]) => /[ -]/.test(marker));
+    expect(joined.length).toBeGreaterThan(40);
+    for (const [disposition, marker] of joined) {
+      const written = marker.replace(/[ -]/g, '_');
+      const state = stateOf(`- [ ] Ship the export\n  ${capitalised(written)}: see #412.`);
+      expect([written, state.disposition, state.evidence.source]).toEqual([written, disposition, 'marker']);
+    }
+  });
+
+  it('each marker with an apostrophe, typed curly, decides its row', () => {
+    const quoted = documentedSignals().marker.filter(([, marker]) => marker.includes("'"));
+    expect(quoted.length).toBeGreaterThan(0);
+    for (const [disposition, marker] of quoted) {
+      const written = marker.replace(/'/g, '’');
+      const state = stateOf(`- [ ] Ship the export\n  **${capitalised(written)}:** see #412.`);
+      expect([written, state.disposition, state.evidence.source]).toEqual([written, disposition, 'marker']);
+    }
+  });
+
+  it('each stop the README lists makes a marker punctuated', () => {
+    const readme = readFileSync('README.md', 'utf8');
+    const at = readme.indexOf('Punctuated means followed by');
+    const stops = [...readme.slice(at, readme.indexOf(', so `Done.`', at)).matchAll(/`([^`]+)`/g)].map((m) => m[1] as string);
+    expect(stops).toHaveLength(6);
+    for (const stop of stops) {
+      const line = `Resolved${stop} one node.`;
+      expect([line, stateOf(`- [ ] Shard the write path\n  ${line}`).disposition]).toEqual([line, 'satisfied']);
+    }
+  });
+
   it('document every state word the code exports', () => {
     const documented = documentedSignals().state.map(([, word]) => word);
     expect([...KNOWN_STATE_WORDS].sort()).toEqual(documented.sort());
@@ -273,6 +307,17 @@ describe('what qualifies a marker', () => {
     for (const line of ['Resolved: one node.', 'Resolved： one node.', 'Resolved - one node.', 'Done. Landed in #412.']) {
       expect([line, stateOf(`- [ ] Shard the write path\n  ${line}`).disposition]).toEqual([line, 'satisfied']);
     }
+  });
+
+  it('not a dash that runs into the next word, whichever dash it is', () => {
+    for (const line of ['Resolved-partly by #412', 'Resolved–partly by #412', 'Resolved—partly by #412']) {
+      expect([line, stateOf(`- [ ] Shard the write path\n  ${line}`).disposition]).toEqual([line, 'unresolved']);
+    }
+  });
+
+  it('not an underscored marker in the middle of a sentence', () => {
+    expect(stateOf('- [ ] Clear the in_progress flag before the deploy.').disposition).toBe('unresolved');
+    expect(stateOf('- [ ] Ship it.\n  IN_PROGRESS in #412').disposition).toBe('narrowed');
   });
 
   it('shouting it, with nothing after', () => {
