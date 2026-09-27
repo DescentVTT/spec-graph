@@ -7,6 +7,22 @@ a patch fixes behaviour without asking anything of a repository that upgrades.
 
 ### Fixed
 
+- **`Provisionally accepted` reads as a draft.** The vocabulary listed it
+  among the draft words, but `active` is read first and it contains
+  `accepted`, so it read as active and the entry never matched anything.
+- **`Superceded by ADR-0009` names ADR-0009**, as `Superseded by ADR-0009`
+  does. The misspelling already retired the document; the pattern that reads
+  the successor out of a status spelled it `superseced`.
+- **A status that wraps onto a second line still names its successor.** A
+  `@spec-node status="Superseded by ADR-0009, ..."` whose value ran onto
+  another line retired the document and recorded no supersession.
+- **The `--ignore-ref` a concept tag's hint suggests silences it.** `[[trap-55]]`
+  suggested `--ignore-ref "trap *"`, which matches `trap 55` and not
+  `trap-55`; the glob keeps the separator now, `trap-*`, and `[[trap55]]`
+  suggests `trap*`.
+- **A list item that opens a fence of five tildes is not struck through.**
+  `~~~~~` begins and ends with `~~`, and read as a strikethrough of `~`, so
+  the item read as done.
 - **`spec-graph query` prints a path the way the selector reads.** A
   transitive step printed the end of its path in the middle of it:
   `document[id=ADR-0004] =supersedes=> document`, the README's own kind of
@@ -36,6 +52,12 @@ a patch fixes behaviour without asking anything of a repository that upgrades.
   repository with an `ES` family was told `ES2015` did not resolve. The
   prefix is now read as resolution reads it, `ES` and 2015. The README lists
   what is never a citation.
+
+### Documentation
+
+- The README lists every status word, front-matter key, heading and directory
+  the lifecycle is read from, and every checkbox, marker and `state=` word an
+  item's state is, where it gave a few of each and an ellipsis.
 
 ## 0.9.2
 

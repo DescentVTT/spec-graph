@@ -113,7 +113,8 @@ describe('concept wiki-links', () => {
       'docs/adr/0001-a.md': '# A\n\nSee [[trap 55]], [[Q-17]] and [[services]].\n',
     }).diagnostics.map((d) => d.hint);
     expect(hints[0]).toContain('"trap *"');
-    expect(hints[1]).toContain('"Q *"');
+    // With its separator, or the glob would not match the tag it came from.
+    expect(hints[1]).toContain('"Q-*"');
     // Nothing numbered to generalise: suggest it verbatim rather than inventing.
     expect(hints[2]).toContain('"services"');
   });

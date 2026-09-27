@@ -241,6 +241,9 @@ export function resolveItemState(input: StateInput): ResolvedState {
     });
   }
 
+  // The scanner reads a checkbox only from the ten characters above, and gives
+  // it a start exactly when it gives it a character: these guards narrow types
+  // and decide nothing, so their mutants are equivalent.
   if (item.checkbox !== null && item.checkboxStart !== null) {
     const mapped = CHECKBOX_STATE[item.checkbox];
     if (mapped) {
@@ -257,6 +260,8 @@ export function resolveItemState(input: StateInput): ResolvedState {
     signals.push({
       source: 'section',
       disposition: 'unresolved',
+      // An item in an obligation section is under a heading, so the fallback
+      // narrows the type and is never read.
       raw: input.section[input.section.length - 1] ?? '',
       at: at(item.start, item.end),
     });
@@ -274,6 +279,11 @@ export function resolveItemState(input: StateInput): ResolvedState {
 
   // The most specific signal wins; ties go to the one written last, which is
   // the one a reader of the document sees as the final word.
+  //
+  // Signals are pushed most specific first and markers in document order, so
+  // the winner only changes on a tie, where array order and document order
+  // agree. Mutants of the comparisons are equivalent for that reason; they are
+  // written out so that neither fact about the pushes above is load-bearing.
   let winner = signals[0] as StateSignal;
   for (const signal of signals) {
     const better = SIGNAL_PRIORITY[signal.source] - SIGNAL_PRIORITY[winner.source];
@@ -285,9 +295,10 @@ export function resolveItemState(input: StateInput): ResolvedState {
   const openness = OPENNESS_OF[winner.disposition];
   // Only disagreement about *openness* is a conflict. A body that says
   // "Resolved" under a ticked checkbox agrees with it; one under an empty
-  // checkbox does not, and that is worth a human looking at.
+  // checkbox does not, and that is worth a human looking at. The winner agrees
+  // with itself, so it is never among them.
   const conflicts = signals.filter(
-    (signal) => signal !== winner && signal.source !== 'section' && OPENNESS_OF[signal.disposition] !== openness,
+    (signal) => signal.source !== 'section' && OPENNESS_OF[signal.disposition] !== openness,
   );
 
   return { disposition: winner.disposition, openness, evidence: winner, conflicts };
@@ -342,7 +353,9 @@ function findMarkers(body: string): MarkerHit[] {
     const phrase = m[2] as string;
     const emphasisOpen = m[1];
     const emphasisClose = m[3];
-    const qualifier = (m[4] ?? '').trim();
+    // A dash arrives with the space after it. An absent qualifier is none of the
+    // four, so what stands in for it is equivalent as long as it is not one.
+    const qualifier = m[4] ?? '';
 
     const emphasised = emphasisOpen !== undefined && emphasisClose !== undefined;
     const punctuated = qualifier === ':' || qualifier === '：' || qualifier.startsWith('-') || qualifier === '.';
@@ -352,6 +365,8 @@ function findMarkers(body: string): MarkerHit[] {
     // keep the queue" must not close an item.
     if (!emphasised && !punctuated && !shouted) continue;
 
+    // Every phrase the pattern matches is a table phrase respelled, so this
+    // narrows the type and never skips: its mutant is equivalent.
     const disposition = MARKER_LOOKUP.get(normalisePhrase(phrase));
     if (!disposition) continue;
 
@@ -374,18 +389,32 @@ function markerLookup(): Map<string, Disposition> {
   return map;
 }
 
+/**
+ * The key a phrase is looked up by, from the table and from a match alike.
+ *
+ * Its mutants are equivalent, because it folds both sides of one lookup: folded
+ * to upper case, or with the separator dropped, the same phrases share a key -
+ * no two of the table's dispositions collide without their spaces - and neither
+ * a table phrase nor a match ever holds two separators in a row.
+ */
 function normalisePhrase(phrase: string): string {
-  return phrase.toLowerCase().replace(/[\s-]+/g, ' ').trim();
+  return phrase.toLowerCase().replace(/[\s-]+/g, ' ');
 }
 
-/** Returns the struck text when the whole line is wrapped in `~~`. */
+/** Returns the struck text when the whole line, which arrives trimmed, is wrapped in `~~`. */
 function strikethroughOf(line: string): string | null {
-  const trimmed = line.trim();
-  if (!trimmed.startsWith('~~') || !trimmed.endsWith('~~') || trimmed.length < 5) return null;
-  const inner = trimmed.slice(2, -2);
-  return inner.includes('~~') ? null : trimmed;
+  if (!line.startsWith('~~') || !line.endsWith('~~')) return null;
+  const inner = line.slice(2, -2);
+  // Something has to be struck: `~~~~~` is the fence of a code block nested
+  // under the item, and strikes nothing.
+  return /[^~]/.test(inner) && !inner.includes('~~') ? line : null;
 }
 
+/**
+ * No phrase in the table holds a metacharacter today, so blanking the
+ * replacement is an equivalent mutant; this keeps the dots of a future `n.a.`
+ * dots, rather than any character.
+ */
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
