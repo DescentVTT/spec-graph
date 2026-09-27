@@ -208,6 +208,27 @@ Markers only count in the forms documents actually use — punctuated
 (`Resolved:`), emphasised (`**Moot**`) or shouted (`RESOLVED`) — and never inside
 code. *"We resolved to keep the queue"* does not close anything.
 
+<details>
+<summary>Every checkbox, marker and <code>state=</code> word</summary>
+
+| Disposition | Checkboxes | Markers | `state=` |
+| --- | --- | --- | --- |
+| `unresolved` | `[ ]` `[?]` `[!]` `[*]` | `unresolved`, `still open`, `open question`, `tbd`, `undecided`, `reopened` | `open`, `unresolved`, `todo` |
+| `narrowed` | `[~]` `[/]` | `partially resolved`, `partially answered`, `partially done`, `partly resolved`, `narrowed`, `narrowed to`, `scoped down`, `reduced scope`, `reduced to`, `partial`, `in progress`, `remaining`, `split` | `narrowed`, `partial` |
+| `delegated` | | `delegated`, `delegated to`, `moved to`, `tracked in`, `tracked by`, `handed off`, `handed off to`, `handed to`, `deferred to`, `follow up in`, `follow-up in`, `followup in`, `continued in`, `owned by` | `delegated` |
+| `satisfied` | `[x]` `[X]` `[+]` | `resolved`, `answered`, `decided`, `settled`, `done`, `complete`, `completed`, `closed`, `fixed`, `shipped`, `addressed`, `implemented`, `solved`, `confirmed` | `satisfied`, `resolved`, `done`, `closed` |
+| `accepted-debt` | | `accepted debt`, `accepted as debt`, `accepted risk`, `known limitation`, `known issue`, `known gap`, `technical debt`, `tech debt`, `wontfix`, `won't fix`, `will not fix`, `by design`, `tolerated`, `living with it` | `accepted-debt`, `debt`, `wontfix` |
+| `rejected` | `[-]` | `rejected`, `declined`, `dropped`, `not doing`, `will not do`, `abandoned`, `cancelled`, `canceled`, `withdrawn` | `rejected`, `declined` |
+| `obviated` | | `no longer applicable`, `no longer relevant`, `no longer needed`, `overtaken by events`, `premise invalid`, `obviated`, `obsolete`, `not applicable`, `moot`, `void`, `n/a`, `obe` | `obviated`, `moot` |
+
+A marker counts where a statement starts: at the start of the item or of a line,
+after the end of a sentence, or after `(` or `[`. Punctuated means followed by
+`:`, `：`, `-` or `.`, so `Done.` closes an item; emphasised means the emphasis
+closes on the marker, so `**Closed beta**` does not. A marker of more than one
+word may be spaced or hyphenated either way: `**Tech-debt:**` is `tech debt`.
+
+</details>
+
 ### References, resolved forgivingly and validated strictly
 
 All of these reach the same document:

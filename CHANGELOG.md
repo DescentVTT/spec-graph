@@ -16,12 +16,15 @@ a patch fixes behaviour without asking anything of a repository that upgrades.
 - **A status that wraps onto a second line still names its successor.** A
   `@spec-node status="Superseded by ADR-0009, ..."` whose value ran onto
   another line retired the document and recorded no supersession.
+- **A list item that opens a fence of five tildes is not struck through.**
+  `~~~~~` begins and ends with `~~`, and read as a strikethrough of `~`, so
+  the item read as done.
 
 ### Documentation
 
 - The README lists every status word, front-matter key, heading and directory
-  the lifecycle is read from, where it gave a few words for each phase and an
-  ellipsis.
+  the lifecycle is read from, and every checkbox, marker and `state=` word an
+  item's state is, where it gave a few of each and an ellipsis.
 
 ## 0.9.2
 
