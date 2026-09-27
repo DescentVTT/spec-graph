@@ -171,6 +171,8 @@ export function formatReport(result: AnalysisResult, options: ReporterOptions = 
   );
   lines.push('');
 
+  // Zero is falsy and never reaches the comparison, so `> 0` and `>= 0` are
+  // the same test here.
   const limit = options.max && options.max > 0 ? options.max : result.diagnostics.length;
   const shown = result.diagnostics.slice(0, limit);
 
@@ -232,6 +234,9 @@ export function formatReport(result: AnalysisResult, options: ReporterOptions = 
     // A "gone" entry is not the ratchet working, and saying so matters more
     // than the count does: the usual way to produce one is to narrow an include
     // pattern, which loses sight of a defect rather than fixing it.
+    //
+    // The fallback is only ever filtered for gone entries, so filling it with
+    // anything that is not one counts the same zero.
     const gone = (baseline.entries ?? []).filter((entry) => entry.reason === 'gone').length;
     const because =
       gone === 0
@@ -243,6 +248,8 @@ export function formatReport(result: AnalysisResult, options: ReporterOptions = 
     lines.push(ratcheted ? `${paint.error(marks.error)} ${text}` : paint.dim(text));
   }
 
+  // `ok` means no errors, so where it is true the sum below is the warnings
+  // alone and `-` in place of `+` asks the same question.
   lines.push(
     ratcheted
       ? `${paint.error(marks.error)} ${
@@ -345,6 +352,8 @@ export function formatMarkdown(result: AnalysisResult, options: ReporterOptions 
   const ratcheted = ratchetFailed(options.baseline);
   const lines: string[] = ['### spec-graph', ''];
 
+  // `ok` means no errors, as in the terminal's verdict, so `-` in place of `+`
+  // below asks the same question.
   const verdict =
     ratcheted && result.ok
       ? 'The baseline is looser than the repository.'
@@ -365,6 +374,7 @@ export function formatMarkdown(result: AnalysisResult, options: ReporterOptions 
   lines.push(`| Notes | ${summary.infos} |`);
   lines.push('');
 
+  // Zero never reaches the comparison, as in the terminal report.
   const limit = options.max && options.max > 0 ? options.max : result.diagnostics.length;
   const shown = result.diagnostics.slice(0, limit);
 
@@ -390,6 +400,7 @@ export function formatMarkdown(result: AnalysisResult, options: ReporterOptions 
     if (baseline.stale === 0) {
       lines.push(accepted, '');
     } else {
+      // The fallback is only filtered for gone entries, as in the terminal report.
       const gone = (baseline.entries ?? []).filter((entry) => entry.reason === 'gone').length;
       lines.push(
         `${accepted}, and ${baseline.stale} ${plural(baseline.stale, 'entry', 'entries')} no longer ${
@@ -433,6 +444,8 @@ export function formatMarkdown(result: AnalysisResult, options: ReporterOptions 
     lines.push('', '</details>', '');
   }
 
+  // Every block above ends in exactly one blank line, so there is only ever one
+  // trailing newline for this to strip, and `\n$` would strip the same.
   return `${lines.join('\n').replace(/\n+$/, '')}\n`;
 }
 
@@ -539,6 +552,8 @@ export function formatSarif(
             driver: {
               name: 'spec-graph',
               informationUri: 'https://github.com/DescentVTT/spec-graph',
+              // JSON.stringify drops a key whose value is undefined, so always
+              // spreading the pair writes the same file; the test is for the reader.
               ...(options.version === undefined ? {} : { version: options.version, semanticVersion: options.version }),
               // Only the rules that fired. A driver listing all of them
               // describes the tool; this file describes the run.
@@ -696,6 +711,8 @@ export function formatJson(
       version: 1,
       ok: result.ok && !ratchetFailed(options.baseline),
       strict: escalated.size > 0,
+      // Always spreading would write `baseline: undefined`, which JSON.stringify
+      // drops, so the test changes nothing but what the line says.
       ...(options.baseline === undefined ? {} : { baseline: options.baseline }),
       summary: result.summary,
       files: result.files,
@@ -774,10 +791,17 @@ export function formatGraph(graph: SpecGraph, format: GraphFormat, options: Grap
           // Containment of an *item* is what hiding items makes redundant.
           // Containment of a specification by the register that holds it is
           // structure between documents, and is what this view exists to show.
+          //
+          // An item is contained by its own document, so its containment would
+          // lift onto that document and fall to the reflexive filter below
+          // anyway: dropping this filter changes no export, and it stays to
+          // say which containment the view keeps.
           .filter((edge) => edge.kind !== 'contains' || visible.has(edge.to))
           .map((edge) => {
             const from = graph.owningDocument(edge.from)?.id ?? edge.from;
             const to = graph.owningDocument(edge.to)?.id ?? edge.to;
+            // An edge that did not move, rebuilt, is the same edge: its own
+            // `reflexive` already says whether `from` is `to`.
             return from === edge.from && to === edge.to ? edge : { ...edge, from, to, reflexive: from === to };
           })
           .filter((edge) => !edge.reflexive),
@@ -795,6 +819,8 @@ export function formatGraph(graph: SpecGraph, format: GraphFormat, options: Grap
       return `${JSON.stringify(
         {
           version: 1,
+          // `generator: undefined` is dropped by JSON.stringify, so the test
+          // decides nothing the file shows.
           ...(options.generator !== undefined && { generator: options.generator }),
           nodes: nodes.map(serialiseNode),
           edges: edges.map((edge) => ({
@@ -816,6 +842,8 @@ export function formatGraph(graph: SpecGraph, format: GraphFormat, options: Grap
 /** Collapses duplicate relations produced by lifting item edges onto documents. */
 function dedupeEdges(edges: readonly Edge[]): Edge[] {
   const seen = new Set<string>();
+  // Anything here that is not an edge between drawn nodes is dropped by the
+  // filter formatGraph applies next, so seeding this array changes no export.
   const out: Edge[] = [];
   for (const edge of edges) {
     const key = `${edge.kind} ${edge.from} ${edge.to}`;
@@ -859,6 +887,9 @@ const PHASE_FILL: Readonly<Record<string, string>> = {
 function toDot(nodes: readonly SpecNode[], edges: readonly Edge[]): string {
   const lines = ['digraph spec {', '  rankdir=LR;', '  node [shape=box, style="rounded,filled", fontname="sans"];'];
   for (const node of nodes) {
+    // Every phase has a fill, `unknown` included, so the fallback is for a
+    // phase added to the lattice before it is given a colour, and no graph
+    // today reaches it.
     const fill = node.kind === 'document' ? (PHASE_FILL[node.phase] ?? '#ffffff') : '#fffbe6';
     const label = node.kind === 'document' ? `${node.id}\\n${escapeDot(node.title)}` : escapeDot(node.text);
     const shape = node.kind === 'document' ? 'box' : 'note';
@@ -883,11 +914,10 @@ function toMermaid(nodes: readonly SpecNode[], edges: readonly Edge[]): string {
     lines.push(node.kind === 'document' ? `  ${key}["${label}"]` : `  ${key}(["${label}"])`);
     if (node.kind === 'document' && node.phase !== 'unknown') lines.push(`  class ${key} ${node.phase};`);
   }
+  // formatGraph hands over only edges between the nodes being drawn, and every
+  // one of those has an alias.
   for (const edge of edges) {
-    const from = alias.get(edge.from);
-    const to = alias.get(edge.to);
-    if (!from || !to) continue;
-    lines.push(`  ${from} -->|${edge.kind}| ${to}`);
+    lines.push(`  ${alias.get(edge.from) as string} -->|${edge.kind}| ${alias.get(edge.to) as string}`);
   }
   for (const [phase, fill] of Object.entries(PHASE_FILL)) {
     if (phase === 'unknown') continue;
