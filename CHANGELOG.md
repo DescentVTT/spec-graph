@@ -23,6 +23,12 @@ a patch fixes behaviour without asking anything of a repository that upgrades.
   `id: S3-0012` was reported as `S3-12`, because the padding was read from the
   first run of digits, which is the family's. An id is now written with the
   number as it was declared. Citations resolved either way.
+- **A register is not retired by a decision inside it.** A register whose
+  sections kept their status under a `### Status` heading read the first
+  one as the file's own: a first decision `Superseded by ADR-0009` made the
+  register retired and superseded by ADR-0009, so open work in its
+  introduction was an `orphaned-obligation`. A status section inside a
+  section is that section's; the file's is one written above them all.
 - **`ES2015`, `ARM64`, `Win32`, `base64` and `cpp20` are prose, not
   citations**, and nor are `x86` and `p99`. Each was read with every digit
   but the last in its prefix - `ES201` and 5 - and so walked past the list of
