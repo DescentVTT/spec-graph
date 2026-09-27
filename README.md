@@ -245,10 +245,13 @@ header you wrote:
 | ADR-0002 | Cache eviction | Accepted   | ADR-0001   | -             |
 ```
 
-Findings point at the declaring cell, not at the file.
+Findings point at the declaring cell, not at the file. A cell that is empty or
+holds only a placeholder — `-`, `—`, `n/a`, `none`, `nil`, `TBD` — says nothing.
 
-A row is named by its ID column, and a title is only a title. An identifier a
-title opens with belongs to the document the row is *about* — an issue reading
+A row is named by its ID column, and a title is only a title. A row whose ID cell
+names nothing — empty, a placeholder, or a `?` nobody has numbered yet — is not a
+specification. An identifier a title opens with belongs to the document the row
+is *about* — an issue reading
 `| OI-V-05 | ADR-040's enforcement point has no browser test |` is filed under
 `OI-V-05`, and citations of `ADR-040` still reach `ADR-040`. The same holds for
 a whole file: an explicit `id:` (or `adr:`, `adr-id:`, `rfc:`, `rfc-id:`,
