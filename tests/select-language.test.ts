@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+
 import { describe, expect, it } from 'vitest';
 
 import { parseQuery, QueryError, type StepSpec } from '../src/select.js';
@@ -6,17 +8,20 @@ import { parseQuery, QueryError, type StepSpec } from '../src/select.js';
  * The selector grammar, read on its own.
  *
  * This file imports the parser and nothing else, and that is what it is for.
- * `rules.ts` parses its two selectors when it is imported, so a parser fault
- * that breaks either of them fails every test file reaching the runner before
- * one of its tests has run - and a file that fails to load fails no test.
- * Stryker counted each such mutant a survivor: the constructor emptied,
- * whitespace no longer skipped, the node-type table cleared, about seventy in
- * one sweep, none of which a user could have missed. Here nothing can fail
- * before the grammar is asked. Keep the imports to `select.ts`.
+ * `rules.ts` parses its selectors when it is imported, so a parser fault that
+ * breaks one of them fails every test file reaching the runner before one of
+ * its tests has run - and a file that fails to load fails no test. Stryker
+ * counted each such mutant a survivor: the constructor emptied, whitespace no
+ * longer skipped, the node-type table cleared, about seventy in one sweep,
+ * none of which a user could have missed. Here nothing can fail before the
+ * grammar is asked. Keep the static imports to `select.ts`; `rules.ts` is
+ * imported inside a test, where failing to load fails that test.
  *
  * Expectations come from the README's grammar and the parser's own usage
  * errors, which the CLI prints with a caret under `offset`.
  */
+
+const readme = (): string => readFileSync('README.md', 'utf8');
 
 /** The usage error a selector is refused with. */
 const failure = (selector: string): QueryError => {
@@ -31,20 +36,44 @@ const failure = (selector: string): QueryError => {
 
 const step = (selector: string, index = 0): StepSpec | undefined => parseQuery(selector).steps[index];
 
+describe('the built-in rules', () => {
+  it('load, which parses the selectors they are, as the README prints them', async () => {
+    // ADR-0005: the rules are selectors, parsed when rules.ts loads.
+    const { RULE_QUERIES } = await import('../src/rules.js');
+    const printed = [...readme().matchAll(/^(ghost-handover|stale-premise) +(\S.*)$/gm)].map(([, rule, selector]) => [
+      rule,
+      selector,
+    ]);
+    expect(printed).toEqual([
+      ['ghost-handover', RULE_QUERIES['ghost-handover']],
+      ['stale-premise', RULE_QUERIES['stale-premise']],
+    ]);
+    for (const [, selector] of printed) expect(parseQuery(selector as string).steps).toHaveLength(1);
+  });
+});
+
 describe('node types', () => {
+  // The README names `document · item · *` and the other spellings of each.
+  const KINDS: readonly (readonly [string, 'document' | 'item' | null])[] = [
+    ['document', 'document'],
+    ['documents', 'document'],
+    ['doc', 'document'],
+    ['docs', 'document'],
+    ['item', 'item'],
+    ['items', 'item'],
+    ['node', null],
+    ['nodes', null],
+    ['any', null],
+    ['*', null],
+  ];
+
+  it('are the ones the README lists', () => {
+    const line = /^Node types +(.+)$/m.exec(readme())?.[1] ?? '';
+    const words = line.replace(/[()·]|\balso\b/g, ' ').split(/\s+/).filter(Boolean);
+    expect(words.sort()).toEqual(KINDS.map(([word]) => word).sort());
+  });
+
   it('reads each node type the grammar names, in any case', () => {
-    const KINDS: readonly (readonly [string, 'document' | 'item' | null])[] = [
-      ['document', 'document'],
-      ['documents', 'document'],
-      ['doc', 'document'],
-      ['docs', 'document'],
-      ['item', 'item'],
-      ['items', 'item'],
-      ['node', null],
-      ['nodes', null],
-      ['any', null],
-      ['*', null],
-    ];
     for (const [word, kind] of KINDS) {
       expect(parseQuery(word)).toEqual({ start: { kind, predicates: [] }, steps: [] });
       expect(parseQuery(word.toUpperCase()).start.kind).toBe(kind);

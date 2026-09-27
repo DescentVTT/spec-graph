@@ -1,6 +1,8 @@
+import { readFileSync } from 'node:fs';
+
 import { describe, expect, it } from 'vitest';
 
-import { identify, normaliseRef, splitAnchor, type IdentityInput } from '../src/identity.js';
+import { ID_KEYS, identify, normaliseRef, splitAnchor, type IdentityInput } from '../src/identity.js';
 import { analyseSources, type Source } from '../src/runner.js';
 
 /**
@@ -27,6 +29,8 @@ const ids = (sources: Source[]): string[] =>
     .corpus.documents.map((d) => d.id)
     .sort();
 
+const readme = (): string => readFileSync('README.md', 'utf8');
+
 describe('the family a directory gives a numbered file', () => {
   // The README lists these. The nearest enclosing one wins.
   const FAMILIES: readonly (readonly [string, string])[] = [
@@ -50,6 +54,16 @@ describe('the family a directory gives a numbered file', () => {
     ['specs', 'SPEC'],
   ];
 
+  it('is one of the ones the README lists', () => {
+    const text = readme();
+    const bullet = text.slice(text.indexOf('- **Bare numbers are family-scoped.**'), text.indexOf('- **Two candidates'));
+    // `proposal(s)/` names both spellings.
+    const listed = [...bullet.matchAll(/`([a-z-]+)(\(s\))?\/`/g)].flatMap(([, stem, plural]) =>
+      plural ? [stem as string, `${stem}s`] : [stem as string],
+    );
+    expect(listed.sort()).toEqual(FAMILIES.map(([directory]) => directory).sort());
+  });
+
   it.each(FAMILIES)('is %s/ -> %s', (directory, family) => {
     expect(identify(file(`docs/${directory}/0007-sharding.md`)).id).toBe(`${family}-0007`);
   });
@@ -65,6 +79,14 @@ describe('the front-matter keys that declare an identifier', () => {
     ['kep-number', 'docs/keps/sharding.md', '1234', 'KEP-1234'],
     ['number', 'docs/adr/sharding.md', '0007', 'ADR-0007'],
   ];
+
+  it('are the ones the README lists, every one the code exports', () => {
+    const listed = /an explicit `id:` \(or ([^)]*)\)/.exec(readme())?.[1] ?? '';
+    const documented = ['id', ...[...listed.matchAll(/`([a-z-]+):`/g)].map(([, key]) => key as string)];
+    expect([...documented].sort()).toEqual([...ID_KEYS].sort());
+    // Each is read below: all but `slug:` by the table, `slug:` on its own.
+    expect([...KEYS.map(([key]) => key), 'slug'].sort()).toEqual([...ID_KEYS].sort());
+  });
 
   it.each(KEYS)('reads %s: in %s', (key, path, value, id) => {
     expect(ids([{ path, text: `---\n${key}: ${value}\nstatus: accepted\n---\n\n# Sharding\n` }])).toEqual([id]);
