@@ -7,6 +7,11 @@ a patch fixes behaviour without asking anything of a repository that upgrades.
 
 ### Fixed
 
+- **A register row whose ID cell names nothing is not a specification.** A
+  row with only `?` in its ID cell, or a section whose `@spec-node` id is a
+  lone backslash, fell back to the file's own name: the file contained itself
+  and the row or section vanished. Such a row now stays part of the file, and
+  such a section keeps its heading's id.
 - **A declared id keeps its zero padding when its family has a digit in it.**
   `id: S3-0012` was reported as `S3-12`, because the padding was read from the
   first run of digits, which is the family's. An id is now written with the
