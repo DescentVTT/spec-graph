@@ -173,6 +173,15 @@ describe('reading a baseline file', () => {
     expect(parse(JSON.stringify({ version: BASELINE_VERSION, findings: {} })).problems[0]).toContain('must be an array');
   });
 
+  it('refuses JSON that holds no object, rather than throwing on it', () => {
+    // Each of these parses, so the JSON check lets it through; `null` then has
+    // no version to ask for, and a number or a string would be misreported as a
+    // file of the wrong version.
+    for (const text of ['null', '42', '"findings"', 'true']) {
+      expect(parse(text), text).toEqual({ baseline: { version: BASELINE_VERSION, findings: [] }, problems: ['b.json must contain a JSON object'] });
+    }
+  });
+
   it('drops an unusable row and keeps the rest', () => {
     const mixed = JSON.stringify({
       version: BASELINE_VERSION,
@@ -229,6 +238,39 @@ describe('the sort is total, so the file is stable field by field', () => {
     };
     expect(recorded(files).findings.map((row) => row.subject)).toEqual(['docs/plans/a.md', 'docs/plans/z.md']);
   });
+
+  it('writes the same bytes whatever order the findings arrive in', () => {
+    // The file's byte order is a function of its content and nothing else
+    // (ADR-0012), so the order a run happened to report in cannot reach it -
+    // in either direction, since a comparison that only ever says "after" and
+    // one that only ever says "before" each keep one of the two orders intact.
+    const { graph } = analyse({});
+    const at = { file: 'a.md', span: { start: { offset: 0, line: 1, column: 1 }, end: { offset: 0, line: 1, column: 1 } } };
+    const finding = (rule: Diagnostic['rule'], document: string, target: string): Diagnostic => ({
+      rule,
+      severity: 'warn',
+      message: 'm',
+      at,
+      nodes: [document],
+      target,
+      related: [],
+      hint: 'h',
+    });
+    const findings = [
+      finding('broken-reference', 'ADR-0001', 'docs/a.md'),
+      finding('broken-reference', 'ADR-0001', 'docs/b.md'),
+      finding('broken-reference', 'ADR-0002', 'docs/a.md'),
+      finding('stale-premise', 'ADR-0001', 'ADR-0009'),
+    ];
+    const forward = formatBaseline(graph, findings);
+    expect(formatBaseline(graph, [...findings].reverse())).toBe(forward);
+    expect((JSON.parse(forward) as Baseline).findings.map((row) => `${row.rule} ${row.document} ${row.subject}`)).toEqual([
+      'broken-reference ADR-0001 docs/a.md',
+      'broken-reference ADR-0001 docs/b.md',
+      'broken-reference ADR-0002 docs/a.md',
+      'stale-premise ADR-0001 ADR-0009',
+    ]);
+  });
 });
 
 describe('fingerprinting the awkward shapes', () => {
@@ -281,6 +323,50 @@ describe('a hand-edited baseline', () => {
     expect(parsed.problems).toHaveLength(3);
     expect(parsed.problems[0]).toContain('must be an object');
     expect(parsed.problems[1]).toContain('must be strings');
+  });
+
+  it('names the row it rejects, a null one included, and keeps reading', () => {
+    // A reader fixing the file needs to know which of fifty rows to look at.
+    const parsed = parseBaseline(
+      JSON.stringify({
+        version: BASELINE_VERSION,
+        findings: [{ rule: 'broken-reference', document: 'ADR-0004', subject: 'x' }, null, { document: 'ADR-0004' }, { rule: 7, document: 'ADR-0004' }],
+      }),
+      'b.json',
+    );
+    expect(parsed.baseline.findings).toEqual([{ rule: 'broken-reference', document: 'ADR-0004', subject: 'x', count: 1 }]);
+    expect(parsed.problems).toEqual([
+      'b.json: findings[1] must be an object',
+      'b.json: findings[2]: unknown rule undefined',
+      'b.json: findings[3]: unknown rule 7',
+    ]);
+  });
+
+  it('takes a count only as a whole number of at least 1', () => {
+    // A count is how many findings the row may account for. Half a finding, or
+    // the text "2", is a row nobody can say the meaning of.
+    const counted = (count: unknown) =>
+      parseBaseline(JSON.stringify({ version: BASELINE_VERSION, findings: [{ rule: 'broken-reference', document: 'ADR-0004', subject: 'x', count }] }), 'b.json');
+    for (const count of ['2', 2.5, 0, -1, true]) {
+      expect(counted(count).baseline.findings, JSON.stringify(count)).toEqual([]);
+      expect(counted(count).problems, JSON.stringify(count)).toEqual(['b.json: findings[0]: "count" must be a whole number of at least 1']);
+    }
+    expect(counted(3).baseline.findings[0]?.count).toBe(3);
+  });
+
+  it('reads a row without a subject as one about the whole document', () => {
+    // What `--record-baseline` writes for a document-level rule, less the empty
+    // field a person editing the file by hand would leave out.
+    const files = {
+      'docs/adr/0002-sharding.md': ['---', 'status: retired', '---', '', '# ADR-0002: Sharding', '', '- [ ] never closed'].join('\n'),
+    };
+    const { graph, diagnostics } = analyse(files);
+    expect(diagnostics.map((finding) => finding.rule)).toContain('orphaned-obligation');
+    const parsed = parseBaseline(JSON.stringify({ version: BASELINE_VERSION, findings: [{ rule: 'orphaned-obligation', document: 'ADR-0002' }] }), 'b.json');
+    expect(parsed.problems).toEqual([]);
+    const outcome = applyBaseline(graph, diagnostics, parsed.baseline);
+    expect(outcome.kept.map((finding) => finding.rule)).not.toContain('orphaned-obligation');
+    expect(outcome.stale).toEqual([]);
   });
 
   it('does not let the same entry claim its surplus twice', () => {

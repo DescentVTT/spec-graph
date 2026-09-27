@@ -71,6 +71,9 @@ a patch fixes behaviour without asking anything of a repository that upgrades.
   name.
 - The README lists the attributes each directive takes, where it showed a few
   of them by example.
+- `maxRelated`, the configuration key that caps how many related locations one
+  finding lists, is in the README and `--help`. It was read, and never
+  mentioned.
 
 ## 0.9.2
 

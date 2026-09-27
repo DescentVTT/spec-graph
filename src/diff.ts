@@ -18,6 +18,9 @@
 export class DiffInputError extends Error {
   constructor(message: string) {
     super(message);
+    // For a stack trace, which nothing prints: the command catches every one
+    // of these and prints its message, and the library does not export the
+    // class. A mutant that blanks the name is equivalent.
     this.name = 'DiffInputError';
   }
 }
@@ -108,6 +111,10 @@ export interface GraphDiff {
 /* Reading an export                                                          */
 /* -------------------------------------------------------------------------- */
 
+// Every caller goes on to read a field and check it with `text` or
+// `Array.isArray`, and a number, string or boolean yields `undefined` for every
+// field read here, which both refuse. So the `typeof` decides nothing a caller
+// can see, and its mutant is equivalent.
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -265,6 +272,10 @@ function compareRelations(before: GraphExport, after: GraphExport): GraphDiff['r
 function byPlace(a: ObligationRef, b: ObligationRef): number {
   const left = [a.document, ...a.section];
   const right = [b.document, ...b.section];
+  // Past the end of the shorter path `byText` meets `undefined`, which is
+  // neither less nor greater than anything, and answers 0: the mutants that
+  // run the loop on decide nothing the lengths below do not, and are
+  // equivalent.
   for (let at = 0; at < left.length && at < right.length; at++) {
     const order = byText(left[at] as string, right[at] as string);
     if (order !== 0) return order;
@@ -285,6 +296,9 @@ function headingsIn(graph: GraphExport): (item: ExportedItem) => readonly string
 function compareObligations(before: GraphExport, after: GraphExport): GraphDiff['obligations'] {
   const headingsBefore = headingsIn(before);
   const headingsAfter = headingsIn(after);
+  // Seeded with a string, as a mutant seeds it, this holds a "pair" of two
+  // characters with no openness on either side, which the transition filter
+  // drops: that mutant is equivalent.
   const pairs: [ExportedItem, ExportedItem][] = [];
   const paired = new Set<ExportedItem>();
 

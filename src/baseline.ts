@@ -105,6 +105,10 @@ export function formatBaseline(graph: SpecGraph, diagnostics: readonly Diagnosti
   return `${JSON.stringify({ version: BASELINE_VERSION, findings }, null, 2)}\n`;
 }
 
+// A string comparison is reached only when the two differ, where `<` and `<=`
+// agree. Nothing sorted here has two entries alike in all three fields - a
+// tally is keyed on them, and a stale entry is taken once per key - so the
+// last guard never sees two equal subjects. Those mutants are equivalent.
 function compareEntries(a: BaselineEntry, b: BaselineEntry): number {
   if (a.rule !== b.rule) return a.rule < b.rule ? -1 : 1;
   if (a.document !== b.document) return a.document < b.document ? -1 : 1;
@@ -176,6 +180,8 @@ function readEntry(row: unknown, where: string, problems: string[]): BaselineEnt
     problems.push(`${where}: "document" and "subject" must be strings`);
     return null;
   }
+  // `Number.isInteger` is false for anything but a number, so the `typeof`
+  // only narrows the type for `count < 1`, and its mutant is equivalent.
   if (typeof count !== 'number' || !Number.isInteger(count) || count < 1) {
     problems.push(`${where}: "count" must be a whole number of at least 1`);
     return null;

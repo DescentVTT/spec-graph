@@ -799,6 +799,7 @@ command. spec-graph reads the first of `.spec-graph.json`,
   "ratchet": true,
   "severities": { "self-reference": "off" },
   "strict": true,
+  "maxRelated": 3,
   "rules": {
     "no-draft-dependency": {
       "query": "document[phase=active] -depends-on-> document[phase=draft]",
@@ -822,6 +823,10 @@ decision to discard what the repository already declared. `--verbose` prints
 which file was read, on stderr with everything else a run says about itself, so
 it can be combined with any `--format` and leave the document on stdout intact.
 `--no-config` skips the mechanism entirely.
+
+`maxRelated` has no flag. It caps how many related locations one finding lists
+— the lines under it in the terminal, `related` in JSON, `relatedLocations` in
+SARIF — and is 8 unless set; `0` lists none.
 
 A broken config stops the run with exit `2`, each problem named on stderr —
 invalid JSON, a value of the wrong type, an unknown key, a rule that does not
