@@ -404,7 +404,7 @@ document[phase=active] -delegates-to-> item[openness=open]
 └──────┘└────────────┘ └─────────────┘ └─────────────────┘
   node    predicate       relation            node
 
-Node types   document · item · *
+Node types   document · item · *        (also documents docs doc items nodes node any)
 Attributes   id kind title path file line phase status receptivity alias
              document state (or disposition) openness section text body
              evidence conflicted fm.<front-matter-key>
@@ -413,9 +413,12 @@ Relations    -kind->   <-kind-   =kind=>   <=kind=      (= forms are transitive)
              comma-separate kinds: -assumes,depends-on->
 ```
 
-Items inherit their document's lifecycle, so `item[phase=retired]` means what you
-expect. A query evaluates to **paths**, not endpoints, which is why a finding can
-name both ends and the line that connects them.
+Items inherit their document's lifecycle - `phase`, `receptivity`, `status` - and
+answer to its `path` and its `alias` spellings, so `item[phase=retired]` means
+what you expect. A query evaluates to **paths**, not endpoints, which is why a
+finding can name both ends and the line that connects them, and `query` prints
+each one the way the selector reads, every document a transitive step passed
+through included.
 
 `~=` is a regular expression matched by an automaton that cannot backtrack, so a
 predicate is linear in the subject whatever the pattern — `^([A-Za-z0-9_]+[ ]?)+$`
