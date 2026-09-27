@@ -40,6 +40,8 @@ export function formatRef(ref: SourceRef): string {
  * total: file, then line, then column, then length.
  */
 export function compareRefs(a: SourceRef, b: SourceRef): number {
+  // Reached only when the two files differ, where `<` and `<=` agree: that
+  // mutant is equivalent.
   if (a.file !== b.file) return a.file < b.file ? -1 : 1;
   if (a.span.start.line !== b.span.start.line) return a.span.start.line - b.span.start.line;
   if (a.span.start.column !== b.span.start.column) return a.span.start.column - b.span.start.column;
