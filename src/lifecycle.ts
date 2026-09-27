@@ -21,6 +21,10 @@ import type { Phase, Receptivity } from './types.js';
  * Order matters. A status of "accepted, superseded by ADR-0009" is retired, not
  * active: retirement is terminal, so a retirement word anywhere in the string
  * wins over anything else in it.
+ *
+ * A hyphenated term is found anywhere in the status, so a row needs no term
+ * another in it already finds: `replaced` reads "replaced by", `review` reads
+ * "in review" and "under review", and `in-progress` reads "work in progress".
  */
 const VOCABULARY: readonly (readonly [Phase, readonly string[]])[] = [
   [
@@ -32,7 +36,6 @@ const VOCABULARY: readonly (readonly [Phase, readonly string[]])[] = [
       'superceded',
       'supersedes-by',
       'replaced',
-      'replaced-by',
       'deprecated',
       'obsolete',
       'obsoleted',
@@ -73,6 +76,9 @@ const VOCABULARY: readonly (readonly [Phase, readonly string[]])[] = [
     'frozen',
     ['final', 'finalised', 'finalized', 'frozen', 'locked', 'ratified', 'immutable', 'sealed', 'standard', 'published'],
   ],
+  // Ahead of `active`, whose `accepted` it contains: read after it, as the
+  // rest of the draft row is, `provisionally accepted` would be active.
+  ['draft', ['provisionally-accepted']],
   [
     'active',
     [
@@ -110,11 +116,8 @@ const VOCABULARY: readonly (readonly [Phase, readonly string[]])[] = [
       'provisional',
       'prospective',
       'wip',
-      'work-in-progress',
       'in-progress',
       'review',
-      'in-review',
-      'under-review',
       'reviewing',
       'discussion',
       'discussing',
@@ -130,7 +133,6 @@ const VOCABULARY: readonly (readonly [Phase, readonly string[]])[] = [
       'alpha',
       'beta',
       'incubating',
-      'provisionally-accepted',
     ],
   ],
 ];
@@ -187,7 +189,6 @@ export function normaliseStatus(raw: string): string {
 export function phaseOf(raw: string | null | undefined): Phase {
   if (raw === null || raw === undefined) return 'unknown';
   const text = normaliseStatus(raw);
-  if (text.length === 0) return 'unknown';
   const words = new Set(text.split(' '));
   const hyphenated = text.replace(/ /g, '-');
 
@@ -227,7 +228,7 @@ export function isRetired(phase: Phase): boolean {
 
 /** True when the heading names a section that declares the document status. */
 export function isStatusHeading(text: string): boolean {
-  return STATUS_HEADINGS.has(text.trim().toLowerCase().replace(/[:*_`]/g, '').trim());
+  return STATUS_HEADINGS.has(text.toLowerCase().replace(/[:*_`]/g, '').trim());
 }
 
 /**
@@ -239,8 +240,8 @@ export function isStatusHeading(text: string): boolean {
  */
 export function phaseFromPath(posixPath: string): Phase {
   const segments = posixPath.toLowerCase().split('/');
-  // The file name itself is not a directory; a document called `archive.md` is
-  // not retired.
+  // The file name itself is not a directory; a document called `archive`, with
+  // or without an extension, is not retired.
   for (let i = 0; i < segments.length - 1; i += 1) {
     if (RETIRING_DIRECTORIES.has(segments[i] as string)) return 'retired';
   }
@@ -257,7 +258,9 @@ export function phaseFromPath(posixPath: string): Phase {
  */
 export function supersessionTargetsIn(raw: string): string[] {
   const out: string[] = [];
-  const pattern = /(?:superse[dc]ed|replaced|obsoleted)\s*(?:by|with|through)?\s*[:\-—]?\s*(.+)$/i;
+  // The tail runs to the end of the line, not of the string: a status that
+  // wraps onto a second line still names its successor on the first.
+  const pattern = /(?:super[sc]eded|replaced|obsoleted)\s*(?:by|with|through)?\s*[:\-—]?\s*(.+)/i;
   const match = pattern.exec(raw.replace(/[`*_]/g, ''));
   if (!match) return out;
   const tail = match[1] as string;

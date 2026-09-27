@@ -3,6 +3,26 @@
 Notable changes, newest first. Versions follow [semver](https://semver.org):
 a patch fixes behaviour without asking anything of a repository that upgrades.
 
+## Unreleased
+
+### Fixed
+
+- **`Provisionally accepted` reads as a draft.** The vocabulary listed it
+  among the draft words, but `active` is read first and it contains
+  `accepted`, so it read as active and the entry never matched anything.
+- **`Superceded by ADR-0009` names ADR-0009**, as `Superseded by ADR-0009`
+  does. The misspelling already retired the document; the pattern that reads
+  the successor out of a status spelled it `superseced`.
+- **A status that wraps onto a second line still names its successor.** A
+  `@spec-node status="Superseded by ADR-0009, ..."` whose value ran onto
+  another line retired the document and recorded no supersession.
+
+### Documentation
+
+- The README lists every status word, front-matter key, heading and directory
+  the lifecycle is read from, where it gave a few words for each phase and an
+  ellipsis.
+
 ## 0.9.2
 
 Three small fixes found when 0.9.1 was read as a user reads it: `rules

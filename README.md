@@ -135,6 +135,30 @@ is left out rather than guessed at. Every run says how many statuses, ids and
 relations it left out that way, and `--verbose` says where and why: quote the
 value and it is read.
 
+<details>
+<summary>Every status word, and where a status is looked for</summary>
+
+A word counts whole and in any case, once emphasis, links, HTML, emoji and dates
+are stripped, so `Unapproved` is not `approved`. A hyphenated word matches
+spaced as well: `signed-off` reads `Signed off`. A status holding words from two
+rows takes the higher row, except that `provisionally accepted` is a draft.
+
+| Phase | Status words |
+| --- | --- |
+| `retired` | `superseded`, `superceded`, `supersedes-by`, `replaced`, `replaced-by`, `deprecated`, `obsolete`, `obsoleted`, `retired`, `rejected`, `declined`, `withdrawn`, `abandoned`, `cancelled`, `canceled`, `dropped`, `revoked`, `reverted`, `moved`, `historical`, `defunct`, `inactive`, `dead`, `void`, `closed`, `postponed`, `deferred`, `not-planned`, `wontfix` |
+| `record` | `archived`, `archive` |
+| `frozen` | `final`, `finalised`, `finalized`, `frozen`, `locked`, `ratified`, `immutable`, `sealed`, `standard`, `published` |
+| `active` | `accepted`, `active`, `approved`, `adopted`, `agreed`, `implementable`, `implemented`, `implementing`, `current`, `effective`, `in-effect`, `enforced`, `stable`, `merged`, `released`, `shipped`, `live`, `done`, `complete`, `completed`, `signed-off`, `committed` |
+| `draft` | `draft`, `drafting`, `proposed`, `proposal`, `provisional`, `provisionally-accepted`, `prospective`, `wip`, `work-in-progress`, `in-progress`, `review`, `in-review`, `under-review`, `reviewing`, `discussion`, `discussing`, `pending`, `idea`, `exploratory`, `candidate`, `open`, `new`, `unreviewed`, `rfc`, `experimental`, `alpha`, `beta`, `incubating` |
+
+| Where | Read from |
+| --- | --- |
+| Front matter, the first key present | `status`, `state`, `stage`, `lifecycle`, `phase`, `adr-status` |
+| A section, under the heading | `Status`, `State`, `Stage`, `Lifecycle`, `Current status` |
+| A directory, for a document that declares no status | `archive`, `archived`, `attic`, `deprecated`, `graveyard`, `historical`, `obsolete`, `rejected`, `retired`, `superseded`, `superceded`, `withdrawn` |
+
+</details>
+
 `archived` is none of the four. It is what spec-brief writes on a round of work
 it has closed, and every spec-* tool reads it as a **record**: depending on it
 is normal, its unticked boxes are not anyone's work, its links are still
