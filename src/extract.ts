@@ -706,7 +706,12 @@ export function extractDocument(input: ExtractInput): ExtractedDocument | null {
     ? provisional
     : identityOf(declaredId, nodeDirective);
 
-  const status = readStatus(scanned, byKey, nodeDirective, index, file);
+  // A register's sections are specifications too. The file is always the first
+  // region, so a one-decision file behaves exactly as it did before.
+  const regions =
+    identity.id === provisional.id ? provisionalRegions : findSpecificationRegions(scanned, directives, identity.id);
+
+  const status = readStatus(scanned, byKey, nodeDirective, index, file, regions);
   const pathPhase = phaseFromPath(input.path);
   // A record is a categorical statement about what the file *is*, made by
   // configuration or by an explicit directive, so it outranks a status word
@@ -734,10 +739,6 @@ export function extractDocument(input: ExtractInput): ExtractedDocument | null {
     frontMatter: toRecord(entries),
   };
 
-  // A register's sections are specifications too. The file is always the first
-  // region, so a one-decision file behaves exactly as it did before.
-  const regions =
-    identity.id === provisional.id ? provisionalRegions : findSpecificationRegions(scanned, directives, identity.id);
   // Every region but the first: a heading section, or a row of a register kept
   // as a table.
   const subSpecifications = regions
@@ -944,6 +945,11 @@ interface StatusReading {
  * deliberate each is: a directive, a front-matter field, then the body of a
  * `## Status` section. A repository using none of them still gets a phase from
  * its directory layout, which is handled by the caller.
+ *
+ * A status section inside a register's region is that region's, not the
+ * file's. Read as the file's, a register whose first decision said
+ * `### Status` / `Superseded by ADR-0009` was itself retired, and itself
+ * superseded by ADR-0009, for something one of its decisions said.
  */
 function readStatus(
   scanned: ScannedDocument,
@@ -951,6 +957,7 @@ function readStatus(
   nodeDirective: Directive | null,
   index: LineIndex,
   file: string,
+  regions: readonly SpecificationRegion[],
 ): StatusReading {
   if (nodeDirective) {
     const declared = attr(nodeDirective, 'status');
@@ -975,7 +982,7 @@ function readStatus(
     };
   }
 
-  const heading = scanned.headings.find((h) => isStatusHeading(h.text));
+  const heading = scanned.headings.find((h) => isStatusHeading(h.text) && regionAt(regions, h.start) === null);
   if (heading) {
     const body = statusSectionBody(scanned, heading.line);
     if (body) {
