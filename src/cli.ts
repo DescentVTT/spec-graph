@@ -315,12 +315,10 @@ export function parseArgs(argv: readonly string[], cwd: string): CliOptions {
   const args = [...argv];
   let command: Command = 'check';
 
-  if (args.length > 0 && !((args[0] as string).startsWith('-'))) {
-    const first = args[0] as string;
-    if (first === 'check' || first === 'query' || first === 'graph' || first === 'rules' || first === 'diff') {
-      command = first;
-      args.shift();
-    }
+  const first = args[0];
+  if (first === 'check' || first === 'query' || first === 'graph' || first === 'rules' || first === 'diff') {
+    command = first;
+    args.shift();
   }
 
   const patterns: string[] = [];
@@ -603,6 +601,8 @@ export async function main(io: CliIO = {}): Promise<number> {
   try {
     options = parseArgs(argv, cwd);
   } catch (error) {
+    // parseArgs throws nothing but a UsageError for any argv, so no test can
+    // tell this check from `true`: the rethrow is for a bug in the parser.
     if (error instanceof UsageError) {
       err(`spec-graph: ${error.message}\n`);
       return EXIT_ERROR;
@@ -699,6 +699,11 @@ export async function main(io: CliIO = {}): Promise<number> {
     // .gitignore line does, so it means the same thing wherever it was typed.
     // A path or a glob is matched against the repository-relative path, and
     // leaving that one alone would make it silently match nothing.
+    //
+    // A stray entry in one of the empty fallbacks below changes a run only if
+    // it matches a path, a target or a family some corpus has, so the mutants
+    // that plant one survive every corpus but one built for them - except in
+    // `families`, where any entry is an allowlist.
     ignore: [...(file.ignore ?? []), ...options.ignore.map((pattern) => anchorPath(here, pattern))],
     ignoreReferences: [...(file.ignoreReferences ?? []), ...options.ignoreReferences],
     families: [...(file.families ?? []), ...options.families],
@@ -706,7 +711,7 @@ export async function main(io: CliIO = {}): Promise<number> {
     historyPatterns: [...(file.historyPatterns ?? []), ...options.historyPatterns.map((pattern) => anchorPath(here, pattern))],
     severities,
     projectRules,
-    ...(file.maxRelated !== undefined ? { maxRelated: file.maxRelated } : {}),
+    maxRelated: file.maxRelated,
   };
 
   // Named the way the reader would have to type it, because a discovered
@@ -770,6 +775,8 @@ export async function main(io: CliIO = {}): Promise<number> {
         try {
           queries = [parseQuery(selector)];
         } catch (error) {
+          // Every selector that fails to parse fails as a QueryError, so no
+          // test can tell this check from `true`.
           if (error instanceof QueryError) {
             err(renderQueryError(selector, error));
             return EXIT_ERROR;
@@ -779,6 +786,8 @@ export async function main(io: CliIO = {}): Promise<number> {
       }
 
       const matches = union(result.graph, queries);
+      // renderMatches asks only whether this is 'json', so the other word is a
+      // name for the reader and emptying it changes nothing.
       out(renderMatches(matches, options.format === 'json' ? 'json' : 'human', result.graph.nodes.size));
       return matches.length > 0 ? EXIT_OK : EXIT_FAILED;
     }
@@ -791,6 +800,8 @@ export async function main(io: CliIO = {}): Promise<number> {
         const text = formatBaseline(result.graph, result.diagnostics);
         try {
           const { writeFile } = await import('node:fs/promises');
+          // Node writes a string as UTF-8 when the encoding is empty too, so
+          // emptying this literal writes the same bytes.
           await writeFile(underRoot(root, anchor(here, options.recordBaseline)), text, 'utf8');
         } catch (error) {
           err(`spec-graph: cannot write ${options.recordBaseline}: ${(error as Error).message}\n`);
@@ -848,7 +859,7 @@ export async function main(io: CliIO = {}): Promise<number> {
         // stdout only for a human - the structured formats carry the same rows
         // inside the document, where a stray line is the difference between
         // parsing and not.
-        if (options.format === 'human' && (options.verbose || (ratchet && outcome.stale.length > 0))) {
+        if (options.format === 'human' && (options.verbose || ratchet)) {
           for (const entry of outcome.stale) {
             const subject = entry.subject === '' ? '' : ` "${entry.subject}"`;
             const why = entry.reason === 'gone' ? ` - ${entry.document} is not in this corpus` : '';
@@ -858,15 +869,14 @@ export async function main(io: CliIO = {}): Promise<number> {
       }
       const looseBaseline = note !== undefined && note.ratchet && note.stale > 0;
 
-      const baselineNote = note === undefined ? {} : { baseline: note };
-      const reporterOptions = { verbose: options.verbose, max: options.max, escalated, ...baselineNote };
+      const reporterOptions = { verbose: options.verbose, max: options.max, escalated, baseline: note };
       out(
         options.format === 'sarif'
           ? formatSarif(reported, reported.graph, { version: await readVersion(), escalated, projectRules })
           : options.format === 'gitlab'
             ? formatGitlab(reported, { escalated })
             : options.format === 'json'
-              ? formatJson(reported, { escalated, ...baselineNote })
+              ? formatJson(reported, { escalated, baseline: note })
               : options.format === 'markdown'
                 ? formatMarkdown(reported, reporterOptions)
                 : `${formatReport(reported, { color, ascii, ...reporterOptions })}\n`,
@@ -891,6 +901,9 @@ export async function main(io: CliIO = {}): Promise<number> {
  */
 function below(root: string, from: string): string {
   const start = toPosix(from).replace(/[/]+$/, '');
+  // The prefix test only guards a root that is neither `start` nor above it,
+  // which nothing returns; for `start` itself, slicing past its end is `''`
+  // too, so emptying the prefix changes nothing a run can reach.
   return start.startsWith(`${root}/`) ? start.slice(root.length + 1) : '';
 }
 
@@ -936,6 +949,9 @@ function knownProjectRules(projectRules: readonly ProjectRule[]): string {
  * this command what a rule matches answers with the set `check` reports on.
  */
 function union(graph: AnalysisResult['graph'], queries: readonly QuerySpec[]): Match[] {
+  // `execute` already returns each path of nodes once, keyed the way this is,
+  // so one selector needs no second pass and sending it through one anyway
+  // returns the same matches.
   if (queries.length === 1) return execute(graph, queries[0] as QuerySpec);
   const seen = new Set<string>();
   const matches: Match[] = [];
@@ -963,9 +979,9 @@ interface RuleRow {
 function renderRules(
   explain: boolean,
   version: string,
-  projectRules: readonly ProjectRule[] = [],
-  only: string | null = null,
-  configSource: string | null = null,
+  projectRules: readonly ProjectRule[],
+  only: string | null,
+  configSource: string | null,
 ): string {
   // A project rule is described by the selector it is, because that is what it
   // is - its message is a template, and a template is not a description.
@@ -982,6 +998,8 @@ function renderRules(
       severity: rule.severity,
       description: rule.sources[0] as string,
       query: rule.sources.slice(1).join(' | ') || undefined,
+      // A project rule only exists because a file declared it, so the source
+      // is never null here and the first branch is for the type alone.
       decided: configSource === null ? `rules.${rule.name}` : `${configSource}: rules.${rule.name}`,
     })),
   ];
@@ -1073,6 +1091,8 @@ async function runDiff(
   for (const path of paths) {
     let raw: string;
     try {
+      // Without the encoding this is a Buffer, which JSON.parse decodes as
+      // UTF-8 all the same - so emptying the literal parses the same export.
       raw = await readFile(resolve(cwd, path), 'utf8');
     } catch (error) {
       err(`spec-graph: cannot read ${path}: ${(error as Error).message}\n`);
@@ -1081,6 +1101,8 @@ async function runDiff(
     try {
       sides.push(parseGraphExport(raw, path));
     } catch (error) {
+      // Every input parseGraphExport refuses, it refuses as a DiffInputError;
+      // the rethrow is for a bug in it, which no file reaches.
       if (!(error instanceof DiffInputError)) throw error;
       err(`spec-graph: ${error.message}\n`);
       return EXIT_ERROR;
@@ -1092,6 +1114,15 @@ async function runDiff(
   return EXIT_OK;
 }
 
+/**
+ * The version in the package's own manifest.
+ *
+ * The guards and the placeholder are for a manifest that is missing or
+ * malformed, and the one this reads always parses and always has a version, so
+ * no test reaches them without replacing the file the package ships - and the
+ * same parse without the encoding reads a Buffer, which JSON.parse decodes as
+ * UTF-8 all the same.
+ */
 async function readVersion(): Promise<string> {
   try {
     const { readFile } = await import('node:fs/promises');
