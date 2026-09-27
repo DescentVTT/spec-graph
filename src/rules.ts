@@ -140,7 +140,9 @@ export function resolveStrict(
 
   // A project rule is escalated on the same terms as a built-in, reading its
   // declared severity as the default. Anything else would mean a team could
-  // adopt --strict and quietly keep their own conventions advisory.
+  // adopt --strict and quietly keep their own conventions advisory. (A default
+  // list seeded with something that is not a rule is an equivalent mutant: with
+  // no severity, it is never a warning to raise.)
   const defaults: [AnyRuleId, Severity][] = [
     ...RULE_IDS.map((id): [AnyRuleId, Severity] => [id, DEFAULT_SEVERITIES[id]]),
     ...projectRules.map((rule): [AnyRuleId, Severity] => [rule.id, rule.severity]),
@@ -203,7 +205,7 @@ export function runRules(graph: SpecGraph, corpus: ResolvedCorpus, options: Rule
   stalePremises(graph, emit, claimed);
   brokenReferences(corpus, emit);
   circularDelegations(graph, emit);
-  orphanedObligations(graph, emit, maxRelated);
+  orphanedObligations(graph, emit);
   supersessions(graph, emit);
   stateConflicts(graph, emit);
   misreadKeys(corpus, emit);
@@ -257,6 +259,9 @@ const REFERENCE_RULES: ReadonlySet<AnyRuleId> = new Set<AnyRuleId>([
  */
 function exempt(graph: SpecGraph, rule: AnyRuleId, nodes: readonly string[]): boolean {
   if (REFERENCE_RULES.has(rule)) return false;
+  // Every other rule names its subject first, and names a node of the graph,
+  // which has an owning document: the two guards below narrow types, and their
+  // mutants are equivalent.
   const subject = nodes[0];
   if (subject === undefined) return false;
   const owner = graph.owningDocument(subject);
@@ -293,6 +298,8 @@ function ghostHandovers(graph: SpecGraph, emit: Emit): Set<string> {
     const source = match.nodes[0] as SpecNode;
     const target = match.nodes[1] as SpecNode;
     const edge = match.edges[0] as Edge;
+    // A node always has an owning document; the guard narrows the type, and its
+    // mutant is equivalent.
     const targetDocument = graph.owningDocument(target.id);
     if (!targetDocument) continue;
 
@@ -371,6 +378,10 @@ function stalePremises(graph: SpecGraph, emit: Emit, claimed: ReadonlySet<string
       // Already reported as a ghost handover, which says the same thing in the
       // terms the reader needs.
       if (claimed.has(edgeKey(edge))) continue;
+      // `execute` already returns one path per pair of nodes, and the two
+      // selectors reach different kinds of node, so this never skips today and
+      // its mutants are equivalent. It keeps one finding per premise if either
+      // of those stops being true.
       const key = `${source.id}>${target.id}>${edge.kind}`;
       if (seen.has(key)) continue;
       seen.add(key);
@@ -387,7 +398,8 @@ function stalePremises(graph: SpecGraph, emit: Emit, claimed: ReadonlySet<string
         nodes: [source.id, target.id],
         // Point at the status line when there is one: that is the sentence that
         // makes the premise stale, and repeating the document's first line
-        // underneath it adds nothing.
+        // underneath it adds nothing. A document target owns itself, so the
+        // optional chain is never taken.
         related: [related(target.kind === 'document' ? (targetDocument?.statusAt ?? target.at) : target.at, because)],
         hint: `re-check this dependency: the constraint it assumes may have been lifted when ${target.kind === 'item' ? 'the question closed' : `${target.id} was retired`}`,
       }));
@@ -491,13 +503,17 @@ function brokenHint(ref: DanglingRef): string {
  *
  * `trap 55` suggests `trap *` rather than `trap 55`, because these tags come in
  * numbered series and excluding them one at a time is not a fix anybody would
- * accept. A target with no trailing number is suggested verbatim.
+ * accept. The separator stays in the glob - `trap-55` suggests `trap-*` - or
+ * the flag the hint names would not silence the finding it is attached to. A
+ * target with no trailing number, or nothing before it, is suggested verbatim.
  */
 function suggestReferenceGlob(target: string): string {
+  // The scanner hands over a wiki link's target trimmed already, so the trim's
+  // mutant is equivalent; and unanchored at the start the pattern would match
+  // the same, because the lazy stem can always begin at the first character.
   const trimmed = target.trim();
-  const series = /^(.*?)[\s._-]*\d+$/.exec(trimmed);
-  const stem = series?.[1]?.trim();
-  return stem !== undefined && stem.length > 0 ? `${stem} *` : trimmed;
+  const stem = /^(.*?[\s._-]*)\d+$/.exec(trimmed)?.[1];
+  return stem !== undefined && /[^\s._-]/.test(stem) ? `${stem}*` : trimmed;
 }
 
 /**
@@ -524,6 +540,10 @@ function circularDelegations(graph: SpecGraph, emit: Emit): void {
   // of them is found even though each delegation runs item -> document and the
   // raw graph therefore contains no cycle at all.
   for (const component of graph.cycles(kinds, { byDocument: true })) {
+    // A projected component is two documents or more, each with the edge that
+    // holds it in: the filter, the length guard and the empty-edges cases below
+    // never decide, and their mutants are equivalent. They keep the rule true
+    // if `cycles` ever returns less.
     const members = component
       .map((id) => graph.document(id))
       .filter((node): node is DocumentNode => node !== undefined);
@@ -559,6 +579,7 @@ function circularDelegations(graph: SpecGraph, emit: Emit): void {
  */
 function cycleEdges(graph: SpecGraph, component: readonly string[], kinds: readonly Edge['kind'][]): Edge[] {
   const inside = new Set(component);
+  // Both ends of an edge are nodes, so the fallback is never taken.
   const owner = (id: string): string => graph.owningDocument(id)?.id ?? id;
   const out: Edge[] = [];
   for (const edge of graph.edges) {
@@ -581,7 +602,7 @@ function cycleEdges(graph: SpecGraph, component: readonly string[], kinds: reado
  * say "this archived ADR has open questions" is five times the noise and none
  * of the extra information.
  */
-function orphanedObligations(graph: SpecGraph, emit: Emit, maxRelated: number): void {
+function orphanedObligations(graph: SpecGraph, emit: Emit): void {
   for (const document of graph.documents) {
     if (document.phase !== 'retired' && document.phase !== 'frozen') continue;
     const open = graph.itemsOf(document.id).filter((item) => item.openness !== 'closed');
@@ -592,9 +613,8 @@ function orphanedObligations(graph: SpecGraph, emit: Emit, maxRelated: number): 
       message: `${sealed} document still holds ${open.length} open ${open.length === 1 ? 'obligation' : 'obligations'}`,
       at: document.statusAt ?? document.at,
       nodes: [document.id, ...open.map((item) => item.id)],
-      related: open
-        .slice(0, maxRelated)
-        .map((item) => related(item.at, `${item.disposition}: ${item.text}`)),
+      // Every item, where `emit` applies the cap on related locations.
+      related: open.map((item) => related(item.at, `${item.disposition}: ${item.text}`)),
       hint: `move each one to a live document or close it - as it stands, ${open.length === 1 ? 'it disappears' : 'they disappear'} with ${document.id}`,
     }));
   }
@@ -663,9 +683,9 @@ function stateConflicts(graph: SpecGraph, emit: Emit): void {
       message: `item reads as ${item.disposition} but also carries ${describeSignals(item)}`,
       at: item.evidence.at,
       nodes: [item.id],
-      related: item.conflicts.map((signal) =>
-        related(signal.at, `${signal.source} says ${signal.disposition}${signal.raw ? `: ${signal.raw}` : ''}`),
-      ),
+      // A conflicting signal always has text: only a section's and the default
+      // can be empty, and neither is ever in conflict.
+      related: item.conflicts.map((signal) => related(signal.at, `${signal.source} says ${signal.disposition}: ${signal.raw}`)),
       hint: `make the two agree - spec-graph is treating it as ${item.openness}`,
     }));
   }
@@ -689,9 +709,12 @@ function describeSignals(item: ItemNode): string {
  */
 function selfReferences(graph: SpecGraph, emit: Emit): void {
   for (const edge of graph.edges) {
-    if (!edge.reflexive || edge.kind === 'contains') continue;
+    if (!edge.reflexive) continue;
+    // `contains`, from a document to its own item, is reflexive and neither.
     const traits = EDGE_TRAITS[edge.kind];
     if (!traits.transfersObligation && !traits.loadBearing) continue;
+    // The graph keeps no edge whose ends are not nodes; the guard narrows the
+    // type, and its mutant is equivalent.
     const node = graph.node(edge.from);
     if (!node) continue;
 
@@ -762,6 +785,7 @@ function truncate(text: string, limit: number): string {
   return text.length <= limit ? text : `${text.slice(0, limit - 3)}...`;
 }
 
+/** Every caller has the document in hand, so the optional chain is never taken. */
 function statusSuffix(document: DocumentNode | undefined): string {
   return document?.rawStatus ? ` ("${document.rawStatus}")` : '';
 }
@@ -782,6 +806,8 @@ export function sortDiagnostics(diagnostics: readonly Diagnostic[]): Diagnostic[
   return [...diagnostics].sort((a, b) => {
     const bySeverity = SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity];
     if (bySeverity !== 0) return bySeverity;
+    // A string comparison is reached only when the two differ, where `<` and
+    // `<=` agree: those mutants are equivalent.
     if (a.at.file !== b.at.file) return a.at.file < b.at.file ? -1 : 1;
     if (a.at.span.start.line !== b.at.span.start.line) return a.at.span.start.line - b.at.span.start.line;
     if (a.at.span.start.column !== b.at.span.start.column) return a.at.span.start.column - b.at.span.start.column;

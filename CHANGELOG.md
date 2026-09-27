@@ -16,6 +16,10 @@ a patch fixes behaviour without asking anything of a repository that upgrades.
 - **A status that wraps onto a second line still names its successor.** A
   `@spec-node status="Superseded by ADR-0009, ..."` whose value ran onto
   another line retired the document and recorded no supersession.
+- **The `--ignore-ref` a concept tag's hint suggests silences it.** `[[trap-55]]`
+  suggested `--ignore-ref "trap *"`, which matches `trap 55` and not
+  `trap-55`; the glob keeps the separator now, `trap-*`, and `[[trap55]]`
+  suggests `trap*`.
 - **A list item that opens a fence of five tildes is not struck through.**
   `~~~~~` begins and ends with `~~`, and read as a strikethrough of `~`, so
   the item read as done.
