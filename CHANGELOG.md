@@ -3,7 +3,14 @@
 Notable changes, newest first. Versions follow [semver](https://semver.org):
 a patch fixes behaviour without asking anything of a repository that upgrades.
 
-## Unreleased
+## 0.9.5
+
+spec-core at 119345e. A link inside a link now counts only the inner one, as
+CommonMark and a rendered page read it, and the refusal of `**` inside a name
+suggests patterns built from the one written. On upgrading, a repository with
+no link inside a link sees no finding change; one that has them sees the edge,
+and any broken-reference finding, move from the outer destination to the
+inner. A program that builds a `ScannedDocument` itself adds two fields.
 
 ### Changed
 
