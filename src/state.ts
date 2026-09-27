@@ -356,6 +356,8 @@ function findMarkers(body: string): MarkerHit[] {
     const emphasisClose = m[3];
     // A dash arrives with the space after it. An absent qualifier is none of the
     // four, so what stands in for it is equivalent as long as it is not one.
+    // Only the dash alternative puts a dash in the qualifier at all, so the
+    // anchor on the dash test decides nothing either.
     const qualifier = m[4] ?? '';
 
     const emphasised = emphasisOpen !== undefined && emphasisClose !== undefined;

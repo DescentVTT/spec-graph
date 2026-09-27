@@ -80,6 +80,20 @@ describe('a link to a document', () => {
     ]);
   });
 
+  it('named with a dot whose tail is no extension still resolves', () => {
+    // An extension is a dot and letters or digits to the end of the name; a
+    // tail with a hyphen in it is part of the name, as a digit after the dot is.
+    const { graph, diagnostics } = analyse({
+      ...citing('See [[v2.x-migration]] and [[ADR-0007.1-notes]].'),
+      'docs/notes/v2.x-migration.md': '---\nstatus: accepted\n---\n\n# Migrating\n',
+      'docs/notes/ADR-0007.1-notes.md': '---\nstatus: accepted\n---\n\n# Notes\n',
+    });
+    expect(diagnostics).toEqual([]);
+    expect(
+      graph.edges.filter((edge) => edge.kind === 'references').map((edge) => graph.document(edge.to)?.path),
+    ).toEqual(['docs/notes/v2.x-migration.md', 'docs/notes/ADR-0007.1-notes.md']);
+  });
+
   it('with no extension, or a dotted identifier, is still resolved as one', () => {
     expect(referenceFindings(citing('See [RFC 7](../rfcs/0007) and [[ADR-0009.1]].'))).toEqual([
       'broken-reference "../rfcs/0007" does not resolve to any document',

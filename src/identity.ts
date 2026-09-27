@@ -276,6 +276,8 @@ export function isDocumentTarget(target: string): boolean {
   const base = withoutAnchor.slice(withoutAnchor.lastIndexOf('/') + 1);
   const dot = base.lastIndexOf('.');
   // No extension: a directory, or an extensionless spec such as `rfcs/0007`.
+  // Said outright rather than left to the test below, which would refuse the
+  // last character `slice(-1)` handed it and answer the same.
   if (dot === -1) return true;
   const extension = base.slice(dot);
   // Only a file extension disqualifies a target, and one starts with a letter.

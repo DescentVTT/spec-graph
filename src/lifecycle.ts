@@ -172,7 +172,7 @@ export function normaliseStatus(raw: string): string {
   // with the emphasis, it ran the two words into one that is neither.
   return raw
     .replace(/<[^>]*>/g, ' ')
-    .replace(/(?<=[\p{L}\p{N}])_+(?=[\p{L}\p{N}])/gu, ' ')
+    .replace(/(?<=[\p{L}\p{N}])_(?=[\p{L}\p{N}])/gu, ' ')
     .replace(/[`*_~"'#]/g, '')
     .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
     .replace(/\p{Extended_Pictographic}/gu, ' ')

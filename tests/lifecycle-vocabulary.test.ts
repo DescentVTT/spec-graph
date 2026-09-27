@@ -84,6 +84,9 @@ describe('the documented status words', () => {
     }
     const { graph } = analyseSources(corpus({ 'docs/adr/0001-a.md': '---\nstatus: _not_planned_\n---\n\n# A\n' }));
     expect(graph.document('ADR-0001')?.phase).toBe('retired');
+    // A digit is a letter of a word here, as it is everywhere else in a status.
+    expect(phaseOf('v2_released')).toBe('active');
+    expect(phaseOf('released_2')).toBe('active');
     // Emphasis around a word is still only emphasis.
     expect(phaseOf('_Accepted_')).toBe('active');
     expect(phaseOf('__Draft__ (2026-03-01)')).toBe('draft');
