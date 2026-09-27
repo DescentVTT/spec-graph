@@ -3,7 +3,13 @@
 Notable changes, newest first. Versions follow [semver](https://semver.org):
 a patch fixes behaviour without asking anything of a repository that upgrades.
 
-## Unreleased
+## 0.9.6
+
+spec-core at 65ef842: a link reference definition is read only where
+CommonMark reads one. On upgrading, a repository with no definition under a
+paragraph's text and no bracket in a label sees no finding change; one that
+has them sees the edges and findings the rendered page implies, and under
+`--ratchet` records the baseline once.
 
 ### Changed
 
