@@ -52,12 +52,23 @@ a patch fixes behaviour without asking anything of a repository that upgrades.
   repository with an `ES` family was told `ES2015` did not resolve. The
   prefix is now read as resolution reads it, `ES` and 2015. The README lists
   what is never a citation.
+- **What a walk skips no longer depends on the other patterns beside it.**
+  `docs/vendor/specs/*.md` found its files alone and none of them beside
+  `docs/**/*.md`: the broader walk never enters `vendor`, and the narrower
+  pattern's own starting point was dropped as already covered by it. And
+  `--ignore drafts` took out `docs/drafts/` for `docs/**/*.md` but not for
+  `docs/drafts/*.md`, whose walk started inside it. A pattern that starts
+  inside a directory the walk skips by default is read from there now,
+  whatever the other patterns reach, and a bare `--ignore` name prunes at any
+  depth, a pattern's starting point included.
 
 ### Documentation
 
 - The README lists every status word, front-matter key, heading and directory
   the lifecycle is read from, and every checkbox, marker and `state=` word an
   item's state is, where it gave a few of each and an ellipsis.
+- The README lists the directories a walk never enters, which it did not
+  name.
 
 ## 0.9.2
 
