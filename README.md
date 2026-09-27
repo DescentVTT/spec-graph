@@ -203,7 +203,11 @@ trusts:
   is a real dangling citation; `SHA-256` in the same repository is a sentence.
 - **Bare numbers are family-scoped.** `0007` inside an RFC means `RFC-0007`,
   never `ADR-0007`. A repository with both is ordinary, and guessing would be
-  worse than silence.
+  worse than silence. A document's family is the prefix of its identifier, or
+  else the nearest directory that names one: `adr/`, `adrs/`, `decisions/`,
+  `decision-records/` and `architecture-decisions/` hold ADRs; `rfc/` and
+  `rfcs/` RFCs; `kep/`, `keps/` and `enhancements/` KEPs; and `proposal(s)/`,
+  `design(s)/`, `prd(s)/` and `spec(s)/` a family each.
 - **Two candidates is worse than none.** An ambiguous citation is reported, not
   bound to whichever document was indexed first.
 - **Code never counts.** Links inside fences and inline spans are masked before
@@ -247,8 +251,9 @@ A row is named by its ID column, and a title is only a title. An identifier a
 title opens with belongs to the document the row is *about* — an issue reading
 `| OI-V-05 | ADR-040's enforcement point has no browser test |` is filed under
 `OI-V-05`, and citations of `ADR-040` still reach `ADR-040`. The same holds for
-a whole file: an explicit `id:`, then the file name, then the H1, and the H1 is
-read as a name only when neither of the others gave one.
+a whole file: an explicit `id:` (or `adr:`, `adr-id:`, `rfc:`, `rfc-id:`,
+`kep-number:`, `number:` or `slug:`), then the file name, then the H1, and the
+H1 is read as a name only when neither of the others gave one.
 
 The register itself stays in the graph as the thing that holds them, so
 `spec-graph query 'document[id=register] -contains-> document'` lists what is

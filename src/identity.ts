@@ -78,7 +78,7 @@ export interface IdentityInput {
 }
 
 /** An id has to be a name. Punctuation alone is what a bad parse leaves behind. */
-const HAS_LETTER_OR_DIGIT = /[\p{L}\p{N}]/u;
+export const HAS_LETTER_OR_DIGIT = /[\p{L}\p{N}]/u;
 
 /**
  * Derives a document's canonical id and every alias that should reach it.
@@ -98,7 +98,9 @@ export function identify(input: IdentityInput): DocumentIdentity {
   // worked example, parses its bare value as a lone backslash - and a document
   // whose id is `\` collides with every other one that made the same mistake,
   // exports as invalid Mermaid, and names itself in findings a reader cannot act
-  // on. There is nothing to gain by taking such a value seriously.
+  // on. There is nothing to gain by taking such a value seriously. The null
+  // check is for the type: `test(null)` reads the word "null" and passes, and
+  // the value it would keep is null anyway.
   const declaredId = input.declaredId !== null && HAS_LETTER_OR_DIGIT.test(input.declaredId) ? input.declaredId : null;
   // What the flag decides, named for what it means: the file's path and its
   // name are one claim, and a region makes neither of them.
@@ -113,31 +115,24 @@ export function identify(input: IdentityInput): DocumentIdentity {
     if (key.length > 0) aliases.add(key);
   };
 
-  const candidates: { family: string | null; number: number | null; label: string }[] = [];
+  // Only a spelling that yields a number decides anything below, so only those
+  // are kept. `digits` is the number as it was written there.
+  const candidates: { family: string | null; number: number; digits: string }[] = [];
 
   const consider = (raw: string | null, allowBare: boolean): void => {
     if (!raw) return;
     const cleaned = raw.trim();
-    if (cleaned.length === 0) return;
     const prefixed = PREFIXED_ID.exec(cleaned);
     if (prefixed) {
-      candidates.push({
-        family: (prefixed[1] as string).toUpperCase(),
-        number: Number.parseInt(prefixed[2] as string, 10),
-        label: cleaned,
-      });
+      const digits = prefixed[2] as string;
+      candidates.push({ family: (prefixed[1] as string).toUpperCase(), number: Number.parseInt(digits, 10), digits });
       return;
     }
     const bare = BARE_NUMBER.exec(cleaned);
     if (bare && allowBare) {
-      candidates.push({
-        family: directoryFamily,
-        number: Number.parseInt(bare[1] as string, 10),
-        label: cleaned,
-      });
-      return;
+      const digits = bare[1] as string;
+      candidates.push({ family: directoryFamily, number: Number.parseInt(digits, 10), digits });
     }
-    candidates.push({ family: null, number: null, label: cleaned });
   };
 
   consider(declaredId, true);
@@ -160,27 +155,35 @@ export function identify(input: IdentityInput): DocumentIdentity {
   // the two cases are one shape, `slug:` holds a URL segment rather than an id,
   // and `slug: sharding` under `# ADR-0007` has to stay ADR-0007. See the fifth
   // asymmetry in ADR-0004 for what that costs and why it is not guessed at.
-  const titleId = ownsFile && !candidates.some((c) => c.number !== null) ? headingId(input.heading) : null;
-  consider(titleId, false);
+  //
+  // Considered last, it names the document only where nothing before it gave
+  // a number: only the first candidate is read. A title that does name it
+  // supplies the number, and the spellings of that number registered below
+  // include the title's own. `false` decides nothing, since an identifier a
+  // heading opens with always starts with letters; it says a bare number in a
+  // title would name nothing.
+  consider(ownsFile ? headingId(input.heading) : null, false);
 
-  const numbered = candidates.find((c) => c.number !== null);
+  const numbered = candidates[0];
   const family = numbered?.family ?? directoryFamily;
   const number = numbered?.number ?? null;
 
-  // Witnesses to the local zero-padding convention, most authoritative first.
-  // The spelling that actually produced the number comes first: an id read from
-  // the H1 of `sharding.md` must still render as ADR-0007, not ADR-7.
-  const witnesses = [numbered?.label, declaredId, stem];
-
   let id: string;
-  if (number !== null && family !== null) {
-    id = `${family}-${padNumber(number, witnesses)}`;
+  if (numbered !== undefined && family !== null) {
+    // Written as the number was written where it was found, which is the local
+    // zero-padding convention: an id read from the H1 of `sharding.md` still
+    // renders as ADR-0007, not ADR-7, and one declared as `S3-0012` stays that.
+    id = `${family}-${numbered.digits}`;
   } else if (declaredId) {
     id = declaredId.trim();
   } else if (number !== null) {
     // Numbered but with no family to prefix - a Rust RFC in `text/0001-foo.md`,
     // say. The file stem is a far better identity than a bare "1": it is what
     // people actually type, and it stays unique across the repository.
+    //
+    // A file's stem is never empty - `.md` is its own - so this fallback, and
+    // with it the difference between this branch and the next, is reached only
+    // by a caller identifying an empty path.
     id = stem.length > 0 ? stem : String(number);
   } else {
     id = stem.length > 0 ? stem : input.path;
@@ -194,10 +197,9 @@ export function identify(input: IdentityInput): DocumentIdentity {
   }
   add(declaredId);
   for (const alias of input.declaredAliases) add(alias);
-  add(titleId);
 
-  if (number !== null) {
-    const spellings = numberSpellings(number, witnesses);
+  if (numbered !== undefined) {
+    const spellings = numberSpellings(numbered.number, numbered.digits);
     if (family !== null) {
       // Every spelling a human might type. `normaliseRef` folds separators, so
       // `adr-7`, `adr 7` and `adr7` collapse to one key; the padding variants do
@@ -220,20 +222,20 @@ export function identify(input: IdentityInput): DocumentIdentity {
  * so `ADR-0007`, `adr 0007` and `Adr_0007` all become `adr0007`.
  */
 export function normaliseRef(value: string): string {
+  // The separators go last and take every space with them, so nothing is left
+  // to trim. `+` only saves work: each separator is removed either way.
   return value
     .trim()
     .toLowerCase()
     .replace(/^[#<([]+|[)\]>.,;:]+$/g, '')
-    .replace(/[\s._-]+/g, '')
-    .trim();
+    .replace(/[\s._-]+/g, '');
 }
 
 /** Splits a `target#anchor` reference. */
 export function splitAnchor(target: string): { target: string; anchor: string | null } {
   const hash = target.indexOf('#');
   if (hash === -1) return { target, anchor: null };
-  // A leading `#` is an in-document anchor, not a separator.
-  if (hash === 0) return { target: '', anchor: target.slice(1) };
+  // A leading `#` leaves the target empty: an anchor in the citing document.
   return { target: target.slice(0, hash), anchor: target.slice(hash + 1) };
 }
 
@@ -273,7 +275,9 @@ export function isDocumentTarget(target: string): boolean {
   if (dot <= 0) return true;
   const extension = base.slice(dot);
   // Only a plausible file extension disqualifies a target. An identifier like
-  // `v1.2` or `ADR-0007.1` keeps its dot and is still resolved as an id.
+  // `v1.2` or `ADR-0007.1` keeps its dot and is still resolved as an id. The
+  // extension starts at the last dot and holds no other, so the leading anchor
+  // decides nothing; it says the dot is where the extension begins.
   if (!/^\.[A-Za-z][A-Za-z0-9]{0,5}$/.test(extension)) return true;
   return DOCUMENT_EXTENSION.test(base);
 }
@@ -304,7 +308,8 @@ function fileStem(posixPath: string): string {
   const stem = dot > 0 ? base.slice(0, dot) : base;
   // `docs/adr/0007-sharding/README.md` is identified by its directory - but a
   // README at the repository root has no directory to be named after, and must
-  // keep its own name.
+  // keep its own name. A repository-relative path never starts with `/`, so
+  // `slash > 0` and `slash >= 0` agree on every path this is given.
   const slash = posixPath.lastIndexOf('/');
   if (slash > 0 && /^(readme|index)$/i.test(stem)) {
     const parent = posixPath.slice(0, slash);
@@ -319,7 +324,13 @@ function stripExtension(posixPath: string): string {
   return dot > slash ? posixPath.slice(0, dot) : posixPath;
 }
 
-/** `kep-1234-foo` -> `kep-1234`; `0007-sharding` -> `0007`; `sharding` -> `sharding`. */
+/**
+ * `kep-1234-foo` -> `kep-1234`; `0007-sharding` -> `0007`; `sharding` -> `sharding`.
+ *
+ * The `$` alternatives decide nothing: a stem that is the identifier alone is
+ * handed back whole by the last line, and parses the same. They say that an
+ * identifier may end the name as well as open it.
+ */
 function leadingToken(stem: string): string {
   const prefixed = /^([A-Za-z]{1,15}[\s._-]?\d{1,6})(?:[\s._-]|$)/.exec(stem);
   if (prefixed) return prefixed[1] as string;
@@ -330,40 +341,20 @@ function leadingToken(stem: string): string {
 
 /** `# ADR-0007: Sharding the write path` -> `ADR-0007`. */
 function headingId(heading: string | null): string | null {
+  // Only saves the call: `exec` would read null as the word "null", and
+  // neither that nor an empty heading holds a number.
   if (!heading) return null;
   const match = /^\s*([A-Za-z]{1,15}[\s._-]?\d{1,6})\b/.exec(heading);
   return match ? (match[1] as string) : null;
 }
 
 /**
- * Chooses the digit width of the canonical id.
- *
- * A repository that writes `0007` everywhere should see `ADR-0007` in reports,
- * not `ADR-7`. The file name is the most reliable witness of the local
- * convention, so it decides.
+ * Zero-padded spellings a citation might reasonably use: the number as it was
+ * written, unpadded, and padded to three and to four digits.
  */
-function padNumber(number: number, witnesses: readonly (string | null | undefined)[]): string {
-  const width = paddingWidth(number, witnesses) ?? String(number).length;
-  return String(number).padStart(width, '0');
-}
-
-/** The digit width of the first witness that actually spells this number. */
-function paddingWidth(number: number, witnesses: readonly (string | null | undefined)[]): number | null {
-  for (const witness of witnesses) {
-    if (!witness) continue;
-    const digits = /(\d{1,6})/.exec(witness)?.[1];
-    if (digits && Number.parseInt(digits, 10) === number) return digits.length;
-  }
-  return null;
-}
-
-/** Zero-padded spellings a citation might reasonably use. */
-function numberSpellings(number: number, witnesses: readonly (string | null | undefined)[]): string[] {
-  const out = new Set<string>([String(number)]);
-  const observed = paddingWidth(number, witnesses);
-  if (observed !== null) out.add(String(number).padStart(observed, '0'));
-  for (const width of [3, 4]) out.add(String(number).padStart(width, '0'));
-  return [...out];
+function numberSpellings(number: number, written: string): string[] {
+  const unpadded = String(number);
+  return [...new Set([written, unpadded, unpadded.padStart(3, '0'), unpadded.padStart(4, '0')])];
 }
 
 /**
@@ -376,6 +367,11 @@ function numberSpellings(number: number, witnesses: readonly (string | null | un
  * more code, not less.
  */
 export function withinOneEdit(a: string, b: string): boolean {
+  // The loop bounds are not boundaries: one step past the end of equal-length
+  // strings compares undefined with undefined and continues, and one past the
+  // end of the shorter compares nothing with the last character of the longer
+  // and finds the two empty remainders equal - both the answer the loop's exit
+  // gives. Nor does `<` against `<=` below matter: equal lengths never get there.
   if (a === b) return false;
   if (a.length === b.length) {
     let first = -1;

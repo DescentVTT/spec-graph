@@ -3,6 +3,15 @@
 Notable changes, newest first. Versions follow [semver](https://semver.org):
 a patch fixes behaviour without asking anything of a repository that upgrades.
 
+## Unreleased
+
+### Fixed
+
+- **A declared id keeps its zero padding when its family has a digit in it.**
+  `id: S3-0012` was reported as `S3-12`, because the padding was read from the
+  first run of digits, which is the family's. An id is now written with the
+  number as it was declared. Citations resolved either way.
+
 ## 0.9.2
 
 Three small fixes found when 0.9.1 was read as a user reads it: `rules
