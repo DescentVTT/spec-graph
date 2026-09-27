@@ -323,6 +323,8 @@ export async function walkFiles(options: WalkOptions): Promise<WalkedFile[]> {
   // Anything carrying a separator or glob syntax is matched against the
   // repository-relative path, which is what `--ignore "docs/drafts/**"` means -
   // and treating that as a directory name silently excluded nothing at all.
+  // A mutant that defaults this to `['Stryker was here']` prunes directories of
+  // that name, which no repository has: equivalent, and left untested.
   const ignores = options.ignore ?? [];
   // The empty pattern is no directory's name, so it goes to the dialect, which
   // refuses it as it refuses an empty include: a pattern that names nothing is
@@ -394,7 +396,7 @@ export async function walkFiles(options: WalkOptions): Promise<WalkedFile[]> {
           if (!patterns.match(child) || excluded(child) || info.size > maxSize) continue;
           out.set(child, { path: child, absolute: `${root}/${child}`, size: info.size });
         } catch {
-          continue;
+          // A link to nothing has nothing to read.
         }
         continue;
       }
@@ -407,14 +409,16 @@ export async function walkFiles(options: WalkOptions): Promise<WalkedFile[]> {
         if (info.size > maxSize) continue;
         out.set(child, { path: child, absolute: `${root}/${child}`, size: info.size });
       } catch {
-        continue;
+        // Gone between the listing and the look: there is nothing to read.
       }
     }
   };
 
   for (const base of bases) if (startable(base) && (await spelledAsOnDisk(root, base))) await walk(base);
 
-  return [...out.values()].sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+  // No two paths are equal, since they are the keys of `out`, so the order
+  // needs only `<`, and `<=` would read the same.
+  return [...out.values()].sort((a, b) => (a.path < b.path ? -1 : 1));
 }
 
 /**
