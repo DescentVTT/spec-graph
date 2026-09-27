@@ -781,6 +781,9 @@ describe('what the shared scan reads differently', () => {
   });
 
   it('reads links as CommonMark does where spec-graph read them otherwise', () => {
+    // `[^1]:` and `[Note]:` define nothing, so the paragraph they open runs on
+    // through `[foo]: 0003-c.md`, which cannot interrupt it and defines nothing
+    // either, in CommonMark or on GitHub. `[foo]` is defined on the last line.
     const text = [
       '# ADR-0001: A',
       '',
@@ -799,6 +802,7 @@ describe('what the shared scan reads differently', () => {
       'Label [Mixed   Case][] folded.',
       '',
       '[MIXED CASE]: 0005-e.md',
+      '[foo]: 0003-c.md',
     ].join('\n');
     const others = ['0002-b', '0003-c', '0004-d', '0005-e'].map((name, k) => ({
       path: `docs/adr/${name}.md`,
@@ -806,7 +810,7 @@ describe('what the shared scan reads differently', () => {
     }));
     const { graph, diagnostics } = analyseSources([{ path: 'docs/adr/0001-a.md', text }, ...others]);
     expect(graph.edges.filter((e) => e.kind !== 'contains').map((e) => [e.to, e.declaredAt.span.start.line])).toEqual([
-      ['ADR-0003', 11],
+      ['ADR-0003', 18],
       ['ADR-0004', 13],
       ['ADR-0005', 17],
     ]);

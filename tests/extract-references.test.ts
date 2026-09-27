@@ -152,6 +152,74 @@ describe('a link inside the text of another', () => {
   });
 });
 
+/** Each link `body` cites, by target and as it was written. */
+function links(body: string): string[] {
+  return extract(`# A\n\n${body}\n`)
+    .references.filter((reference) => reference.origin === 'link')
+    .map((reference) => `${reference.target} | ${reference.raw}`);
+}
+
+describe('a link reference definition', () => {
+  // CommonMark's, as spec-core reads it from 65ef842 (spec-core's ADR-0004): a
+  // definition cannot interrupt a paragraph, and its label holds no unescaped
+  // bracket and at most 999 characters.
+  it('defines nothing on the line under a paragraph, so a reference through it cites nothing', () => {
+    // A renderer shows that line as the paragraph's text, and the reference as
+    // text too. It was a definition, and the reference an edge to ADR-0002.
+    for (const above of ['Some text', '> Quoted text', '- An item']) {
+      const { graph, diagnostics } = analyse({
+        'docs/adr/0001-a.md': `# A\n\nSee [the record][r].\n\n${above}\n[r]: 0002-b.md\n`,
+        'docs/adr/0002-b.md': '# B\n',
+      });
+      expect([graph.edges, diagnostics], above).toEqual([[], []]);
+    }
+  });
+
+  it('leaves the identifiers on such a line to be read as prose', () => {
+    expect(bare('Some text\n[ADR-0003]: 0003-c.md')).toEqual(['ADR-0003']);
+    // A label of more than 999 characters is no label, wherever it is written.
+    expect(bare(`[ADR-0003${' x'.repeat(500)}]: 0003-c.md`)).toEqual(['ADR-0003']);
+  });
+
+  it('still defines where it opens a paragraph or a block quote, or follows a heading, a rule, code, a comment or a definition', () => {
+    for (const written of [
+      '[r]: 0002-b.md',
+      'Some text\n> [r]: 0002-b.md',
+      'Records\n===\n[r]: 0002-b.md',
+      '***\n[r]: 0002-b.md',
+      '```\ncode\n```\n[r]: 0002-b.md',
+      '<!-- a note -->\n[r]: 0002-b.md',
+      '[s]: 0003-c.md\n[r]: 0002-b.md',
+    ]) {
+      expect(links(`See [the record][r].\n\n${written}`), written).toEqual(['0002-b.md | [the record][r]']);
+    }
+  });
+
+  it('holds no bracket in its label, so what looked like one can be a link', () => {
+    // It was a definition of `r.md](0002-b.md)` under the label `[r`, and cited nothing.
+    expect(links('[[r]: r.md](0002-b.md)')).toEqual(['0002-b.md | [[r]: r.md](0002-b.md)']);
+  });
+
+  it('holds an escaped bracket in its label', () => {
+    expect(links('See [a\\]b].\n\n[a\\]b]: 0002-b.md')).toEqual(['0002-b.md | [a\\]b][a\\]b]']);
+  });
+});
+
+describe('a reference link whose second bracket is no label', () => {
+  // The second bracket of a full reference is a link label, and one holding a
+  // bracket or more than 999 characters is not: the first bracket is then read
+  // as a shortcut, as commonmark.js reads it. It cited nothing.
+  it('cites through its first bracket', () => {
+    for (const second of ['[a[b]c]', `[${'x'.repeat(1000)}]`]) {
+      expect(links(`See [r]${second}.\n\n[r]: 0002-b.md`), second.slice(0, 9)).toEqual(['0002-b.md | [r][r]']);
+    }
+  });
+
+  it('cites nothing when its second bracket is a label nothing defines', () => {
+    expect(links('See [r][abc].\n\n[r]: 0002-b.md')).toEqual([]);
+  });
+});
+
 describe('one citation, one reference', () => {
   it('does not count a linked document again where prose names it', () => {
     for (const link of ['[[ADR-0007]]', '[[ADR-0007#scope]]']) {

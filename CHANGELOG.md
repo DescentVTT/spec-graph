@@ -3,6 +3,34 @@
 Notable changes, newest first. Versions follow [semver](https://semver.org):
 a patch fixes behaviour without asking anything of a repository that upgrades.
 
+## Unreleased
+
+### Changed
+
+- **spec-core 65ef842: a link reference definition is read only where
+  CommonMark reads one.** It cannot interrupt a paragraph: `[r]: 0002-b.md`
+  on the line under a paragraph's text, a lazy continuation line in a block
+  quote or a list item included, is that paragraph's text, as the rendered
+  page shows it. A reference whose only definition sat there,
+  `See [the record][r].`, draws no edge where it drew one to ADR-0002, and a
+  broken destination written there is no longer reported: a label nothing
+  defines is text. An identifier written on such a line is prose, and cited
+  as prose is - `Some text` over `[ADR-0003]: 0003-c.md` cites ADR-0003,
+  where it cited nothing. A definition is still read where it opens a
+  paragraph, in a block quote opened on its line, and under a heading, a
+  rule, code, a comment or another definition.
+- **A definition's label, and a reference link's second bracket, is
+  CommonMark's link label**: no unescaped bracket, and at most 999
+  characters. `[[r]: r.md](0003-c.md)` is a link, and draws an edge to
+  ADR-0003, where it was a definition of `r.md](0003-c.md)` and drew
+  nothing; `[a\]b]: 0002-b.md` defines `a\]b`, where it defined nothing. A
+  second bracket that is no label leaves the first to be read as a shortcut:
+  with `[r]` defined, `[r][a[b]c]` draws an edge to `r`'s destination, where
+  it drew nothing. `ScannedDocument.links` lists what the scan reads now.
+  No document in this repository, its fixtures or the rest of the family
+  writes a reference definition, and over them every `check` format and
+  every graph export is byte for byte what 0.9.5 wrote.
+
 ## 0.9.5
 
 spec-core at 119345e. A link inside a link now counts only the inner one, as
