@@ -71,8 +71,8 @@ npx @descent-vtt/spec-graph "docs/**/*.md"
 | `ghost-handover` | error | An open obligation handed to a document that can no longer absorb it |
 | `stale-premise` | error | A live document resting on a decision that was retired or obviated |
 | `broken-reference` | error | A citation naming a document or anchor that does not exist |
-| `circular-delegation` | error | Obligations or supersessions in a cycle, so none can ever land - not a superseded document handing its question to what replaced it |
-| `orphaned-obligation` | error | A retired or frozen document still holding open work |
+| `circular-delegation` | error | Obligations in a cycle, so none can ever land, or supersessions in a cycle - not a loop that takes one of each to close, such as a superseded document handing its question to what replaced it |
+| `orphaned-obligation` | error | A retired or frozen document still holding open work - not a question it delegated to a document still taking work |
 | `live-supersession` | error | A superseded document still presenting itself as current |
 | `reference-outside-corpus` | warn | A citation naming a real document the include patterns did not reach |
 | `ambiguous-reference` | warn | A citation matching more than one document |
@@ -286,7 +286,9 @@ trusts:
   Nor is a link to any other file that is not a document: an image, a dotfile
   such as `../.nvmrc`, or a drawing such as `arch.excalidraw`, however long its
   extension. A dot followed by a digit, as in `ADR-0007.1`, is part of an
-  identifier and is still resolved.
+  identifier and is still resolved. A link to a directory is not a reference
+  either, `../guides/` or `../guides` alike - without the slash the disk says
+  which it is, and a name with no slash at all, `guides`, is an identifier.
 
 ### Registers: many specifications in one file
 

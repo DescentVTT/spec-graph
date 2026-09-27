@@ -59,6 +59,19 @@ question back and forth are still a cycle, with or without a supersession
 elsewhere, and so is a question a superseded document hands to anything but
 its successor.
 
+*Amended again 2026-09-27.* **Obligations and supersessions are searched for
+cycles apart.** Leaving out the direct hand-off still reported a loop that
+took a supersession to close: a document superseded twice over handing its
+question to the latest successor, and a superseded document handing its
+question to a third that hands it on to the successor. A question carried
+round such a loop stops at the head of its supersession, which passes it no
+further, so it lands - the finding's "nothing in it can ever land" was false.
+A loop of obligations is a delegation cycle and a loop of supersessions a
+supersession cycle, each with only its own relations; a loop that needs both
+kinds is neither. The hand-off is still left out of the search for
+obligations, so a successor handing a question back into the document it
+replaced is one finding, the ghost handover it is, and not a cycle as well.
+
 Two guards keep a pathological query from becoming a denial of service: matches
 are capped, and reflexive edges are excluded from traversal by default - a
 document that links to itself is a formatting quirk, not a relationship.

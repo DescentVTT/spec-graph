@@ -7,7 +7,7 @@
  * never existed on disk.
  */
 
-import { existsSync } from 'node:fs';
+import { existsSync, statSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 
 import { extractSpecifications, type ExtractedDocument } from './extract.js';
@@ -100,6 +100,7 @@ export async function analyse(options: AnalyseOptions): Promise<AnalysisResult> 
       // "that document does not exist" and "that document exists but your
       // include patterns did not reach it", which are different fixes.
       fileExists: (path) => present.has(path.toLowerCase()) || existsSync(`${root}/${path}`),
+      isDirectory: (path) => statSync(`${root}/${path}`, { throwIfNoEntry: false })?.isDirectory() === true,
       // A stray entry in the empty fallback changes a run only for a reference
       // whose target it matches, so the mutant that plants one survives every
       // corpus but one written for it.
@@ -123,6 +124,7 @@ export interface Source {
 
 export interface AnalyseSourcesOptions extends RuleOptions {
   readonly fileExists?: ((path: string) => boolean) | undefined;
+  readonly isDirectory?: ((path: string) => boolean) | undefined;
   readonly isIgnoredReference?: ((target: string) => boolean) | undefined;
   readonly isIgnoredFamily?: ((family: string) => boolean) | undefined;
   /** Whether a path holds a historical record rather than a specification. */
@@ -191,6 +193,7 @@ export function analyseSources(sources: readonly Source[], options: AnalyseSourc
 
   const corpus = resolveCorpus(extracted, {
     fileExists: options.fileExists,
+    isDirectory: options.isDirectory,
     isIgnoredReference: options.isIgnoredReference,
     isIgnoredFamily: options.isIgnoredFamily,
   });

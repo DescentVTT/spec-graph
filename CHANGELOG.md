@@ -3,6 +3,26 @@
 Notable changes, newest first. Versions follow [semver](https://semver.org):
 a patch fixes behaviour without asking anything of a repository that upgrades.
 
+## Unreleased
+
+### Fixed
+
+- **A loop that takes a supersession to close is not a delegation cycle.** A
+  document superseded twice over handing its question to the latest successor,
+  or a superseded document handing its question to a third that hands it on to
+  the successor, read as `delegation cycle ... nothing in it can ever land`.
+  The question lands on the successor. Obligations and supersessions are now
+  searched for cycles apart, and each finding names only its own relations.
+- **A question a retired or frozen document delegated to a live document is
+  not an orphaned obligation.** It was counted as open work the document still
+  held, though the finding's hint - move it to a live document - had been
+  followed. Delegated into another sealed document, it is still counted.
+- **A link to a directory without its trailing slash is not a reference.**
+  `[the guides](../guides)` warned that it "resolves to a file that is not a
+  specification" and suggested include patterns that could not help, while
+  `../guides/` was quiet. `analyseSources` takes an `isDirectory` option for
+  this; without it a directory link is a broken reference as before.
+
 ## 0.9.3
 
 Thirteen defects, found by reading the mutation survivors of nineteen
