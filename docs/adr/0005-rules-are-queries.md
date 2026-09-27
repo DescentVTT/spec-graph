@@ -48,6 +48,17 @@ fixed-length path. Those are implemented directly and
 [the module docstring says so](../../src/rules.ts) rather than pretending
 otherwise.
 
+*Amended 2026-09-27.* The cycle search is not run over every relation. When a
+superseded document hands an open question to a document that superseded it,
+the hand-off is left out: the newer decision supersedes the older, the older
+defers its question to the newer, and projected onto documents the two
+relations were a "delegation cycle" in which nothing is ever passed back. It is
+the hand-off supersession exists for, and reporting it was a false alarm
+([ADR-0006](0006-false-positives-cost-more.md)). Two documents passing a
+question back and forth are still a cycle, with or without a supersession
+elsewhere, and so is a question a superseded document hands to anything but
+its successor.
+
 Two guards keep a pathological query from becoming a denial of service: matches
 are capped, and reflexive edges are excluded from traversal by default - a
 document that links to itself is a formatting quirk, not a relationship.

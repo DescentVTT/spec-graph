@@ -68,6 +68,12 @@ a patch fixes behaviour without asking anything of a repository that upgrades.
   documents and reported when no document answered. Both are links to files
   now, like a link to source code or an image. A link to a missing `.md` is
   still reported, and `ADR-0007.1` is still an identifier.
+- **A superseded document handing its question to its successor is not a
+  `circular-delegation`.** A document superseded by another that deferred its
+  open question to that other was reported as a delegation cycle across the
+  two, though nothing in it is passed back. Two documents delegating to each
+  other are still a cycle, as is a question handed anywhere but to the
+  document that superseded the one handing it.
 
 ### Documentation
 

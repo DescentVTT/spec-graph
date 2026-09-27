@@ -20,7 +20,7 @@
  * the superseded document, not the one that declared the relation.
  */
 
-import { OBLIGATION_EDGES, type SpecGraph } from './graph.js';
+import { buildGraph, OBLIGATION_EDGES, type SpecGraph } from './graph.js';
 import { dirnamePosix, resolveFrom } from './paths.js';
 import { renderTemplate, type ProjectRule } from './project-rules.js';
 import { execute, parseQuery, type QuerySpec } from './select.js';
@@ -536,10 +536,11 @@ function suggestPattern(ref: DanglingRef): string {
 
 function circularDelegations(graph: SpecGraph, emit: Emit): void {
   const kinds = [...OBLIGATION_EDGES, 'supersedes' as const];
+  const searched = withoutHandOffs(graph);
   // Projected onto documents, so a question handed back and forth between two
   // of them is found even though each delegation runs item -> document and the
   // raw graph therefore contains no cycle at all.
-  for (const component of graph.cycles(kinds, { byDocument: true })) {
+  for (const component of searched.cycles(kinds, { byDocument: true })) {
     // A projected component is two documents or more, each with the edge that
     // holds it in: the filter, the length guard and the empty-edges cases below
     // never decide, and their mutants are equivalent. They keep the rule true
@@ -554,7 +555,7 @@ function circularDelegations(graph: SpecGraph, emit: Emit): void {
     // is not a log: its half of the loop is a claim it still makes.
     if (members.some((member) => member.history)) continue;
 
-    const edges = cycleEdges(graph, component, kinds);
+    const edges = cycleEdges(searched, component, kinds);
     const onlySupersession = edges.length > 0 && edges.every((edge) => edge.kind === 'supersedes');
     const head = members[0] as DocumentNode;
 
@@ -568,6 +569,36 @@ function circularDelegations(graph: SpecGraph, emit: Emit): void {
       hint: 'break the loop: one of these must own the work outright, or be closed',
     }));
   }
+}
+
+/**
+ * The graph without the questions a superseded document handed to its successor.
+ *
+ * `ADR-0002 supersedes ADR-0001`, and ADR-0001 defers its open question to
+ * ADR-0002: the question went to the decision that replaced the one asking it,
+ * which is the hand-off a supersession is for. Projected onto documents the
+ * two relations make a loop, and nothing in it is passed back - so it is not
+ * searched for one (ADR-0006). Two documents passing a question back and forth
+ * still close a cycle, and so does a question handed to any document other
+ * than one that replaced the document handing it.
+ */
+function withoutHandOffs(graph: SpecGraph): SpecGraph {
+  // Both ends of an edge are nodes, so the fallback is never taken.
+  const owner = (id: string): string => graph.owningDocument(id)?.id ?? id;
+  const successors = new Map<string, Set<string>>();
+  for (const edge of graph.edges) {
+    if (edge.kind !== 'supersedes') continue;
+    const replaced = owner(edge.to);
+    const set = successors.get(replaced) ?? new Set<string>();
+    set.add(owner(edge.from));
+    successors.set(replaced, set);
+  }
+  const kept = graph.edges.filter(
+    (edge) => !(OBLIGATION_EDGES.includes(edge.kind) && successors.get(owner(edge.from))?.has(owner(edge.to))),
+  );
+  // Rebuilding a graph with every edge kept gives back the same graph, so the
+  // comparison only saves the work: its mutants are equivalent.
+  return kept.length === graph.edges.length ? graph : buildGraph({ nodes: graph.nodes, edges: kept });
 }
 
 /**

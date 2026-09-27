@@ -71,7 +71,7 @@ npx @descent-vtt/spec-graph "docs/**/*.md"
 | `ghost-handover` | error | An open obligation handed to a document that can no longer absorb it |
 | `stale-premise` | error | A live document resting on a decision that was retired or obviated |
 | `broken-reference` | error | A citation naming a document or anchor that does not exist |
-| `circular-delegation` | error | Obligations or supersessions in a cycle, so none can ever land |
+| `circular-delegation` | error | Obligations or supersessions in a cycle, so none can ever land - not a superseded document handing its question to what replaced it |
 | `orphaned-obligation` | error | A retired or frozen document still holding open work |
 | `live-supersession` | error | A superseded document still presenting itself as current |
 | `reference-outside-corpus` | warn | A citation naming a real document the include patterns did not reach |
