@@ -93,6 +93,19 @@ prefix is now looked up by name in its parent. A prefix rooted at `/` names
 something outside the repository and is not walked; it used to be read as the
 root's own directory and reported as `/docs/...`, a path no node can have.
 
+*Amended 2026-09-27.* **Every pattern's starting point is walked**, even one
+inside another's. A starting point inside another used to be dropped as
+already covered - but the outer walk prunes `vendor` and the rest of the
+default list on its way down, so `docs/vendor/specs/*.md` found its files on
+its own and none of them beside `docs/**/*.md`: adding a pattern took files
+away. The default list now gives way to a pattern that starts inside one of
+its directories, since naming it is the reason to read it. A bare `--ignore`
+name does not give way: it is the user's, and prunes at any depth, a
+pattern's own starting point included, so `--ignore adr` still takes out the
+`adr/` the default `adr/**/*.md` starts in. A negated pattern starts no walk:
+it takes files back, and starting at its prefix would enter what the walk
+skips.
+
 **A `..` typed below the root is resolved where it was typed.** A pattern may
 no longer climb out of its root, and `cd docs/deep && spec-graph "../*.md"` is
 not doing that: it names the root's `docs/*.md`, and re-anchoring it

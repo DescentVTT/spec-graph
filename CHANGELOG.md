@@ -3,7 +3,22 @@
 Notable changes, newest first. Versions follow [semver](https://semver.org):
 a patch fixes behaviour without asking anything of a repository that upgrades.
 
-## Unreleased
+## 0.9.3
+
+Thirteen defects, found by reading the mutation survivors of nineteen
+modules rather than the score, and four approved changes that make the graph
+report less that is not wrong. Among the defects: `Provisionally accepted` read as
+active, `Superceded by` named no successor, `ES2015` and `ARM64` were
+read as citations, `spec-graph query` printed transitive paths wrong, a
+register could be retired by a decision inside it, and adding a pattern
+could make a walk find fewer files. The changes: a link to a dotfile or a
+file with a long extension is checked as a file, a superseded document
+handing its question to its successor is not a delegation cycle, a table
+register's status cell names its successor, and underscore, curly and dashed
+spellings read as their plain forms. The README now lists every vocabulary
+the graph reads, and a test holds each list to the code. On upgrading, expect
+findings that were false to go and a few to arrive where a successor or a
+status is now read; under `--ratchet`, record the baseline once.
 
 ### Fixed
 

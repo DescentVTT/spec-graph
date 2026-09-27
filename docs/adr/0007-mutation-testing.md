@@ -613,7 +613,15 @@ with a test. The sweep on 9589932 then read **93.34% over 8,248 mutants**, 549
 undetected, 258 of the detections timeouts. `break` moved from 70 to 90: losing
 every timeout would leave 90.21%.
 
-Two lessons from the pass:
+A second pass took the remaining modules - `glob.ts`, `directives.ts`,
+`paths.ts`, `runner.ts`, `baseline.ts`, `yaml.ts`, `config.ts`, `graph.ts`,
+`diff.ts` and `resolve.ts` - with the approved behaviour changes of 0.9.3 in
+the same modules. It killed 208 more, found three more defects, and the
+sweep on d5f9abd read **96.28% over 8,221 mutants**, 306 undetected, 257 of
+the detections timeouts. `break` moved from 90 to 93: losing every timeout
+would leave 93.15%.
+
+Two lessons from the first pass:
 
 - **A module that throws while it loads reads as a survivor.** A vocabulary
   table or selector parsed at import that a mutant breaks makes every test file
