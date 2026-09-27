@@ -135,11 +135,13 @@ describe('the dialect every spec-* tool reads', () => {
   it('refuses ** inside a name, and names the two things it could have meant', () => {
     // It crossed directories wherever it was written. Read as `*` instead, a
     // scope that used to reach every nested file would quietly stop at one.
+    // The advice is written from the pattern: every pattern was once told
+    // `docs/**/*.md` or `*.md`, which for `docs/**.md` dropped its directory.
     expect(() => compileGlob('docs/**.md')).toThrow(
-      'invalid glob "docs/**.md": "**" means any number of directories only as a whole segment: write "docs/**/*.md" for any depth, or "*.md" for one level',
+      'invalid glob "docs/**.md": "**" means any number of directories only as a whole segment: write "docs/**/*.md" for any depth, or "docs/*.md" for one level',
     );
     expect(() => createGlobMatcher(['**.ts'])).toThrow('invalid glob "**.ts": "**" means any number of directories');
-    expect(() => createGlobMatcher(['a**b'])).toThrow('only as a whole segment');
+    expect(() => createGlobMatcher(['a**b'])).toThrow('write "a*/**/*b" for any depth, or "a*b" for one level');
     expect(() => createReferenceFilter(['trap**'])).toThrow('only as a whole segment');
     expect(matches('docs/**/*.md', 'docs/adr/a.md')).toBe(true);
   });

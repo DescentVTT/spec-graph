@@ -128,6 +128,30 @@ describe('a link that is not a citation', () => {
   });
 });
 
+describe('a link inside the text of another', () => {
+  // CommonMark reads the inner one as the link, and the brackets around it and
+  // the destination after them as text, so the rendered page links to ADR-0002
+  // and nowhere else (spec-core's ADR-0004). The outer destination was the one
+  // edge drawn, and the document the reader can follow was cited by none.
+  it('cites the inner target alone, in every bracket form', () => {
+    const files = (body: string) => ({
+      'docs/adr/0001-a.md': `# A\n\n${body}\n`,
+      'docs/adr/0002-b.md': '# B\n',
+      'docs/adr/0003-c.md': '# C\n',
+    });
+    for (const [body, raw] of [
+      ['See [a [ADR-0002](0002-b.md) c](0003-c.md).', '[ADR-0002](0002-b.md)'],
+      ['See [a [ADR-0002] c](0003-c.md).\n\n[ADR-0002]: 0002-b.md', '[ADR-0002][ADR-0002]'],
+    ] as const) {
+      const { graph, diagnostics } = analyse(files(body));
+      expect(graph.edges.map((edge) => `${edge.from} -${edge.kind}-> ${edge.to} | ${edge.raw}`), body).toEqual([
+        `ADR-0001 -references-> ADR-0002 | ${raw}`,
+      ]);
+      expect(diagnostics, body).toEqual([]);
+    }
+  });
+});
+
 describe('one citation, one reference', () => {
   it('does not count a linked document again where prose names it', () => {
     for (const link of ['[[ADR-0007]]', '[[ADR-0007#scope]]']) {

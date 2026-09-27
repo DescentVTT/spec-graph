@@ -3,6 +3,37 @@
 Notable changes, newest first. Versions follow [semver](https://semver.org):
 a patch fixes behaviour without asking anything of a repository that upgrades.
 
+## Unreleased
+
+### Changed
+
+- **spec-core 119345e: a link inside a link counts only the inner one.**
+  `See [a [ADR-0002](0002-b.md) c](0003-c.md).` draws an edge to ADR-0002
+  and none to ADR-0003. CommonMark reads the inner pair as the link, and the
+  brackets around it and `(0003-c.md)` as text, so the rendered page links
+  to ADR-0002 alone; spec-graph drew the one edge to ADR-0003, which the page
+  does not link to, and none to ADR-0002. It holds at any depth and in every
+  bracket form - with `[ADR-0002]` defined, `[a [ADR-0002] c](0003-c.md)` is
+  the shortcut alone - so a finding moves with the edge: a broken inner
+  destination is reported, and a broken outer one no longer is. A badge
+  wrapped in a link is still the link around it, and a wiki link inside a
+  link leaves the outer link the link, as before. `ScannedDocument.links`
+  lists the inner link in place of the outer one. No document in this
+  repository, its fixtures or the rest of the family writes a link inside a
+  link, and over them every `check` format and every graph export is byte for
+  byte what 0.9.4 wrote.
+- **`**` inside a name is told the two patterns it may have meant, written
+  from it.** `docs/**.md` is told `docs/**/*.md` for any depth or
+  `docs/*.md` for one level, `**.ts` `**/*.ts` or `*.ts`, and `src/a**`
+  `src/a*/**` or `src/a*`, where every such pattern was told `docs/**/*.md`
+  or `*.md`. The first clause of the message and the exit `2` are as they
+  were.
+- `ScannedDocument` carries spec-core's `unclosedFrontMatter` - front matter
+  opened on the first line and never closed, with its kind and offsets - and
+  each of its `blocks` a `tag`, an HTML block's element (`script`, `pre`,
+  `style` or `textarea`), `null` for code. A program that builds a
+  `ScannedDocument` itself, as a test double might, adds both.
+
 ## 0.9.4
 
 Three false alarms, each raised in review of 0.9.3's changes: a loop that

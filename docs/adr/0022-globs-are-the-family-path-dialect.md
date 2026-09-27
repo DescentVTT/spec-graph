@@ -63,7 +63,7 @@ differs:
 | --- | --- | --- |
 | `Docs/**` against `docs/a.md` | matched on Windows | never matches |
 | `README.md` against `readme.md` | matched on every host | never matches |
-| `docs/**.md`, `**.ts`, `a**b` | `**` crossed directories wherever it was written | refused: `**` is a whole segment - `docs/**/*.md` for any depth, `*.md` for one level |
+| `docs/**.md`, `**.ts`, `a**b` | `**` crossed directories wherever it was written | refused: `**` is a whole segment - for `docs/**.md`, `docs/**/*.md` for any depth or `docs/*.md` for one level |
 | `docs/+(a\|b).md` | the literal text `+(a\|b)` | refused: an extended glob - `{a,b}` for alternatives, `[(]` for a parenthesis |
 | `docs/[draft.md` | a literal `[` | refused: `a "[" is never closed` |
 | `docs/draft*/` | `docs/drafts` itself | what is in `docs/drafts` |
@@ -84,6 +84,14 @@ is refused rather than read as `*`: the tools the dialect replaced read
 nested file into one that stops at the first level. And a group is an extended
 glob only when it holds a `|`: `C++(notes).md` and `books/*(2017).md` are names
 with parentheses in them, as they were before and as ripgrep reads them.
+
+*Amended 2026-09-27.* The refusal of `**` inside a name writes its advice
+from the pattern, as spec-core's does from 119345e: `docs/**.md` is told
+`docs/**/*.md` or `docs/*.md`, `**.ts` `**/*.ts` or `*.ts`, and `src/a**`
+`src/a*/**` or `src/a*`. Every such pattern was told `docs/**/*.md` or
+`*.md`, which named a directory `**.ts` never mentioned and dropped the one
+`docs/**.md` did. The first clause of the message, and the exit `2`, are as
+they were.
 
 **The walk finds a directory only as it is spelled on disk.** It starts at
 each pattern's literal prefix, and on a filesystem that ignores case,
