@@ -23,6 +23,13 @@ a patch fixes behaviour without asking anything of a repository that upgrades.
   `id: S3-0012` was reported as `S3-12`, because the padding was read from the
   first run of digits, which is the family's. An id is now written with the
   number as it was declared. Citations resolved either way.
+- **`ES2015`, `ARM64`, `Win32`, `base64` and `cpp20` are prose, not
+  citations**, and nor are `x86` and `p99`. Each was read with every digit
+  but the last in its prefix - `ES201` and 5 - and so walked past the list of
+  prefixes that are never a family and the rule that one letter is none; a
+  repository with an `ES` family was told `ES2015` did not resolve. The
+  prefix is now read as resolution reads it, `ES` and 2015. The README lists
+  what is never a citation.
 
 ## 0.9.2
 

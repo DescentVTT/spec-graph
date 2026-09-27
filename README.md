@@ -201,6 +201,15 @@ trusts:
 - **Bare identifiers in prose are opportunistic.** They are reported only when
   their family already exists in the corpus. `ADR-0099` in a repository of ADRs
   is a real dangling citation; `SHA-256` in the same repository is a sentence.
+  A one-letter prefix is never a family - `Q3`, `x86`, `p99` - and nor are the
+  prefixes of versions, pages, protocols and platforms, even in a repository
+  that has a family of that name. **Never a citation:** `ver 3`, `version 4`,
+  `pp.12`, `Fig.3`, `Figure 4`, `Table 2`, `tbl 1`, `section 4`, `sect 2`,
+  `sec 5`, `step 2`, `item 3`, `No.5`, `num 7`, `line 42`, `ln 12`, `col 3`,
+  `port 8080`, `PR 45`, `issue 42`, `GH-123`, `UTF-8`, `ASCII 7`, `SHA-256`,
+  `MD5`, `HTTP 2`, `HTTPS 2`, `IPv6`, `IPv4 32`, `IPv6 128`, `TLS 1.3`,
+  `SSL 3`, `ES2015`, `ECMA-262`, `p99 250`, `base64`, `SQL-92`, `ARM64`,
+  `x86-64`, `Win32`, `Node 22`, `Python 3`, `Java 21`, `Go 1.22`, `cpp20`.
 - **Bare numbers are family-scoped.** `0007` inside an RFC means `RFC-0007`,
   never `ADR-0007`. A repository with both is ordinary, and guessing would be
   worse than silence. A document's family is the prefix of its identifier, or

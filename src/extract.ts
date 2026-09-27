@@ -522,13 +522,12 @@ const OBLIGATION_SECTIONS: ReadonlySet<string> = new Set([
  * Prefixes that look like specification identifiers but never are.
  *
  * The corpus filter in `resolve.ts` is the real defence; this list only keeps
- * the obvious noise out of the candidate set.
+ * the obvious noise out of the candidate set. A single letter - `v2`, `x86`,
+ * `p99` - is not here because no prefix that short is ever read as a family.
  */
 const NOT_A_FAMILY: ReadonlySet<string> = new Set([
-  'v',
   'ver',
   'version',
-  'p',
   'pp',
   'fig',
   'figure',
@@ -559,8 +558,6 @@ const NOT_A_FAMILY: ReadonlySet<string> = new Set([
   'ssl',
   'es',
   'ecma',
-  'x',
-  'h',
   'p99',
   'base',
   'sql',
@@ -573,11 +570,10 @@ const NOT_A_FAMILY: ReadonlySet<string> = new Set([
   'python',
   'java',
   'go',
-  'c',
   'cpp',
 ]);
 
-const BARE_REF = /\b([A-Za-z][A-Za-z0-9]{0,14})[\s._-]?(\d{1,6})\b/g;
+const BARE_REF = /\b[A-Za-z][A-Za-z0-9]{0,14}[\s._-]?\d{1,6}\b/g;
 
 /* -------------------------------------------------------------------------- */
 /* Extraction                                                                 */
@@ -1505,15 +1501,21 @@ function findBareReferences(scanned: ScannedDocument, links: readonly Link[]): B
   const out: BareReference[] = [];
   BARE_REF.lastIndex = 0;
   for (let m = BARE_REF.exec(text); m !== null; m = BARE_REF.exec(text)) {
-    const prefix = (m[1] as string).toLowerCase();
-    if (NOT_A_FAMILY.has(prefix)) continue;
-    if (prefix.length < 2) continue;
-    const start = m.index ?? 0;
+    const written = m[0];
+    // The family as resolution will read it, which takes the shortest prefix
+    // the number allows: `base64` is `base` and 64. Read off this pattern's
+    // greedy prefix it was `base6` and 4, and `ES2015`, `ARM64` and `Win32`
+    // walked past the list below as families of their own. Every match is a
+    // prefixed identifier by construction, so the parse cannot fail.
+    const family = (parsePrefixedRef(written) as { family: string }).family.toLowerCase();
+    if (NOT_A_FAMILY.has(family)) continue;
+    if (family.length < 2) continue;
+    const start = m.index;
     // A token glued to a path separator or an extension is not a citation.
     const before = text[start - 1] ?? ' ';
-    const after = text[start + (m[0] as string).length] ?? ' ';
+    const after = text[start + written.length] ?? ' ';
     if (before === '/' || before === '.' || after === '/') continue;
-    out.push({ text: m[0] as string, start, end: start + (m[0] as string).length });
+    out.push({ text: written, start, end: start + written.length });
   }
   return out;
 }
