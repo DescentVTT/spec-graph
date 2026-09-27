@@ -31,8 +31,10 @@ a patch fixes behaviour without asking anything of a repository that upgrades.
 - `ScannedDocument` carries spec-core's `unclosedFrontMatter` - front matter
   opened on the first line and never closed, with its kind and offsets - and
   each of its `blocks` a `tag`, an HTML block's element (`script`, `pre`,
-  `style` or `textarea`), `null` for code. A program that builds a
-  `ScannedDocument` itself, as a test double might, adds both.
+  `style` or `textarea`), `null` for code. spec-graph reads the first to say
+  front matter was never closed, where it read the document's first line
+  again; the problem and the line it points at are what they were. A program
+  that builds a `ScannedDocument` itself, as a test double might, adds both.
 
 ## 0.9.4
 

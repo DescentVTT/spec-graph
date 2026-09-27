@@ -20,7 +20,7 @@
  * have always been compared, and a value that is a string or a list of them.
  */
 
-import { frontMatterKind, readFrontMatter, type FrontMatter as Read } from './vendor/spec-core/markdown/index.js';
+import { readFrontMatter, type FrontMatter as Read } from './vendor/spec-core/markdown/index.js';
 import type { ScannedDocument } from './markdown.js';
 
 export interface YamlEntry {
@@ -104,23 +104,22 @@ export function readEntries(scanned: ScannedDocument): FrontMatterReading {
  * Front matter that opens and never closes, which the scan reads as a rule
  * and Markdown after it, so nothing in it reaches the graph.
  *
- * The scan closes a block by the rule the reader does, so this is the one case
- * it leaves null with a first line that opens one. The usual cause is a closer
- * that only looks like one: `----` and `....` closed front matter here before
- * 0.9.0, and neither is one of YAML's document markers.
+ * The scan reports it, with its opening line, rather than leaving a document
+ * that wrote front matter looking like one that wrote none. The usual cause is
+ * a closer that only looks like one: `----` and `....` closed front matter
+ * here before 0.9.0, and neither is one of YAML's document markers.
  */
 function neverClosed(scanned: ScannedDocument): FrontMatterReading {
-  const index = scanned.index;
-  const kind = frontMatterKind(index.lineText(1));
-  if (kind === null) return NOTHING;
-  const delimiter = kind === 'yaml' ? '---' : '+++';
+  const open = scanned.unclosedFrontMatter;
+  if (open === null) return NOTHING;
+  const delimiter = open.kind === 'yaml' ? '---' : '+++';
   return {
     entries: [],
     problems: [
       {
         message: `front matter: opened here and never closed, so none of it is read - close it with "${delimiter}" on a line of its own`,
-        start: index.lineStart(1),
-        end: index.lineEnd(1),
+        start: open.start,
+        end: open.end,
         unread: true,
         key: null,
       },
