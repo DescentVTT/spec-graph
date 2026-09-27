@@ -433,7 +433,7 @@ describe('this repository', () => {
     const url = pathToFileURL(path.resolve('stryker.shard.config.mjs')).href;
     const { default: shard } = (await import(url)) as { default: Record<string, unknown> };
     expect(shard.mutate).toEqual(mutateFor(base, 2));
-    expect(shard.thresholds).toEqual({ high: 85, low: 74, break: null });
+    expect(shard.thresholds).toEqual({ high: 95, low: 90, break: null });
     expect(shard.jsonReporter).toEqual({ fileName: 'reports/mutation/shard-2.json' });
     // The timeline reads the progress reporter's counts; without them a
     // sweep's minutes cannot be measured again.

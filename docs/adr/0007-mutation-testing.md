@@ -550,6 +550,19 @@ detect nothing a human would call a defect. Where a table entry is load-bearing 
 the checkbox characters, the four lifecycle phases - it has a test. Where it is
 one synonym among many, it does not.
 
+*Amended 2026-09-27.* That was wrong about what such a test finds, and
+`'provisional'` is the proof: the vocabulary tests written since found that
+`Provisionally accepted` read as active, because `active` is tried first and
+contains `accepted` - the entry was in the table and could never match. The
+tests that found it do not assert that a word exists. They read the README's
+own table of every status word, marker, heading and key, and for each entry
+put it in a document and check that it reads as the row says; and they check
+that every entry the code exports is one the README documents. A synonym is
+tested because a reader was told it works, and the table in the code and the
+table in the README cannot drift apart without a test failing. That is a
+test of documented behaviour, one row at a time - not the assertion of
+existence this paragraph argued against.
+
 **A survivor can be a defect in the test corpus rather than in the tests.**
 0.5.0 produced the clearest example this project has had, because the module in
 question is verified against an oracle and the oracle agreed anyway.
@@ -587,6 +600,29 @@ the other does. A differential test with a blind spot passes forever; a mutation
 score with no oracle behind it only says the tests notice changes, not that the
 changes are wrong.
 
+
+### 2026-09-27: a pass over eight modules, and the gate at 90
+
+The full sweep on fc26fef read 76.80% over 8,406 mutants, 1,950 undetected.
+A pass over the survivors of `extract.ts`, `report.ts`, `cli.ts`,
+`rules.ts`, `lifecycle.ts`, `state.ts`, `select.ts`, `sections.ts` and
+`identity.ts` - each mutant replayed by hand against the tests written for
+it - killed 1,284, recorded 197 as equivalent with a comment at the code,
+deleted 71 with code that decided nothing, and found ten defects, each fixed
+with a test. The sweep on 9589932 then read **93.34% over 8,248 mutants**, 549
+undetected, 258 of the detections timeouts. `break` moved from 70 to 90: losing
+every timeout would leave 90.21%.
+
+Two lessons from the pass:
+
+- **A module that throws while it loads reads as a survivor.** A vocabulary
+  table or selector parsed at import that a mutant breaks makes every test file
+  that imports it fail to load, before any test exists, and Stryker's vitest
+  runner counts that as no failure. About ninety mutants of `select.ts`,
+  whose selectors `rules.ts` parses at import, were scored as survivors this
+  way. A test that imports the module inside an `it` turns the load failure
+  into a failed test.
+- **Vocabulary is tested from the README**, as the amendment above says.
 
 ## Open Questions
 
