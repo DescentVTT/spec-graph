@@ -69,6 +69,8 @@ a patch fixes behaviour without asking anything of a repository that upgrades.
   item's state is, where it gave a few of each and an ellipsis.
 - The README lists the directories a walk never enters, which it did not
   name.
+- The README lists the attributes each directive takes, where it showed a few
+  of them by example.
 
 ## 0.9.2
 

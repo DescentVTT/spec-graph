@@ -614,6 +614,23 @@ Directives are ordinary HTML comments — invisible in every Markdown renderer:
 <!-- @spec-history -->
 ```
 
+Each takes these attributes. Any other is a parse problem, listed by
+`--verbose`, and the directive still applies:
+
+| directive | attributes |
+| --- | --- |
+| `@spec-node` | `id`, `status`, `title`, `aliases`, `kind` |
+| `@spec-item` | `id`, `state`, `title`, `owner`, `note` |
+| `@spec-edge` | `kind`, `to`, `from`, `reason` |
+| `@spec-ignore` | `reason` |
+| `@spec-history` | none |
+
+`reason`, `note`, `owner` and a node's `kind` are for whoever reads the source;
+spec-graph reads nothing from them. `aliases` splits at commas, semicolons and
+spaces. A value is quoted with either quote mark, or bare when it holds no space
+or quote, and an attribute with no value is a flag. A directive is the first
+thing in its comment, so a comment that only mentions one is a comment.
+
 A directive always wins, and the report says the state came from a directive, so
 an override is visible rather than mysterious.
 
