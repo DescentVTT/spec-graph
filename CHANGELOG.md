@@ -7,6 +7,13 @@ a patch fixes behaviour without asking anything of a repository that upgrades.
 
 ### Fixed
 
+- **`spec-graph query` prints a path the way the selector reads.** A
+  transitive step printed the end of its path in the middle of it:
+  `document[id=ADR-0004] =supersedes=> document`, the README's own kind of
+  query, printed `ADR-0004 -supersedes-> ADR-0002 -supersedes-> ADR-0002` for
+  a chain through ADR-0003. A backward step printed as a relation pointing the
+  other way. Every edge now names the node it reaches, as `-kind->` or
+  `<-kind-` in the direction it was walked. `--format json` was always right.
 - **A register row whose ID cell names nothing is not a specification.** A
   row with only `?` in its ID cell, or a section whose `@spec-node` id is a
   lone backslash, fell back to the file's own name: the file contained itself
