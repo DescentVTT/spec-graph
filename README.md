@@ -229,6 +229,17 @@ word may be spaced or hyphenated either way: `**Tech-debt:**` is `tech debt`.
 
 </details>
 
+Without a box, a bullet is an obligation only at the top level of a section
+whose heading names open work, however the heading is cased, spaced, emphasised
+or punctuated - `## ❓ **Open questions:**` is one. The section ends at the next
+heading of its level. **Headings that hold obligations:** `Open Questions`,
+`Open Question`, `Unresolved Questions`, `Unanswered Questions`, `Questions`,
+`Open Issues`, `Action Items`, `Actions`, `TODO`, `To Do`, `To-Do`, `TODOs`,
+`Next Steps`, `Follow Ups`, `Follow-Ups`, `Followups`, `Follow Up`, `Follow-Up`,
+`Unresolved`, `Outstanding`, `Outstanding Questions`, `Tasks`, `Task List`,
+`Work Items`, `Remaining Work`, `Decisions Needed`, `Blockers`, `Parking Lot`,
+`Future Work`, `Deferred`. Every other bullet is the document's own prose.
+
 ### References, resolved forgivingly and validated strictly
 
 All of these reach the same document:
@@ -246,6 +257,15 @@ trusts:
 - **Bare identifiers in prose are opportunistic.** They are reported only when
   their family already exists in the corpus. `ADR-0099` in a repository of ADRs
   is a real dangling citation; `SHA-256` in the same repository is a sentence.
+  A one-letter prefix is never a family - `Q3`, `x86`, `p99` - and nor are the
+  prefixes of versions, pages, protocols and platforms, even in a repository
+  that has a family of that name. **Never a citation:** `ver 3`, `version 4`,
+  `pp.12`, `Fig.3`, `Figure 4`, `Table 2`, `tbl 1`, `section 4`, `sect 2`,
+  `sec 5`, `step 2`, `item 3`, `No.5`, `num 7`, `line 42`, `ln 12`, `col 3`,
+  `port 8080`, `PR 45`, `issue 42`, `GH-123`, `UTF-8`, `ASCII 7`, `SHA-256`,
+  `MD5`, `HTTP 2`, `HTTPS 2`, `IPv6`, `IPv4 32`, `IPv6 128`, `TLS 1.3`,
+  `SSL 3`, `ES2015`, `ECMA-262`, `p99 250`, `base64`, `SQL-92`, `ARM64`,
+  `x86-64`, `Win32`, `Node 22`, `Python 3`, `Java 21`, `Go 1.22`, `cpp20`.
 - **Bare numbers are family-scoped.** `0007` inside an RFC means `RFC-0007`,
   never `ADR-0007`. A repository with both is ordinary, and guessing would be
   worse than silence. A document's family is the prefix of its identifier, or
@@ -388,6 +408,23 @@ depends-on: [ADR-0004, RFC-0011]
 ---
 ```
 
+A front-matter key is read however it is punctuated or cased - `depends-on`,
+`depends_on` and `dependsOn` are one key - and every relation is spelled in
+both directions, so a repository writes whichever half its filing convention
+keeps ([ADR-0014](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0014-a-relation-is-spelled-both-ways.md)).
+Written in ADR-0001, `key: ADR-0002` means:
+
+| Relation | ADR-0001 → ADR-0002 | ADR-0002 → ADR-0001 |
+| --- | --- | --- |
+| `supersedes` | `supersedes`, `supercedes`, `replaces`, `obsoletes`, `deprecates` | `superseded-by`, `superceded-by`, `replaced-by`, `obsoleted-by`, `deprecated-by`, `rolled-into` |
+| `amends` | `amends`, `extends`, `refines`, `clarifies`, `revises` | `amended-by`, `extended-by`, `refined-by`, `clarified-by`, `revised-by` |
+| `depends-on` | `depends-on`, `dependent-on`, `dependencies`, `requires`, `builds-on`, `relies-on` | `depended-on-by`, `required-by`, `dependents` |
+| `assumes` | `assumes` | `assumed-by` |
+| `blocked-by` | `blocked-by`, `blocked-on`, `waiting-on`, `waiting-for`, `gated-on`, `gated-by` | `blocks` |
+| `delegates-to` | `delegates-to`, `delegated-to`, `deferred-to`, `tracked-in`, `tracked-by`, `continued-in` | `delegated-from` |
+| `relates-to` | `related`, `relates-to`, `related-to`, `see-also` | |
+| `references` | `references`, `reference`, `refs` | `referenced-by` |
+
 ```md
 The chunking scheme is constrained by [ADR-0002](0002-rows.md).  → assumes
 Which policy? Deferred to [ADR-0011](0011-policy.md).            → delegates-to
@@ -396,6 +433,23 @@ Blocked by [ADR-0009](0009-compliance.md).                       → blocked-by
 ## See also
 - [ADR-0001](0001-intro.md)                                      → relates-to
 ```
+
+A phrase governs a reference when it stands no more than 40 characters before
+it, in the same statement: a sentence, a paragraph, a list item or a table cell.
+A negation between the two - `owned by nobody` - cancels it. Prose reads both
+directions too: `supersedes` and `superseded by`, `amends` and `amended by`,
+`blocked by` and `blocks` or `blocking`, `depends on` and `depended on by` - the
+second of each pair points back at the document that wrote it. A phrase that follows the reference
+makes the reference its subject - `[ADR-0009](0009.md) supersedes this` - except
+a `depends-on` or `assumes` phrase: `[ADR-0002](0002.md) requires a migration`
+says nothing about this document.
+
+A link under a heading that files it as bookkeeping is `relates-to` unless a
+phrase beside it says more. **Bookkeeping headings:** `See also`, `References`,
+`Reference`, `Related`, `Related work`, `Related decisions`,
+`Related documents`, `Links`, `Further reading`, `Prior art`, `History`,
+`Changelog`, `Change log`, `Revision history`, `Bibliography`, `Sources`,
+`Appendix`, `More information`, `Resources`, `Index`.
 
 Two properties do the work. `loadBearing` relations (`assumes`, `depends-on`,
 `blocked-by`, `amends`) make the source's validity depend on the target — those

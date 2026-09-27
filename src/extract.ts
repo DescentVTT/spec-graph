@@ -205,8 +205,9 @@ export const RELATION_KEYS: Readonly<Record<string, { kind: EdgeKind; inverted: 
  * catch (ADR-0006).
  */
 function looksLikeCitation(value: string): boolean {
+  // A blank value needs no case of its own: it is neither an identifier nor a
+  // path, so both tests below already answer no.
   const trimmed = value.trim();
-  if (trimmed.length === 0) return false;
   if (parsePrefixedRef(trimmed) !== null) return true;
   return looksLikePath(trimmed) && isDocumentTarget(trimmed) && !isExternal(trimmed);
 }
@@ -228,6 +229,9 @@ function misreadRelationKeys(
   const out: MisreadKey[] = [];
   for (const [key, entry] of byKey) {
     const folded = foldRelationKey(key);
+    // A key of nothing but punctuation folds to nothing. The shortest relation
+    // key folds to four letters, so the edit test below would pass it over too
+    // and no test can see this half; it keeps that true for any future key.
     if (folded.length === 0 || RELATION_INDEX.has(folded)) continue;
     if (!valuesOf(entry).some(looksLikeCitation)) continue;
     const near = [...RELATION_INDEX.values()]
@@ -430,6 +434,9 @@ const VERB_RULES: readonly { kind: EdgeKind; inverted: boolean; phrases: readonl
  * disclaimed by [138]" was being read as a delegation *to* 138, which is the
  * opposite of what the sentence says, and an inference that inverts its source
  * is worse than no inference at all.
+ *
+ * The `^` never decides anything: the text tested starts just after a phrase,
+ * and a phrase only matches where no letter follows it.
  */
 const NEGATION = /(?:^|\s)(?:no|not|nobody|none|never|neither|nor|nothing|without)(?:\s|$)/;
 
@@ -445,6 +452,10 @@ const VERB_WINDOW = 40;
  * prefers `partially resolved` over `resolved`, matching the precedence the
  * per-phrase search had. Lookarounds rather than `\b`, because phrases contain
  * hyphens and `\b` does the wrong thing around them.
+ *
+ * Neither the sort nor the escaping decides anything today, and no test can
+ * pin them: no phrase in the table is another one followed by more words, and
+ * none holds a character a pattern would read. Both are for the next phrase.
  */
 const VERB_LOOKUP: ReadonlyMap<string, Classification> = new Map(
   VERB_RULES.flatMap((rule) =>
@@ -522,13 +533,12 @@ const OBLIGATION_SECTIONS: ReadonlySet<string> = new Set([
  * Prefixes that look like specification identifiers but never are.
  *
  * The corpus filter in `resolve.ts` is the real defence; this list only keeps
- * the obvious noise out of the candidate set.
+ * the obvious noise out of the candidate set. A single letter - `v2`, `x86`,
+ * `p99` - is not here because no prefix that short is ever read as a family.
  */
 const NOT_A_FAMILY: ReadonlySet<string> = new Set([
-  'v',
   'ver',
   'version',
-  'p',
   'pp',
   'fig',
   'figure',
@@ -559,8 +569,6 @@ const NOT_A_FAMILY: ReadonlySet<string> = new Set([
   'ssl',
   'es',
   'ecma',
-  'x',
-  'h',
   'p99',
   'base',
   'sql',
@@ -573,11 +581,10 @@ const NOT_A_FAMILY: ReadonlySet<string> = new Set([
   'python',
   'java',
   'go',
-  'c',
   'cpp',
 ]);
 
-const BARE_REF = /\b([A-Za-z][A-Za-z0-9]{0,14})[\s._-]?(\d{1,6})\b/g;
+const BARE_REF = /\b[A-Za-z][A-Za-z0-9]{0,14}[\s._-]?\d{1,6}\b/g;
 
 /* -------------------------------------------------------------------------- */
 /* Extraction                                                                 */
@@ -698,6 +705,9 @@ export function extractDocument(input: ExtractInput): ExtractedDocument | null {
       (directive) =>
         directive.name === 'spec-node' &&
         !provisionalRegions.some(
+          // `>=` and `>` agree on the start: a region starts at a heading's
+          // first character or a row's, and a line that opens with a comment is
+          // neither a heading nor a row.
           (region) =>
             (region.heading !== null || region.row !== null) &&
             directive.start >= region.start &&
@@ -706,11 +716,19 @@ export function extractDocument(input: ExtractInput): ExtractedDocument | null {
     ) ?? null;
 
   const declaredId = (nodeDirective ? attr(nodeDirective, 'id')?.value : null) ?? frontMatterId;
-  const identity = declaredId === frontMatterId && nodeDirective === null
-    ? provisional
-    : identityOf(declaredId, nodeDirective);
+  // With no directive of its own the file's identity is the provisional one,
+  // computed from exactly these inputs. Settling it again would give the same
+  // answer, which is why no test can tell this reuse from a second call.
+  const identity = nodeDirective === null ? provisional : identityOf(declaredId, nodeDirective);
 
-  const status = readStatus(scanned, byKey, nodeDirective, index, file);
+  // A register's sections are specifications too. The file is always the first
+  // region, so a one-decision file behaves exactly as it did before. The regions
+  // depend on the file's id alone, so when the directive left it unchanged the
+  // provisional ones are the answer, and finding them again is the same answer.
+  const regions =
+    identity.id === provisional.id ? provisionalRegions : findSpecificationRegions(scanned, directives, identity.id);
+
+  const status = readStatus(scanned, byKey, nodeDirective, index, file, regions);
   const pathPhase = phaseFromPath(input.path);
   // A record is a categorical statement about what the file *is*, made by
   // configuration or by an explicit directive, so it outranks a status word
@@ -738,10 +756,6 @@ export function extractDocument(input: ExtractInput): ExtractedDocument | null {
     frontMatter: toRecord(entries),
   };
 
-  // A register's sections are specifications too. The file is always the first
-  // region, so a one-decision file behaves exactly as it did before.
-  const regions =
-    identity.id === provisional.id ? provisionalRegions : findSpecificationRegions(scanned, directives, identity.id);
   // Every region but the first: a heading section, or a row of a register kept
   // as a table.
   const subSpecifications = regions
@@ -761,19 +775,15 @@ export function extractDocument(input: ExtractInput): ExtractedDocument | null {
       }),
     );
 
-  const ownerAt = (offset: number): string => {
+  // The specification that owns an offset: the innermost region around it, or
+  // the file when no region holds it and `regionAt` answers `null`.
+  const documentAt = (offset: number): DocumentNode => {
     const region = regionAt(regions, offset);
-    if (region === null) return identity.id;
-    const owner = subSpecifications.find((spec) => spec.region === region);
-    return owner?.document.id ?? identity.id;
+    return subSpecifications.find((spec) => spec.region === region)?.document ?? document;
   };
+  const ownerAt = (offset: number): string => documentAt(offset).id;
 
   const allItems = extractItems({ scanned, directives, ownerAt, file, index });
-  const documentAt = (offset: number): DocumentNode => {
-    const id = ownerAt(offset);
-    if (id === identity.id) return document;
-    return subSpecifications.find((spec) => spec.document.id === id)?.document ?? document;
-  };
 
   const allReferences = extractReferences({
     scanned,
@@ -883,7 +893,8 @@ function buildRegion(context: RegionInput): BuiltRegion {
     id: identity.id,
     kind: 'document',
     title: (region.directive ? attr(region.directive, 'title')?.value : null) ?? region.title ?? identity.id,
-    // Anchored at its heading, or at the row when the register is a table.
+    // Anchored at its heading, or at the row when the register is a table. Every
+    // region here has one or the other, so neither `?.` ever stops the chain.
     at: at(region.start, Math.min(region.end, region.heading?.end ?? region.row?.end ?? region.end)),
     path: input.path,
     aliases: identity.aliases,
@@ -916,6 +927,8 @@ function buildRegion(context: RegionInput): BuiltRegion {
     document,
     extracted: {
       document,
+      // Never read: the file's extraction replaces it once every item's owner
+      // is known.
       items: [],
       references,
       problems: [],
@@ -948,6 +961,11 @@ interface StatusReading {
  * deliberate each is: a directive, a front-matter field, then the body of a
  * `## Status` section. A repository using none of them still gets a phase from
  * its directory layout, which is handled by the caller.
+ *
+ * A status section inside a register's region is that region's, not the
+ * file's. Read as the file's, a register whose first decision said
+ * `### Status` / `Superseded by ADR-0009` was itself retired, and itself
+ * superseded by ADR-0009, for something one of its decisions said.
  */
 function readStatus(
   scanned: ScannedDocument,
@@ -955,6 +973,7 @@ function readStatus(
   nodeDirective: Directive | null,
   index: LineIndex,
   file: string,
+  regions: readonly SpecificationRegion[],
 ): StatusReading {
   if (nodeDirective) {
     const declared = attr(nodeDirective, 'status');
@@ -979,7 +998,7 @@ function readStatus(
     };
   }
 
-  const heading = scanned.headings.find((h) => isStatusHeading(h.text));
+  const heading = scanned.headings.find((h) => isStatusHeading(h.text) && regionAt(regions, h.start) === null);
   if (heading) {
     const body = statusSectionBody(scanned, heading.line);
     if (body) {
@@ -1099,6 +1118,9 @@ function isObligation(item: ListItem, inObligationSection: boolean, directive: D
 function sectionPathAt(scanned: ScannedDocument, offset: number): string[] {
   const path: { level: number; text: string }[] = [];
   for (const heading of scanned.headings) {
+    // A heading opening exactly at the offset would be a reference or an item
+    // starting on a `#` or on the first word of a setext heading - and a heading
+    // that begins with a reference is no section name either way.
     if (heading.start > offset) break;
     while (path.length > 0 && (path[path.length - 1] as { level: number }).level >= heading.level) path.pop();
     path.push({ level: heading.level, text: heading.text });
@@ -1110,6 +1132,9 @@ function sectionPathAt(scanned: ScannedDocument, offset: number): string[] {
  * Memoised because it is called for every heading above every reference and
  * every item, and a corpus has only a handful of distinct headings - `Context`,
  * `Decision`, `Open Questions`, `See also` - repeated thousands of times.
+ *
+ * The cache changes how fast an answer arrives and never the answer, so no test
+ * can see whether it is consulted, filled or bounded.
  */
 const headingCache = new Map<string, string>();
 
@@ -1167,13 +1192,21 @@ interface ReferenceContext {
   readonly index: LineIndex;
 }
 
-/** True when an offset falls in a cell a column header already accounted for. */
+/**
+ * True when an offset falls in a cell a column header already accounted for.
+ *
+ * Whether the end is in or out decides nothing: what sits there is the cell's
+ * closing pipe or the space before it, and no reference starts on either.
+ */
 function isClaimed(claimed: readonly { start: number; end: number }[], offset: number): boolean {
   return claimed.some((range) => offset >= range.start && offset < range.end);
 }
 
 function extractReferences(context: ReferenceContext): ReferenceCandidate[] {
   const { scanned, directives, document, documentAt, items, byKey, status, claimed, file, index } = context;
+  // This list and the one `withoutOverlaps` builds from it are only ever read
+  // through `belongsTo`, which passes nothing that was not written on a
+  // document or one of its items: a stray entry in either would reach no one.
   const out: ReferenceCandidate[] = [];
   const at = (start: number, end: number): SourceRef => refOf(file, index, start, end);
 
@@ -1200,7 +1233,8 @@ function extractReferences(context: ReferenceContext): ReferenceCandidate[] {
   }
 
   // `status: Superseded by ADR-0009` is the most common supersession record of
-  // all, and it never appears as a field of its own.
+  // all, and it never appears as a field of its own. A reading carries its text
+  // and its place together or neither, so either test alone would do.
   if (status.raw && status.at) {
     for (const target of supersessionTargetsIn(status.raw)) {
       const cleaned = cleanTarget(target);
@@ -1323,6 +1357,10 @@ function extractReferences(context: ReferenceContext): ReferenceCandidate[] {
 function withoutOverlaps(candidates: readonly ReferenceCandidate[]): ReferenceCandidate[] {
   const out: ReferenceCandidate[] = [];
   for (const candidate of candidates) {
+    // Today the only readings that can overlap are a status line and the prose
+    // inside it, by one owner, and where they disagree they disagree on kind and
+    // direction together. So the kind, owner and direction tests below cannot
+    // be told apart one by one; each is here for a reader that differs in one.
     const index = out.findIndex(
       (other) =>
         other.kind === candidate.kind &&
@@ -1340,7 +1378,9 @@ function withoutOverlaps(candidates: readonly ReferenceCandidate[]): ReferenceCa
     // always the one already held and this comparison always replaces it. It is
     // written as a comparison rather than an unconditional swap because which
     // reader runs first is not a property worth depending on, and a mutant that
-    // makes it unconditional is equivalent only by that accident.
+    // makes it unconditional is equivalent only by that accident. Two of the
+    // same width that match are one value written twice in one list, alike in
+    // everything, so which of them is kept cannot matter.
     if (width(candidate.declaredAt) < width(held.declaredAt)) out[index] = candidate;
   }
   return out;
@@ -1353,18 +1393,28 @@ const width = (ref: SourceRef): number => ref.span.end.offset - ref.span.start.o
  *
  * Offsets alone, with no file comparison: every candidate here was built from
  * one scan of one file, so there is no second file for them to be offsets into.
+ * Spans that only touch never occur between two readings of one target, so
+ * whether touching counts as overlapping decides nothing.
  */
 function overlapping(a: SourceRef, b: SourceRef): boolean {
   return a.span.start.offset < b.span.end.offset && b.span.start.offset < a.span.end.offset;
 }
 
-/** The item whose block contains an offset, if any. */
+/**
+ * The item whose block contains an offset, if any.
+ *
+ * An item's span runs from its indentation or list marker to the line break
+ * that ends it, and no reference or directive starts on either, so both bounds
+ * could be closed or open alike. Items arrive in document order, where a nested
+ * item follows the one it nests in and never shares its start: the last item
+ * that contains the offset is the innermost, which the comparison below says
+ * rather than relies on.
+ */
 function ownerOf(items: readonly ItemNode[], offset: number): string | null {
   let best: ItemNode | null = null;
   for (const item of items) {
     const span = item.at.span;
     if (offset < span.start.offset || offset >= span.end.offset) continue;
-    // Innermost wins when items nest.
     if (best === null || span.start.offset > best.at.span.start.offset) best = item;
   }
   return best?.id ?? null;
@@ -1403,6 +1453,8 @@ export function classifyReference(
     // What sits between the phrase and the reference has to be connective. A
     // negation in there reverses the claim the phrase would otherwise make.
     if (NEGATION.test(before.slice(end))) continue;
+    // Always found: the pattern was compiled from this table's own keys, and a
+    // lower-cased search matches them only as written. The check is for types.
     const rule = VERB_LOOKUP.get(phrase);
     if (rule) best = rule;
   }
@@ -1421,8 +1473,8 @@ export function classifyReference(
     }
   }
 
-  const innermost = section.length > 0 ? normaliseHeading(section[section.length - 1] as string) : '';
-  if (WEAK_SECTIONS.has(innermost)) return { kind: 'relates-to', inverted: false };
+  // Any enclosing heading will do: a link under `### Notes` inside `## See also`
+  // is bookkeeping still.
   for (const heading of section) {
     if (WEAK_SECTIONS.has(normaliseHeading(heading))) return { kind: 'relates-to', inverted: false };
   }
@@ -1495,6 +1547,8 @@ function findBareReferences(scanned: ScannedDocument, links: readonly Link[]): B
   for (const link of links) {
     const start = Math.max(link.start, cursor);
     const end = Math.min(link.end, source.length);
+    // Links from one scan come in order and never nest, so this skips nothing
+    // today. It keeps a scanner that did nest them from copying text twice.
     if (end <= start) continue;
     text += source.slice(cursor, start);
     text += source.slice(start, end).replace(/[^\n\r]/g, ' ');
@@ -1505,15 +1559,22 @@ function findBareReferences(scanned: ScannedDocument, links: readonly Link[]): B
   const out: BareReference[] = [];
   BARE_REF.lastIndex = 0;
   for (let m = BARE_REF.exec(text); m !== null; m = BARE_REF.exec(text)) {
-    const prefix = (m[1] as string).toLowerCase();
-    if (NOT_A_FAMILY.has(prefix)) continue;
-    if (prefix.length < 2) continue;
-    const start = m.index ?? 0;
-    // A token glued to a path separator or an extension is not a citation.
+    const written = m[0];
+    // The family as resolution will read it, which takes the shortest prefix
+    // the number allows: `base64` is `base` and 64. Read off this pattern's
+    // greedy prefix it was `base6` and 4, and `ES2015`, `ARM64` and `Win32`
+    // walked past the list below as families of their own. Every match is a
+    // prefixed identifier by construction, so the parse cannot fail.
+    const family = (parsePrefixedRef(written) as { family: string }).family.toLowerCase();
+    if (NOT_A_FAMILY.has(family)) continue;
+    if (family.length < 2) continue;
+    const start = m.index;
+    // A token glued to a path separator or an extension is not a citation. At
+    // either end of the text the stand-in need only be neither `/` nor `.`.
     const before = text[start - 1] ?? ' ';
-    const after = text[start + (m[0] as string).length] ?? ' ';
+    const after = text[start + written.length] ?? ' ';
     if (before === '/' || before === '.' || after === '/') continue;
-    out.push({ text: m[0] as string, start, end: start + (m[0] as string).length });
+    out.push({ text: written, start, end: start + written.length });
   }
   return out;
 }
@@ -1524,9 +1585,8 @@ function findBareReferences(scanned: ScannedDocument, links: readonly Link[]): B
 
 function firstValue(byKey: ReadonlyMap<string, YamlEntry>, keys: readonly string[]): string | null {
   for (const key of keys) {
-    const entry = byKey.get(key);
-    if (!entry) continue;
-    const value = asString(entry);
+    // A key that is missing reads as null, the same as a blank one.
+    const value = asString(byKey.get(key));
     if (value !== null && value.length > 0) return value;
   }
   return null;
@@ -1553,12 +1613,17 @@ function stripAnchor(target: string): string {
   return hash <= 0 ? target : target.slice(0, hash);
 }
 
+/**
+ * A link's text for an edge's `raw`.
+ *
+ * An autolink never reaches here: spec-core reads one only when it carries a
+ * scheme, and a link with a scheme is external and was dropped before this. A
+ * reference or shortcut link always has a label, so the `''` is for the type.
+ */
 function renderLink(link: Link): string {
   switch (link.form) {
     case 'wiki':
       return `[[${link.target}]]`;
-    case 'autolink':
-      return `<${link.target}>`;
     case 'reference':
     case 'shortcut':
       return `[${link.text}][${link.label ?? ''}]`;
