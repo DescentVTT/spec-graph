@@ -12,9 +12,9 @@
  * and a YAML or TOML reader would be the largest thing in the package, to read
  * a file with nine keys in it.
  *
- * Every key mirrors a flag, and a flag always wins. Configuration is where a
- * team writes down what is true of the repository; a flag is where somebody
- * overrides it for one run.
+ * Every key but `rules` and `maxRelated` mirrors a flag, and a flag always
+ * wins. Configuration is where a team writes down what is true of the
+ * repository; a flag is where somebody overrides it for one run.
  */
 
 import { existsSync, readFileSync } from 'node:fs';
@@ -113,6 +113,9 @@ export function loadConfig(root: string, read: (path: string) => string = defaul
     return parseConfig(raw, name);
   }
 
+  // The first two returns are the third one's answer given early: no file is
+  // `JSON.parse(null)`, which is `null`, and a parse that failed leaves
+  // `parsed` undefined - neither is a record. Their mutants are equivalent.
   const pkg = tryRead(read, `${root}/package.json`);
   if (pkg === null) return EMPTY;
   let parsed: unknown;
@@ -157,10 +160,12 @@ export function discoverConfig(from: string, io: DiscoveryIO = {}): DiscoveredCo
     if (loaded.source !== null) return { ...loaded, root: directory };
     if (exists(`${directory}/.git`)) break;
     const parent = dirnamePosix(directory);
-    // Two guards for one job, and each makes the other unreachable: a path with
-    // no separator left in it gives back `''`, and `''` gives back itself. Only
-    // one of them can ever fire, which is why neither has a test - removing
-    // either leaves the loop terminating on the other.
+    // A path with no separator left in it gives back `''`, and stopping there is
+    // what keeps a relative start from going on to read `/.spec-graph.json`,
+    // which is what a file name joined to `''` spells. The second guard is true
+    // only when the directory is `''` already, and then so is the first: its
+    // mutant is equivalent. It stays so the loop still ends if the parent of a
+    // path is ever spelled as Node's `dirname` spells it, `.` for `.`.
     if (parent === '' || parent === directory) break;
     directory = parent;
   }
@@ -222,6 +227,8 @@ function readFields(raw: Record<string, unknown>, source: string): LoadedConfig 
 
   if (raw['maxRelated'] !== undefined) {
     const value = raw['maxRelated'];
+    // `Number.isInteger` is false for anything but a number, so the `typeof`
+    // only narrows the type for `value < 0`, and its mutant is equivalent.
     if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) {
       problems.push(`${source}: "maxRelated" must be a non-negative whole number`);
     } else {
@@ -261,7 +268,8 @@ function readFields(raw: Record<string, unknown>, source: string): LoadedConfig 
 
   // A severity naming a project rule that nothing defines is a line that will
   // never do anything, and reading like it does is the one thing a
-  // configuration file must not be allowed to do.
+  // configuration file must not be allowed to do. (A fallback seeded with
+  // something that is not a rule defines no id, so that mutant is equivalent.)
   const defined = new Set<string>((compiled?.rules ?? []).map((rule) => rule.id));
   for (const rule of Object.keys(config.severities ?? {})) {
     if (!isProjectRule(rule as AnyRuleId) || defined.has(rule)) continue;

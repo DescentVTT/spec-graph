@@ -203,6 +203,18 @@ describe('finding a configuration', () => {
     expect(loadConfig(ROOT)).toEqual({ config: {}, source: null, problems: [] });
   });
 
+  it('finds no key of ours in a package.json that holds no object', () => {
+    // Valid JSON all the same, so it gets past the parse: `null` has no keys to
+    // look in, and asking it for one would throw out of a loader that never does.
+    for (const body of ['null', '[]', '42', '"spec-graph"']) {
+      const read = (path: string): string => {
+        if (path === '/repo/package.json') return body;
+        throw new Error(`ENOENT ${path}`);
+      };
+      expect(loadConfig('/repo', read), body).toEqual({ config: {}, source: null, problems: [] });
+    }
+  });
+
   it('lets a dedicated file win over the package.json key', async () => {
     await write('package.json', JSON.stringify({ [CONFIG_PACKAGE_KEY]: { ignore: ['package'] } }));
     await write(CONFIG_FILES[0] as string, JSON.stringify({ ignore: ['file'] }));
@@ -317,8 +329,12 @@ describe('discovering a configuration upward', () => {
 
   it('gives up at the top of a relative path rather than reading the filesystem root', () => {
     // Only tests and `--root` produce a relative start, and `--root` turns
-    // discovery off - so the useful property is that the walk terminates.
+    // discovery off - so the useful property is that the walk terminates, and
+    // that it does so before the empty path, which reads as `/` once a file
+    // name is joined to it.
     expect(discoverConfig('docs/adr', tree({})).root).toBe('docs/adr');
+    const atTheTop = tree({ [`/${CONFIG}`]: '{"strict":true}', '/package.json': `{"${CONFIG_PACKAGE_KEY}":{}}` });
+    expect(discoverConfig('docs/adr', atTheTop)).toEqual({ config: {}, source: null, problems: [], root: 'docs/adr' });
   });
 
   it("stops at a linked worktree's .git file, which is not a directory", async () => {
@@ -379,6 +395,11 @@ describe('the family filter', () => {
 
   it('trims what it is given', () => {
     expect(createFamilyFilter(undefined, ['  rfc  '])?.('RFC')).toBe(true);
+    // An allowlist too: a family written with a space around it is still the
+    // one family the repository has, not a reason to read every ADR as prose.
+    const allowed = createFamilyFilter([' adr ', 'KEP'], undefined);
+    expect(allowed?.('ADR')).toBe(false);
+    expect(allowed?.('RFC')).toBe(true);
   });
 });
 

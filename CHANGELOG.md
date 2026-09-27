@@ -58,6 +58,9 @@ a patch fixes behaviour without asking anything of a repository that upgrades.
 - The README lists every status word, front-matter key, heading and directory
   the lifecycle is read from, and every checkbox, marker and `state=` word an
   item's state is, where it gave a few of each and an ellipsis.
+- `maxRelated`, the configuration key that caps how many related locations one
+  finding lists, is in the README and `--help`. It was read, and never
+  mentioned.
 
 ## 0.9.2
 
