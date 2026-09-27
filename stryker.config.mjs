@@ -65,10 +65,10 @@ export default {
   concurrency: 8,
   // `break` is a regression guard, not an aspiration: it sits below the score
   // that actually governs, CI's full sweep, so that losing ground fails the
-  // build while ordinary refactoring does not. That sweep read 93.34% over
-  // 8,248 mutants on 9589932, after a pass over the survivors of eight
-  // modules (ADR-0007). 258 of its detections are timeouts, and losing every
-  // one of them would still leave 90.21%: 90 survives the worst case the
+  // build while ordinary refactoring does not. That sweep read 96.28% over
+  // 8,221 mutants on d5f9abd, after two passes over the survivors of every
+  // module (ADR-0007). 257 of its detections are timeouts, and losing every
+  // one of them would still leave 93.15%: 93 survives the worst case the
   // timeouts can do, and stays there until a sweep says it can move.
-  thresholds: { high: 95, low: 90, break: 90 },
+  thresholds: { high: 97, low: 93, break: 93 },
 };
