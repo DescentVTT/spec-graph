@@ -167,8 +167,12 @@ const STATUS_HEADINGS: ReadonlySet<string> = new Set(['status', 'state', 'stage'
  * same token.
  */
 export function normaliseStatus(raw: string): string {
+  // An underscore between two letters joins two words - `not_planned`,
+  // `in_progress` - where one at either end of a word is emphasis. Stripped
+  // with the emphasis, it ran the two words into one that is neither.
   return raw
     .replace(/<[^>]*>/g, ' ')
+    .replace(/(?<=[\p{L}\p{N}])_(?=[\p{L}\p{N}])/gu, ' ')
     .replace(/[`*_~"'#]/g, '')
     .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
     .replace(/\p{Extended_Pictographic}/gu, ' ')
@@ -260,7 +264,7 @@ export function supersessionTargetsIn(raw: string): string[] {
   const out: string[] = [];
   // The tail runs to the end of the line, not of the string: a status that
   // wraps onto a second line still names its successor on the first.
-  const pattern = /(?:super[sc]eded|replaced|obsoleted)\s*(?:by|with|through)?\s*[:\-—]?\s*(.+)/i;
+  const pattern = /(?:super[sc]eded|replaced|obsoleted)\s*(?:by|with|through)?\s*[:\-–—]?\s*(.+)/i;
   const match = pattern.exec(raw.replace(/[`*_]/g, ''));
   if (!match) return out;
   const tail = match[1] as string;

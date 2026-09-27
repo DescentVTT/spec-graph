@@ -76,6 +76,22 @@ describe('the documented status words', () => {
     }
   });
 
+  // "A hyphenated word matches spaced, or joined by an underscore, as well."
+  it('count joined by an underscore as well, which emphasis stripping does not take', () => {
+    for (const [phase, word] of documented().words) {
+      expect(phaseOf(word.replace(/-/g, '_')), word).toBe(phase);
+      expect(phaseOf(`**${word.replace(/-/g, '_')}**`), word).toBe(phase);
+    }
+    const { graph } = analyseSources(corpus({ 'docs/adr/0001-a.md': '---\nstatus: _not_planned_\n---\n\n# A\n' }));
+    expect(graph.document('ADR-0001')?.phase).toBe('retired');
+    // A digit is a letter of a word here, as it is everywhere else in a status.
+    expect(phaseOf('v2_released')).toBe('active');
+    expect(phaseOf('released_2')).toBe('active');
+    // Emphasis around a word is still only emphasis.
+    expect(phaseOf('_Accepted_')).toBe('active');
+    expect(phaseOf('__Draft__ (2026-03-01)')).toBe('draft');
+  });
+
   it('count only whole', () => {
     // `approved` and `live` are in the table; these words only contain them.
     expect(phaseOf('Unapproved')).toBe('unknown');
@@ -194,6 +210,8 @@ describe('the successor a status names', () => {
       'Superseded - ADR-0009',
       'Superseded — ADR-0009',
       'Superseded—ADR-0009',
+      'Superseded – ADR-0009',
+      'Superseded–ADR-0009',
       'Superseded (ADR-0009)',
       'Superseded by **ADR-0009**',
       'Superseded by [ADR-0009](0009-sharding.md)',

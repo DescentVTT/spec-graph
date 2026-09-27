@@ -58,6 +58,14 @@ reads as a record ([ADR-0011](0011-a-record-is-not-a-specification.md)), which
 is what every spec-* tool means by it: a finished round of work, which it is
 normal to depend on. The directories are unchanged.
 
+*Amended 2026-09-27.* A word is read however its parts are joined. `not_planned`
+and `in_progress`, the spelling issue trackers export, read as `not planned` and
+`in progress`: an underscore between two letters joins two words, and stripped
+along with emphasis it had run them into one word that is in no row. An
+underscore at either end of a word is still emphasis. And `Superseded – ADR-0009`
+names its successor with an en dash as it already did with a hyphen or an em
+dash.
+
 ## Open Questions
 
 - [ ] Should `frozen` and `retired` be distinguishable in the `receptivity`

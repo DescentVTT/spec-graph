@@ -61,6 +61,45 @@ a patch fixes behaviour without asking anything of a repository that upgrades.
   inside a directory the walk skips by default is read from there now,
   whatever the other patterns reach, and a bare `--ignore` name prunes at any
   depth, a pattern's starting point included.
+- **`not_planned` and `in_progress` read as `not planned` and `in progress`.**
+  The underscore was stripped as emphasis and ran the two words into one, so
+  a status spelled that way was `unknown` and a marker spelled that way was
+  prose. Every status word and marker of more than one word may be joined by
+  an underscore now; an underscore around a word is still emphasis.
+- **`Won’t fix:` with a curly apostrophe is accepted debt**, as `Won't fix:`
+  is, and **a marker followed by an en or em dash is punctuated**, as one
+  followed by a hyphen is: `Resolved – one node` closes the item. The pattern
+  already found both dashes and the check after it asked for a hyphen. A
+  status reading `Superseded – ADR-0009` names its successor.
+- **A link to a dotfile or to a file with a long extension is not a broken
+  reference.** `../.nvmrc` counted as having no extension and
+  `arch.excalidraw` as an identifier with a dot in it, so both were read as
+  documents and reported when no document answered. Both are links to files
+  now, like a link to source code or an image. A link to a missing `.md` is
+  still reported, and `ADR-0007.1` is still an identifier.
+- **A superseded document handing its question to its successor is not a
+  `circular-delegation`.** A document superseded by another that deferred its
+  open question to that other was reported as a delegation cycle across the
+  two, though nothing in it is passed back. Two documents delegating to each
+  other are still a cycle, as is a question handed anywhere but to the
+  document that superseded the one handing it.
+- **A register row whose status cell says `Superseded by ADR-0002` is
+  superseded by ADR-0002**, as a section of a register kept under headings
+  already was. The status cell was skipped by prose scanning like a relation
+  column, though it types no relation, so the row was retired with no
+  successor.
+- **A status section followed at once by a setext heading says nothing.** Its
+  text line starts with no `#`, so it read as the status: a register with
+  `### Status` above a decision underlined as a heading took that decision's
+  title, `ADR-0002: B`, for its own status. A line that opens a heading ends
+  the search now, whichever kind of heading it is; one that starts with `#`
+  and is not a heading is read.
+- **A duplicate document id draws no containment between unrelated files.** A
+  register whose own id another file already had was drawn as that other
+  file containing the register's rows, and a row whose id another file had
+  was drawn inside the register as that other file. Containment is drawn only
+  between a file and a region of it the graph kept; the duplicate is still
+  reported as a parse problem.
 
 ### Documentation
 

@@ -321,8 +321,9 @@ function buildMarkerPattern(): RegExp {
     // Longest first so `partially resolved` is not eaten by `resolved`.
     .sort((a, b) => b.length - a.length)
     .map(escapeRegExp)
-    // Allow the writer to hyphenate or space multi-word markers either way.
-    .map((phrase) => phrase.replace(/\\?[ -]/g, '[ \\-]'));
+    // Allow the writer to space, hyphenate or underscore a multi-word marker
+    // whichever way, and to type its apostrophe straight or curly.
+    .map((phrase) => phrase.replace(/\\?[ -]/g, '[ _\\-]').replace(/'/g, "['’]"));
 
   return new RegExp(
     // A marker only counts at the start of a statement: the start of the item,
@@ -355,10 +356,12 @@ function findMarkers(body: string): MarkerHit[] {
     const emphasisClose = m[3];
     // A dash arrives with the space after it. An absent qualifier is none of the
     // four, so what stands in for it is equivalent as long as it is not one.
+    // Only the dash alternative puts a dash in the qualifier at all, so the
+    // anchor on the dash test decides nothing either.
     const qualifier = m[4] ?? '';
 
     const emphasised = emphasisOpen !== undefined && emphasisClose !== undefined;
-    const punctuated = qualifier === ':' || qualifier === '：' || qualifier.startsWith('-') || qualifier === '.';
+    const punctuated = qualifier === ':' || qualifier === '：' || /^[-–—]/.test(qualifier) || qualifier === '.';
     const shouted = phrase === phrase.toUpperCase() && /[A-Z]/.test(phrase);
 
     // Without one of these three the match is ordinary prose. "We resolved to
@@ -392,13 +395,15 @@ function markerLookup(): Map<string, Disposition> {
 /**
  * The key a phrase is looked up by, from the table and from a match alike.
  *
- * Its mutants are equivalent, because it folds both sides of one lookup: folded
- * to upper case, or with the separator dropped, the same phrases share a key -
- * no two of the table's dispositions collide without their spaces - and neither
- * a table phrase nor a match ever holds two separators in a row.
+ * Its case and separator mutants are equivalent, because it folds both sides
+ * of one lookup: folded to upper case, or with the separator dropped, the same
+ * phrases share a key - no two of the table's dispositions collide without
+ * their spaces - and neither a table phrase nor a match ever holds two
+ * separators in a row. The apostrophe is folded for the match alone: the table
+ * spells it straight.
  */
 function normalisePhrase(phrase: string): string {
-  return phrase.toLowerCase().replace(/[\s-]+/g, ' ');
+  return phrase.toLowerCase().replace(/’/g, "'").replace(/[\s_-]+/g, ' ');
 }
 
 /** Returns the struck text when the whole line, which arrives trimmed, is wrapped in `~~`. */

@@ -83,6 +83,25 @@ that the heuristics were badly chosen; it is that a synthetic fixture never
 writes a sentence like that, and only a repository nobody wrote for the tool
 will.
 
+*Amended 2026-09-27.* Two more, found the other way round: by reading what a
+mutation sweep could not pin down, where the only test that would have pinned
+it asserted a false alarm.
+
+- **A link to a file was read as a link to a document** when the file was a
+  dotfile or its extension was long. `../.nvmrc` has its only dot first, which
+  counted as no extension at all, and `arch.excalidraw` has an extension of
+  ten letters, which counted as part of an identifier. Both were broken
+  references. An extension is now a dot and a letter, however long, and a
+  dotfile has one; either makes the link a link to a file, which is not a
+  reference. A dot followed by a digit - `ADR-0007.1`, `v1.2` - is still part
+  of an identifier.
+- **A superseded document handing its open question to its successor was a
+  delegation cycle.** The newer decision supersedes the older, and the older
+  defers its question to the newer: projected onto documents that is a loop,
+  and nothing in it is ever passed back. It is the hand-off supersession exists
+  for, so the cycle search leaves it out
+  ([ADR-0005](0005-rules-are-queries.md)).
+
 ## Open Questions
 
 - [ ] Should the default include patterns be widened, or is naming the fix in

@@ -71,7 +71,7 @@ npx @descent-vtt/spec-graph "docs/**/*.md"
 | `ghost-handover` | error | An open obligation handed to a document that can no longer absorb it |
 | `stale-premise` | error | A live document resting on a decision that was retired or obviated |
 | `broken-reference` | error | A citation naming a document or anchor that does not exist |
-| `circular-delegation` | error | Obligations or supersessions in a cycle, so none can ever land |
+| `circular-delegation` | error | Obligations or supersessions in a cycle, so none can ever land - not a superseded document handing its question to what replaced it |
 | `orphaned-obligation` | error | A retired or frozen document still holding open work |
 | `live-supersession` | error | A superseded document still presenting itself as current |
 | `reference-outside-corpus` | warn | A citation naming a real document the include patterns did not reach |
@@ -140,16 +140,17 @@ value and it is read.
 
 A word counts whole and in any case, once emphasis, links, HTML, emoji and dates
 are stripped, so `Unapproved` is not `approved`. A hyphenated word matches
-spaced as well: `signed-off` reads `Signed off`. A status holding words from two
-rows takes the higher row, except that `provisionally accepted` is a draft.
+spaced, or joined by an underscore, as well: `signed-off` reads `Signed off` and
+`signed_off`. A status holding words from two rows takes the higher row, except
+that `provisionally accepted` is a draft.
 
 | Phase | Status words |
 | --- | --- |
-| `retired` | `superseded`, `superceded`, `supersedes-by`, `replaced`, `replaced-by`, `deprecated`, `obsolete`, `obsoleted`, `retired`, `rejected`, `declined`, `withdrawn`, `abandoned`, `cancelled`, `canceled`, `dropped`, `revoked`, `reverted`, `moved`, `historical`, `defunct`, `inactive`, `dead`, `void`, `closed`, `postponed`, `deferred`, `not-planned`, `wontfix` |
+| `retired` | `superseded`, `superceded`, `supersedes-by`, `replaced`, `replaced-by`, `deprecated`, `obsolete`, `obsoleted`, `retired`, `rejected`, `declined`, `withdrawn`, `abandoned`, `cancelled`, `canceled`, `dropped`, `revoked`, `reverted`, `moved`, `historical`, `defunct`, `inactive`, `dead`, `void`, `closed`, `postponed`, `deferred`, `not-planned`, `not_planned`, `wontfix` |
 | `record` | `archived`, `archive` |
 | `frozen` | `final`, `finalised`, `finalized`, `frozen`, `locked`, `ratified`, `immutable`, `sealed`, `standard`, `published` |
 | `active` | `accepted`, `active`, `approved`, `adopted`, `agreed`, `implementable`, `implemented`, `implementing`, `current`, `effective`, `in-effect`, `enforced`, `stable`, `merged`, `released`, `shipped`, `live`, `done`, `complete`, `completed`, `signed-off`, `committed` |
-| `draft` | `draft`, `drafting`, `proposed`, `proposal`, `provisional`, `provisionally-accepted`, `prospective`, `wip`, `work-in-progress`, `in-progress`, `review`, `in-review`, `under-review`, `reviewing`, `discussion`, `discussing`, `pending`, `idea`, `exploratory`, `candidate`, `open`, `new`, `unreviewed`, `rfc`, `experimental`, `alpha`, `beta`, `incubating` |
+| `draft` | `draft`, `drafting`, `proposed`, `proposal`, `provisional`, `provisionally-accepted`, `prospective`, `wip`, `work-in-progress`, `in-progress`, `in_progress`, `review`, `in-review`, `under-review`, `reviewing`, `discussion`, `discussing`, `pending`, `idea`, `exploratory`, `candidate`, `open`, `new`, `unreviewed`, `rfc`, `experimental`, `alpha`, `beta`, `incubating` |
 
 | Where | Read from |
 | --- | --- |
@@ -214,18 +215,20 @@ code. *"We resolved to keep the queue"* does not close anything.
 | Disposition | Checkboxes | Markers | `state=` |
 | --- | --- | --- | --- |
 | `unresolved` | `[ ]` `[?]` `[!]` `[*]` | `unresolved`, `still open`, `open question`, `tbd`, `undecided`, `reopened` | `open`, `unresolved`, `todo` |
-| `narrowed` | `[~]` `[/]` | `partially resolved`, `partially answered`, `partially done`, `partly resolved`, `narrowed`, `narrowed to`, `scoped down`, `reduced scope`, `reduced to`, `partial`, `in progress`, `remaining`, `split` | `narrowed`, `partial` |
+| `narrowed` | `[~]` `[/]` | `partially resolved`, `partially answered`, `partially done`, `partly resolved`, `narrowed`, `narrowed to`, `scoped down`, `reduced scope`, `reduced to`, `partial`, `in progress`, `in_progress`, `remaining`, `split` | `narrowed`, `partial` |
 | `delegated` | | `delegated`, `delegated to`, `moved to`, `tracked in`, `tracked by`, `handed off`, `handed off to`, `handed to`, `deferred to`, `follow up in`, `follow-up in`, `followup in`, `continued in`, `owned by` | `delegated` |
 | `satisfied` | `[x]` `[X]` `[+]` | `resolved`, `answered`, `decided`, `settled`, `done`, `complete`, `completed`, `closed`, `fixed`, `shipped`, `addressed`, `implemented`, `solved`, `confirmed` | `satisfied`, `resolved`, `done`, `closed` |
-| `accepted-debt` | | `accepted debt`, `accepted as debt`, `accepted risk`, `known limitation`, `known issue`, `known gap`, `technical debt`, `tech debt`, `wontfix`, `won't fix`, `will not fix`, `by design`, `tolerated`, `living with it` | `accepted-debt`, `debt`, `wontfix` |
+| `accepted-debt` | | `accepted debt`, `accepted as debt`, `accepted risk`, `known limitation`, `known issue`, `known gap`, `technical debt`, `tech debt`, `wontfix`, `won't fix`, `won’t fix`, `will not fix`, `by design`, `tolerated`, `living with it` | `accepted-debt`, `debt`, `wontfix` |
 | `rejected` | `[-]` | `rejected`, `declined`, `dropped`, `not doing`, `will not do`, `abandoned`, `cancelled`, `canceled`, `withdrawn` | `rejected`, `declined` |
 | `obviated` | | `no longer applicable`, `no longer relevant`, `no longer needed`, `overtaken by events`, `premise invalid`, `obviated`, `obsolete`, `not applicable`, `moot`, `void`, `n/a`, `obe` | `obviated`, `moot` |
 
 A marker counts where a statement starts: at the start of the item or of a line,
 after the end of a sentence, or after `(` or `[`. Punctuated means followed by
-`:`, `：`, `-` or `.`, so `Done.` closes an item; emphasised means the emphasis
-closes on the marker, so `**Closed beta**` does not. A marker of more than one
-word may be spaced or hyphenated either way: `**Tech-debt:**` is `tech debt`.
+`:`, `：`, `-`, `–`, `—` or `.`, so `Done.` closes an item; emphasised means the
+emphasis closes on the marker, so `**Closed beta**` does not. A marker of more
+than one word may be spaced, hyphenated or joined by an underscore, whichever
+the table has: `**Tech-debt:**` and `TECH_DEBT:` are `tech debt`. An apostrophe
+may be straight or curly.
 
 </details>
 
@@ -280,6 +283,10 @@ trusts:
   so `[ADR-7](https://example.com/adr-7)` yields one reference rather than three.
 - **Source links are not spec links.** `[rules.ts](../../src/rules.ts)` is not a
   broken reference. That is [spec-guard](#relationship-to-spec-guard)'s job.
+  Nor is a link to any other file that is not a document: an image, a dotfile
+  such as `../.nvmrc`, or a drawing such as `arch.excalidraw`, however long its
+  extension. A dot followed by a digit, as in `ADR-0007.1`, is part of an
+  identifier and is still resolved.
 
 ### Registers: many specifications in one file
 
@@ -312,6 +319,8 @@ header you wrote:
 
 Findings point at the declaring cell, not at the file. A cell that is empty or
 holds only a placeholder — `-`, `—`, `n/a`, `none`, `nil`, `TBD` — says nothing.
+A status cell is read as a status line under a heading is, so
+`Superseded by ADR-0003` there names the row's successor.
 
 A row is named by its ID column, and a title is only a title. A row whose ID cell
 names nothing — empty, a placeholder, or a `?` nobody has numbered yet — is not a
