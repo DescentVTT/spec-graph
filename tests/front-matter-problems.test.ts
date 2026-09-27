@@ -48,6 +48,18 @@ describe('a front-matter line that was not read', () => {
     });
   }
 
+  it('counts front matter never closed, and points at the line that opened it', () => {
+    // Which line was meant to close it is a guess, and the opener is not, so
+    // the report points there.
+    const text = '---\nstatus: accepted\n....\n\n# ADR-0001: A\n';
+    const problems = extract(text).problems;
+    expect(problems).toHaveLength(1);
+    const [problem] = problems as [ExtractedDocument['problems'][number]];
+    expect(problem.message).toMatch(/^front matter: opened here and never closed/);
+    expect(problem.unread).toBe(true);
+    expect(covered(text, problem.at)).toBe('---');
+  });
+
   it('reads the last of a key written twice', () => {
     expect(extract(block('status: draft', 'status: accepted')).document.frontMatter['status']).toBe('accepted');
   });

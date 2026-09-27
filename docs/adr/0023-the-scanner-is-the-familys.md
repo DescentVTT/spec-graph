@@ -146,6 +146,10 @@ No document in this repository, its fixtures or the rest of the family
 writes one, and over them every `check` format and every graph export is
 what 0.9.4 wrote. The test is in `tests/extract-references.test.ts`.
 
+Front matter that opens and never closes is the scan's to report now, in
+`unclosedFrontMatter`, where `src/yaml.ts` read the first line again to find
+it. The problem it gives, and the line it points at, are the ones it gave.
+
 ## Alternatives
 
 | Option | Why not |
