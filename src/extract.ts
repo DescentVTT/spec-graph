@@ -39,7 +39,7 @@ import {
   type ListItem,
   type ScannedDocument,
 } from './markdown.js';
-import { findSpecificationRegions, regionAt, type SpecificationRegion } from './sections.js';
+import { findSpecificationRegions, opensHeading, regionAt, type SpecificationRegion } from './sections.js';
 import { resolveItemState } from './state.js';
 import { refOf, type LineIndex } from './source.js';
 import type {
@@ -1022,9 +1022,10 @@ function statusSectionBody(
     if (line.line <= headingLine) continue;
     if (line.blank || isOnlyComment(scanned, line)) continue;
     if (!isMarkdownLine(line)) return null;
+    // A heading immediately after means the section is empty - a setext one
+    // too, whose text line does not start with `#` and read as the status.
+    if (opensHeading(scanned, line.line)) return null;
     const trimmed = line.content.trim();
-    // A heading immediately after means the section is empty.
-    if (trimmed.startsWith('#')) return null;
     const offset = line.contentStart + line.content.indexOf(trimmed);
     // Bullet lists under Status are a status history; take the first entry.
     const cleaned = trimmed.replace(/^[-*+]\s+/, '');

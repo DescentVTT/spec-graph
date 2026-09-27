@@ -444,14 +444,26 @@ function readHeadedStatus(scanned: ScannedDocument, start: number, end: number):
     if (line.contentStart >= end) break;
     if (line.blank || isOnlyComment(scanned, line)) continue;
     if (!isMarkdownLine(line)) return null;
+    if (opensHeading(scanned, line.line)) return null;
     const trimmed = line.content.trim();
-    if (trimmed.startsWith('#')) return null;
     // A bullet list under Status is a status history; the first entry is current.
     const cleaned = trimmed.replace(/^[-*+]\s+/, '');
     const offset = line.contentStart + line.content.indexOf(trimmed) + (trimmed.length - cleaned.length);
     return { text: cleaned, start: offset, end: offset + cleaned.length };
   }
   return null;
+}
+
+/**
+ * Whether a heading begins on this line, which ends a status section's search
+ * for its value.
+ *
+ * Asked of the scanner rather than of the line's first character, because a
+ * setext heading's text line starts with no `#`: under `### Status` it read as
+ * the status, and a register took the next decision's title for its own.
+ */
+export function opensHeading(scanned: ScannedDocument, line: number): boolean {
+  return scanned.headings.some((heading) => heading.line === line);
 }
 
 /**

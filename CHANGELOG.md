@@ -79,6 +79,12 @@ a patch fixes behaviour without asking anything of a repository that upgrades.
   already was. The status cell was skipped by prose scanning like a relation
   column, though it types no relation, so the row was retired with no
   successor.
+- **A status section followed at once by a setext heading says nothing.** Its
+  text line starts with no `#`, so it read as the status: a register with
+  `### Status` above a decision underlined as a heading took that decision's
+  title, `ADR-0002: B`, for its own status. A line that opens a heading ends
+  the search now, whichever kind of heading it is; one that starts with `#`
+  and is not a heading is read.
 
 ### Documentation
 
