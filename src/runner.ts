@@ -77,6 +77,9 @@ export interface AnalysisResult {
 /** Reads, extracts, resolves, and checks a corpus of specifications. */
 export async function analyse(options: AnalyseOptions): Promise<AnalysisResult> {
   const started = performance.now();
+  // The walk strips the root again, and past it the root only prefixes an
+  // existence check, where `docs//x.md` names what `docs/x.md` does - so a
+  // mutant that strips one separator rather than all of them is equivalent.
   const root = toPosix(options.root).replace(/\/+$/, '');
   const patterns = options.patterns && options.patterns.length > 0 ? options.patterns : DEFAULT_PATTERNS;
 
@@ -97,12 +100,15 @@ export async function analyse(options: AnalyseOptions): Promise<AnalysisResult> 
       // "that document does not exist" and "that document exists but your
       // include patterns did not reach it", which are different fixes.
       fileExists: (path) => present.has(path.toLowerCase()) || existsSync(`${root}/${path}`),
+      // A stray entry in the empty fallback changes a run only for a reference
+      // whose target it matches, so the mutant that plants one survives every
+      // corpus but one written for it.
       isIgnoredReference: createReferenceFilter(options.ignoreReferences ?? []),
       isIgnoredFamily: createFamilyFilter(options.families, options.ignoreFamilies),
       isRecord: createHistoryMatcher(options.historyPatterns),
-      ...(options.severities !== undefined ? { severities: options.severities } : {}),
-      ...(options.projectRules !== undefined ? { projectRules: options.projectRules } : {}),
-      ...(options.maxRelated !== undefined ? { maxRelated: options.maxRelated } : {}),
+      severities: options.severities,
+      projectRules: options.projectRules,
+      maxRelated: options.maxRelated,
     }),
     walked.map((file) => file.path),
     started,
@@ -225,6 +231,8 @@ function finish(analysed: Analysed, files: readonly string[], started: number): 
 
 /** Reads files with bounded concurrency, skipping ones that cannot be read. */
 async function readAll(files: readonly WalkedFile[], concurrency: number): Promise<Source[]> {
+  // Pre-sized for throughput only: the length is set to what was read below,
+  // so an array that starts empty ends the same. That mutant is equivalent.
   const out: Source[] = new Array(files.length);
   let cursor = 0;
   let written = 0;
@@ -233,6 +241,9 @@ async function readAll(files: readonly WalkedFile[], concurrency: number): Promi
     for (;;) {
       const index = cursor;
       cursor += 1;
+      // `>` for `>=` lets one worker take the index past the end, whose read
+      // throws inside the `try` below and is skipped like any unreadable file:
+      // an equivalent mutant.
       if (index >= files.length) return;
       const file = files[index] as WalkedFile;
       try {
@@ -245,10 +256,17 @@ async function readAll(files: readonly WalkedFile[], concurrency: number): Promi
     }
   };
 
+  // How many workers there are, once there is one, changes throughput and
+  // nothing a caller sees: one reads every file, and each worker past the last
+  // file returns at once. The mutants that only move the count are equivalent,
+  // and no test counts workers.
   const workers = Array.from({ length: Math.max(1, Math.min(concurrency, files.length || 1)) }, worker);
   await Promise.all(workers);
   out.length = written;
-  // Deterministic order regardless of which worker finished first.
+  // Deterministic order regardless of which worker finished first. The walk
+  // hands over each path once, and the sort acts only on whether a comparison
+  // is negative, so the mutants that change its answer for two equal paths, or
+  // give 0 rather than 1 for a later one, sort the same.
   return out.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
 }
 
