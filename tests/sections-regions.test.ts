@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+
 import { describe, expect, it } from 'vitest';
 
 import { scanMarkdown } from '../src/markdown.js';
@@ -300,6 +302,13 @@ describe('a relation cell', () => {
   it('declares nothing when it is empty or says NA', () => {
     expect(dependencies('')).toEqual({ to: [], findings: [] });
     expect(dependencies('NA')).toEqual({ to: [], findings: [] });
+  });
+
+  it('declares nothing when it holds a placeholder the README lists', () => {
+    const sentence = /holds only a placeholder([^.]*)says nothing/.exec(readFileSync('README.md', 'utf8'))?.[1] ?? '';
+    const placeholders = [...sentence.matchAll(/`([^`]+)`/g)].map(([, placeholder]) => placeholder as string);
+    expect(placeholders.length).toBeGreaterThan(4);
+    for (const placeholder of placeholders) expect(dependencies(placeholder)).toEqual({ to: [], findings: [] });
   });
 
   it('splits a list written without spaces', () => {
