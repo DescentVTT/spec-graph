@@ -130,6 +130,22 @@ spec-core's differential test, and each has a test here: in
 | a fence inside a comment | code from there on | text in a comment |
 | a list marker inside a comment, then an indented block | the block continued a list | indented code |
 
+*Amended 2026-09-27.* **A link inside a link's text is the link**, from
+spec-core 119345e. `[a [ADR-0002](0002-b.md) c](0003-c.md)` draws an edge to
+`0002-b.md` and none to `0003-c.md`: CommonMark reads the inner pair as the
+link, and the brackets around it and `(0003-c.md)` as text, so the rendered
+page links to `0002-b.md` alone. The outer pair was the edge, to a document
+the page does not link to, and the one it does link to was cited by nothing.
+It holds at any depth and in every bracket form - with `[ADR-0002]` defined,
+`[a [ADR-0002] c](0003-c.md)` is the shortcut alone - and a broken inner
+destination is reported where the outer one was. A badge wrapped in a link
+is still the link around it, and a wiki link, which is not CommonMark's,
+leaves the link around it a link
+([spec-core's ADR-0004](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0004-markdown-structure.md)).
+No document in this repository, its fixtures or the rest of the family
+writes one, and over them every `check` format and every graph export is
+what 0.9.4 wrote. The test is in `tests/extract-references.test.ts`.
+
 ## Alternatives
 
 | Option | Why not |
