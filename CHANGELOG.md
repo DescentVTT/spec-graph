@@ -3,7 +3,15 @@
 Notable changes, newest first. Versions follow [semver](https://semver.org):
 a patch fixes behaviour without asking anything of a repository that upgrades.
 
-## Unreleased
+## 0.9.4
+
+Three false alarms, each raised in review of 0.9.3's changes: a loop that
+takes a supersession to close read as a delegation cycle, a question handed
+on to a live document read as an orphaned obligation, and a link to a
+directory without its trailing slash read as a reference outside the corpus.
+On upgrading, expect those findings to go, and a finding for each kind
+where one cycle held a loop of obligations and a loop of supersessions
+together; under `--ratchet`, record the baseline once.
 
 ### Fixed
 
