@@ -52,8 +52,10 @@ Two thresholds are regression guards, set below the last measurement. They move
 **up** when the measurement moves further than the noise, and **never** down to
 accommodate a regression:
 
-- **Mutation score >= 70** (`break` in `stryker.config.mjs`). **73.41% on the
-  hosted runner** governs - it is where the build fails - measured once the
+- **Mutation score >= 90** (`break` in `stryker.config.mjs`). **93.34% on the
+  hosted runner** governs - it is where the build fails - measured on 9589932
+  after a pass over the survivors of eight modules killed 1,284 of them and
+  found ten defects (ADR-0007). Before it, 73.41% governed, measured once the
   tests stopped racing each other on disk. Every earlier hosted figure, 76.83%
   at 0.5.0 among them, carried about three points of false kills from those
   races (ADR-0007), and so did the local 80.54%. `perTest` attribution moves
@@ -65,10 +67,10 @@ accommodate a regression:
   not a verdict, in **either** direction: against a full rebuild of the same
   commit it read 3.18 points high at 0.3.0, 1.29 low at 0.4.0 and 0.40 low at
   0.5.0. Its cost varies as much - 110 minutes when a broad change left nothing
-  to reuse, 64 when half the corpus was reused. See ADR-0007. The guard stays at
-  70, and the margin is thinner than it looked: 346 mutants are detected by
-  timeout, and losing all of them takes 73.41 to 69.88, under it. That is a
-  reason to strengthen tests, never to move the floor. One runner took 166 to
+  to reuse, 64 when half the corpus was reused. See ADR-0007. The guard moved
+  from 70 to 90 with that pass. Timeouts are the margin to watch: 258 mutants
+  are detected by timeout, and losing all of them takes 93.34 to 90.21, just
+  over the guard. That is a reason to strengthen tests, never to move the floor. One runner took 166 to
   171 minutes for the sweep. CI splits it into four shards of 26 to 36 minutes,
   and the gate is applied to their merged report, never to a shard (ADR-0019).
   The time is the work: a static mutant runs the whole suite, so a slow test can
