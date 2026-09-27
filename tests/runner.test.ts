@@ -1,8 +1,8 @@
 import { mkdir, rm, writeFile } from 'node:fs/promises';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
-import { analyse, analyseSources, DEFAULT_CONCURRENCY, DEFAULT_PATTERNS } from '../src/runner.js';
-import type { AnyRuleId } from '../src/types.js';
+import { analyse, analyseSources, DEFAULT_CONCURRENCY, DEFAULT_PATTERNS, withDiagnostics } from '../src/runner.js';
+import type { AnyRuleId, Diagnostic, Severity } from '../src/types.js';
 
 /**
  * The orchestration layer, tested through its observable contract.
@@ -252,6 +252,19 @@ describe('the summary', () => {
     expect(Number(durationMs.toFixed(2))).toBe(durationMs);
   });
 
+  it('reports the time between starting and finishing, not a multiple of it', async () => {
+    // The bounds above hold for a duration a hundred times too long or too
+    // short on a fast machine, so the clock here is the test's: the run starts
+    // at 1000 and finishes at 1012.3456.
+    const clock = vi.spyOn(performance, 'now').mockReturnValueOnce(1000).mockReturnValue(1012.3456);
+    try {
+      const result = await analyse({ root: ROOT, patterns: ['docs/**/*.md'] });
+      expect(result.summary.durationMs).toBe(12.35);
+    } finally {
+      clock.mockRestore();
+    }
+  });
+
   it('is ok exactly when nothing reached error severity', async () => {
     const clean = await analyse({ root: ROOT, patterns: ['doc/**/*.md'] });
     expect(clean.summary.errors).toBe(0);
@@ -264,6 +277,27 @@ describe('the summary', () => {
     });
     expect(failing.summary.errors).toBeGreaterThan(0);
     expect(failing.ok).toBe(false);
+  });
+});
+
+describe('a narrower set of findings', () => {
+  it('moves the tallies and the verdict, and no count of what the corpus holds', async () => {
+    // What a baseline does to a result: it suppresses findings, never facts
+    // (ADR-0012).
+    const result = await analyse({ root: ROOT, patterns: ['docs/**/*.md'] });
+    const found = result.diagnostics[0] as Diagnostic;
+    expect(found).toBeDefined();
+    const as = (severity: Exclude<Severity, 'off'>): Diagnostic => ({ ...found, severity });
+
+    const kept = withDiagnostics(result, [as('error'), as('warn'), as('warn'), as('info'), as('info'), as('info')]);
+    expect(kept.summary).toEqual({ ...result.summary, errors: 1, warnings: 2, infos: 3 });
+    expect(kept.ok).toBe(false);
+    expect(kept.corpus).toBe(result.corpus);
+    expect(kept.graph).toBe(result.graph);
+
+    const quiet = withDiagnostics(result, [as('warn')]);
+    expect([quiet.summary.errors, quiet.summary.warnings, quiet.summary.infos]).toEqual([0, 1, 0]);
+    expect(quiet.ok).toBe(true);
   });
 });
 
