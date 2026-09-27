@@ -54,7 +54,8 @@ const ATTRIBUTE = /([A-Za-z_][A-Za-z0-9_-]*)\s*(?:=\s*("([^"]*)"|'([^']*)'|([^\s
 /** Attributes each directive understands. Anything else is reported, not ignored. */
 const SCHEMA: Readonly<Record<DirectiveName, readonly string[]>> = {
   'spec-node': ['id', 'status', 'title', 'aliases', 'kind'],
-  // Takes no attributes: the file either is a record or it is not.
+  // Takes no attributes: the file either is a record or it is not. A mutant
+  // that lists `Stryker was here` lists no name: one never holds a space.
   'spec-history': [],
   'spec-item': ['id', 'state', 'title', 'owner', 'note'],
   'spec-edge': ['kind', 'to', 'from', 'reason'],
@@ -79,7 +80,8 @@ export function parseDirectives(comments: readonly HtmlComment[]): Directive[] {
     if (!KNOWN.has(name)) continue;
 
     const directiveName = name as DirectiveName;
-    const bodyStart = (head.index ?? 0) + (head[0] as string).length;
+    // The head is anchored, so it starts where the comment's text does.
+    const bodyStart = (head[0] as string).length;
     const body = comment.inner.slice(bodyStart);
     const attributes = new Map<string, Attribute>();
     const unknown: string[] = [];
@@ -129,10 +131,10 @@ export function attr(directive: Directive, name: string): Attribute | null {
 export function attrList(directive: Directive, name: string): string[] {
   const found = attr(directive, name);
   if (!found) return [];
-  return found.value
-    .split(/[,;\s]+/)
-    .map((part) => part.trim())
-    .filter((part) => part.length > 0);
+  // Whitespace is a separator, so no part holds any to trim. The filter drops
+  // what a separator at either end leaves, and would drop what each separator
+  // in a run leaves too, so splitting at one at a time is equivalent.
+  return found.value.split(/[,;\s]+/).filter((part) => part.length > 0);
 }
 
 /**
@@ -158,6 +160,7 @@ export function directiveFor(
     const inside = directive.start >= region.start && directive.end <= region.end;
     const above = directive.end <= region.start && region.start - directive.end <= lookBehind;
     if (!inside && !above) continue;
+    // Two directives never start at one offset, so `>=` reads the same.
     if (best === null || directive.start > best.start) best = directive;
   }
   return best;
