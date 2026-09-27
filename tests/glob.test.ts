@@ -244,6 +244,8 @@ describe('the deprecated globToRegExp', () => {
     expect(old('{a,b}c', 'bc')).toBe(true);
     expect(old('{a,b}c', 'b}c')).toBe(false);
     expect(old('a,b', 'a,b')).toBe(true);
+    // Outside braces a comma is itself, and not an alternation.
+    expect(old('a,b', 'a')).toBe(false);
     expect(old('a}b', 'a}b')).toBe(true);
     expect(old('a**b', 'a/x/b')).toBe(true);
     expect(old('a[b', 'a[b')).toBe(true);

@@ -593,6 +593,19 @@ describe('reports', () => {
     expect(markdown).toContain('A &#124; B?');
   });
 
+  it('writes a title that runs over lines as one line, a space where each break was', () => {
+    // A line break would end the row. A Windows break is one break, and reads
+    // as one space, not two.
+    const diff = diffExports(
+      assembled([adr('ADR-0001', 'ADR-0001: Cache', 'docs/adr/0001-cache.md', 'active', 'accepted')]),
+      assembled([
+        adr('ADR-0001', 'ADR-0001: Cache', 'docs/adr/0001-cache.md', 'active', 'accepted'),
+        adr('ADR-0002', 'ADR-0002: First\r\nsecond\n\n third', 'docs/adr/0002-x.md', 'active', 'accepted'),
+      ]),
+    );
+    expect(formatDiffMarkdown(diff)).toContain('ADR-0002: First second third');
+  });
+
   it('writes the same bytes for the same exports, in whatever order the files were read', () => {
     const files = {
       'docs/adr/0001-a.md': cache('- [x] Eviction policy?', '- [ ] Size?'),

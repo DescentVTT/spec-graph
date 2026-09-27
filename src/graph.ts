@@ -39,7 +39,8 @@ export interface SpecGraph {
 
   /**
    * Strongly connected components with more than one member, over the given
-   * edge kinds. Each is a real cycle.
+   * edge kinds, and each node with an edge to itself as a component of one.
+   * Each is a real cycle.
    *
    * With `byDocument`, relations are projected onto the documents that own
    * their endpoints before the search. That is what catches two documents
@@ -97,6 +98,9 @@ export function buildGraph(input: {
       const found = nodes.get(id);
       if (!found) return undefined;
       if (found.kind === 'document') return found;
+      // An item's document is a document, or is missing from a graph built
+      // from some documents and not others - never an item. So the check only
+      // narrows the type, and its mutant is equivalent.
       const owner = nodes.get(found.document);
       return owner?.kind === 'document' ? owner : undefined;
     },
@@ -132,7 +136,7 @@ export function buildGraph(input: {
     cycles(kinds, options) {
       const relevant = (id: string): Edge[] => [...filter(outgoing.get(id), kinds)];
       if (!options?.byDocument) {
-        return tarjan([...nodes.keys()], (id) => relevant(id).map((edge) => edge.to).filter((to) => nodes.has(to)));
+        return tarjan([...nodes.keys()], (id) => relevant(id).map((edge) => edge.to));
       }
       const ownerOf = (id: string): string => graph.owningDocument(id)?.id ?? id;
       const projected = new Map<string, Set<string>>();
@@ -185,6 +189,9 @@ function tarjan(ids: readonly string[], successors: (id: string) => string[]): s
   const indexOf = new Map<string, number>();
   const lowLink = new Map<string, number>();
   const onStack = new Set<string>();
+  // A component is popped down to its own root and no further, so nothing
+  // beneath the first root pushed is ever popped: a stack that starts with
+  // something in it is an equivalent mutant.
   const stack: string[] = [];
   const components: string[][] = [];
   let counter = 0;
@@ -203,6 +210,9 @@ function tarjan(ids: readonly string[], successors: (id: string) => string[]): s
 
     while (work.length > 0) {
       const frame = work[work.length - 1] as { id: string; next: number; children: string[] };
+      // `<=` reads one child past the end: `undefined`, a node with no
+      // successors that is settled on its own at once and is in no cycle. That
+      // mutant is equivalent.
       if (frame.next < frame.children.length) {
         const child = frame.children[frame.next] as string;
         frame.next += 1;

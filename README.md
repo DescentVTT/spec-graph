@@ -623,6 +623,23 @@ Directives are ordinary HTML comments — invisible in every Markdown renderer:
 <!-- @spec-history -->
 ```
 
+Each takes these attributes. Any other is a parse problem, listed by
+`--verbose`, and the directive still applies:
+
+| directive | attributes |
+| --- | --- |
+| `@spec-node` | `id`, `status`, `title`, `aliases`, `kind` |
+| `@spec-item` | `id`, `state`, `title`, `owner`, `note` |
+| `@spec-edge` | `kind`, `to`, `from`, `reason` |
+| `@spec-ignore` | `reason` |
+| `@spec-history` | none |
+
+`reason`, `note`, `owner` and a node's `kind` are for whoever reads the source;
+spec-graph reads nothing from them. `aliases` splits at commas, semicolons and
+spaces. A value is quoted with either quote mark, or bare when it holds no space
+or quote, and an attribute with no value is a flag. A directive is the first
+thing in its comment, so a comment that only mentions one is a comment.
+
 A directive always wins, and the report says the state came from a directive, so
 an override is visible rather than mysterious.
 
@@ -791,6 +808,7 @@ command. spec-graph reads the first of `.spec-graph.json`,
   "ratchet": true,
   "severities": { "self-reference": "off" },
   "strict": true,
+  "maxRelated": 3,
   "rules": {
     "no-draft-dependency": {
       "query": "document[phase=active] -depends-on-> document[phase=draft]",
@@ -814,6 +832,10 @@ decision to discard what the repository already declared. `--verbose` prints
 which file was read, on stderr with everything else a run says about itself, so
 it can be combined with any `--format` and leave the document on stdout intact.
 `--no-config` skips the mechanism entirely.
+
+`maxRelated` has no flag. It caps how many related locations one finding lists
+— the lines under it in the terminal, `related` in JSON, `relatedLocations` in
+SARIF — and is 8 unless set; `0` lists none.
 
 A broken config stops the run with exit `2`, each problem named on stderr —
 invalid JSON, a value of the wrong type, an unknown key, a rule that does not
@@ -851,7 +873,13 @@ extended glob, `+(a|b)`: write `{a,b}`. A parenthesis with no `|` in its group
 is itself, so `C++(notes).md` names that file. A `..` typed below the root,
 `spec-graph "../*.md"` from `docs/deep`, is resolved against where you typed
 it. A bare `--ignore` name, `--ignore drafts`, still prunes that directory at
-any depth.
+any depth, even where a pattern starts inside it.
+
+The walk never enters `.git`, `.hg`, `.svn`, `.cache`, `.next`, `.nuxt`,
+`.turbo`, `.venv`, `node_modules`, `bower_components`, `vendor`, `dist`,
+`build`, `out`, `target`, `coverage` or `__pycache__` on its way to what the
+patterns name. Unlike an `--ignore`, these yield to a pattern that starts inside
+one: `vendor/specs/*.md` is read from there, whatever the other patterns reach.
 
 `--ignore-ref` is matched against reference targets rather than paths: a bare
 pattern names one target exactly, case is ignored on every host, a `\` escapes

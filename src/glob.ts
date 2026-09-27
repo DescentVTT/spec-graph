@@ -323,33 +323,42 @@ export async function walkFiles(options: WalkOptions): Promise<WalkedFile[]> {
   // Anything carrying a separator or glob syntax is matched against the
   // repository-relative path, which is what `--ignore "docs/drafts/**"` means -
   // and treating that as a directory name silently excluded nothing at all.
+  // A mutant that defaults this to `['Stryker was here']` prunes directories of
+  // that name, which no repository has: equivalent, and left untested.
   const ignores = options.ignore ?? [];
   // The empty pattern is no directory's name, so it goes to the dialect, which
   // refuses it as it refuses an empty include: a pattern that names nothing is
   // a typo or an unset variable, and was an ignore that ignored nothing.
   const bare = (pattern: string): boolean => pattern.length > 0 && !isGlob(pattern) && !pattern.includes('/');
-  const ignoredNames = new Set([...DEFAULT_IGNORED_DIRECTORIES, ...ignores.filter(bare)]);
+  const named = new Set(ignores.filter(bare));
+  const ignoredNames = new Set([...DEFAULT_IGNORED_DIRECTORIES, ...named]);
   const ignoreList = pathList(ignores.filter((pattern) => !bare(pattern)));
   const excluded = (path: string): boolean => ignoreList.match(path);
 
   // Only walk the directories the patterns can possibly reach: each pattern's
-  // literal prefix, one per brace alternative. A negated pattern adds none,
-  // and adding its would change no answer - whatever lies beneath it that no
-  // other pattern reaches, no other pattern matches either - so that mutant is
-  // equivalent. No positive pattern at all walks nothing, which is the answer.
+  // literal prefix, one per brace alternative. A negated pattern adds none: it
+  // takes files back, and starting a walk at its prefix would enter what the
+  // walk skips - `!node_modules/**/*.txt` beside `**/*.md` would read every
+  // Markdown file in `node_modules`. No positive pattern at all walks nothing,
+  // which is the answer.
   const bases = new Set<string>();
   for (const entry of patterns.entries) {
     if (entry.negated) continue;
     for (const base of entry.glob.bases) bases.add(base);
   }
-  // Drop any base already contained in another: walking it again would only
-  // repeat work. The empty base is the repository root, which contains
-  // everything, so when it is present it is the only root worth walking.
-  const roots = bases.has('')
-    ? ['']
-    : [...bases].filter((base) => ![...bases].some((other) => other !== base && base.startsWith(`${other}/`)));
-
+  // Every base is walked, even one inside another, because the outer walk
+  // prunes `vendor` and the rest of the default list on its way down, and a
+  // pattern that starts inside one of those is read from there. Dropping the
+  // inner base as already covered meant `docs/**/*.md` beside
+  // `docs/vendor/specs/*.md` found less than the second pattern alone. A bare
+  // `--ignore` name is not overruled that way: it is the user's, and prunes at
+  // any depth, a pattern's own starting point included - so `--ignore adr`
+  // still takes out `adr/`, which the default `adr/**/*.md` starts inside.
+  const startable = (base: string): boolean => !base.split('/').some((segment) => named.has(segment));
   const out = new Map<string, WalkedFile>();
+  // Where two walks overlap, whichever reaches a directory first reads it and
+  // the other stops there. Reading it twice would find the same files under
+  // the same keys, so the two mutants that drop this are equivalent.
   const visited = new Set<string>();
 
   const walk = async (relative: string): Promise<void> => {
@@ -387,7 +396,7 @@ export async function walkFiles(options: WalkOptions): Promise<WalkedFile[]> {
           if (!patterns.match(child) || excluded(child) || info.size > maxSize) continue;
           out.set(child, { path: child, absolute: `${root}/${child}`, size: info.size });
         } catch {
-          continue;
+          // A link to nothing has nothing to read.
         }
         continue;
       }
@@ -400,14 +409,16 @@ export async function walkFiles(options: WalkOptions): Promise<WalkedFile[]> {
         if (info.size > maxSize) continue;
         out.set(child, { path: child, absolute: `${root}/${child}`, size: info.size });
       } catch {
-        continue;
+        // Gone between the listing and the look: there is nothing to read.
       }
     }
   };
 
-  for (const base of roots) if (await spelledAsOnDisk(root, base)) await walk(base);
+  for (const base of bases) if (startable(base) && (await spelledAsOnDisk(root, base))) await walk(base);
 
-  return [...out.values()].sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+  // No two paths are equal, since they are the keys of `out`, so the order
+  // needs only `<`, and `<=` would read the same.
+  return [...out.values()].sort((a, b) => (a.path < b.path ? -1 : 1));
 }
 
 /**

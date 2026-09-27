@@ -243,10 +243,12 @@ CONFIGURATION
       "historyPatterns": ["**/JOURNAL_*.md", "archive/**"],
       "baseline": ".spec-graph-baseline.json",
       "severities": { "self-reference": "off" },
-      "strict": true }
+      "strict": true,
+      "maxRelated": 3 }
 
   A flag always wins over the file, and list flags add to it rather than
-  replacing it.
+  replacing it. maxRelated has no flag: it caps how many related locations one
+  finding lists, 8 unless set, and 0 lists none.
 
   A problem in that file stops the run with exit 2, named on stderr: invalid
   JSON, an unknown key, a rule that does not compile. A configuration that did
