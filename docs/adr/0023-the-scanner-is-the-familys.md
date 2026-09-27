@@ -150,6 +150,32 @@ Front matter that opens and never closes is the scan's to report now, in
 `unclosedFrontMatter`, where `src/yaml.ts` read the first line again to find
 it. The problem it gives, and the line it points at, are the ones it gave.
 
+*Amended 2026-09-28.* **A link reference definition is read only where
+CommonMark reads one**, from spec-core 65ef842. It cannot interrupt a
+paragraph: `[r]: 0002-b.md` on the line under a paragraph's text, a lazy
+continuation line in a block quote or a list item included, is that text, as
+the rendered page shows it. A reference whose only definition sat there cites
+nothing, where it drew an edge, and a broken destination written there is no
+longer reported; an identifier on such a line is prose, so `Some text` over
+`[ADR-0003]: 0003-c.md` cites `ADR-0003`, where the line was a definition and
+cited nothing. A definition is still read where it opens a paragraph, in a
+block quote opened on its line, and under a heading, a rule, code, a comment
+or another definition. Its label is CommonMark's link label, with no
+unescaped bracket and at most 999 characters: `[[r]: r.md](0003-c.md)` is a
+link to `0003-c.md`, where it defined `r.md](0003-c.md)` under the label
+`[r`, and `[a\]b]: x` is read. A reference link's second bracket is a label
+on the same terms, and where it is none the first bracket is a shortcut:
+with `[r]` defined, `[r][a[b]c]` cites `r`'s destination, where it cited
+nothing ([spec-core's ADR-0004](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0004-markdown-structure.md)).
+The row above for `[foo](not a link)` holds, with `[foo]` defined where
+CommonMark reads it: its test in `tests/markdown.test.ts` had `[foo]: 0003-c.md`
+under a footnote and a `[Note]: prose` line, one paragraph in which neither
+CommonMark nor GitHub defines anything, and now reads that line as the
+paragraph's text. No document in this repository, its fixtures or the rest of
+the family writes a reference definition, and over them every `check` format
+and every graph export is what 0.9.5 wrote. The tests are in
+`tests/extract-references.test.ts`.
+
 ## Alternatives
 
 | Option | Why not |
