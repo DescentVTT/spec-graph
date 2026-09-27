@@ -51,6 +51,14 @@ export interface ResolveOptions {
    */
   readonly fileExists?: ((path: string) => boolean) | undefined;
   /**
+   * Whether a repository-relative path is a directory on disk.
+   *
+   * A link to a directory cites no document, written with a trailing slash or
+   * without one: `[the guides](../guides)` names a directory as surely as
+   * `[the guides](../guides/)` does.
+   */
+  readonly isDirectory?: ((path: string) => boolean) | undefined;
+  /**
    * Targets whose failure to resolve should not be reported.
    *
    * This is a *suppression* filter, not a resolution one: it is consulted only
@@ -376,8 +384,9 @@ function resolveOne(
     // A trailing slash names a directory. Linking to one is ordinary - "the
     // decisions live in [archive/](archive/)" - and is not a citation of any
     // document. Resolution is still attempted first, so a directory-style
-    // document written as `0007-sharding/` continues to resolve.
-    if (bare.endsWith('/')) return null;
+    // document written as `0007-sharding/` continues to resolve. Without the
+    // slash, the disk says whether the path is a directory.
+    if (bare.endsWith('/') || isDirectoryPath(bare, entry, options)) return null;
     const reason = pathMissingReason(bare, entry, options);
     return dangle(candidate, reason, found.near);
   }
@@ -605,6 +614,12 @@ function filteredBy(target: string, bare: string, options: ResolveOptions): Supp
 function worthReporting(target: string, index: Index): boolean {
   const prefixed = parsePrefixedRef(target);
   return prefixed !== null && index.families.has(prefixed.family);
+}
+
+/** True when a path-like target names a directory, as `../guides` can. */
+function isDirectoryPath(target: string, entry: ExtractedDocument, options: ResolveOptions): boolean {
+  if (!looksLikePath(target) || !options.isDirectory) return false;
+  return options.isDirectory(resolveFrom(entry.document.path, target));
 }
 
 function pathMissingReason(

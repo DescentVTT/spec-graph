@@ -102,6 +102,22 @@ it asserted a false alarm.
   for, so the cycle search leaves it out
   ([ADR-0005](0005-rules-are-queries.md)).
 
+Three more, raised in review of the two above:
+
+- **A loop that took a supersession to close was a delegation cycle** when the
+  hand-off went further than one step: to the latest of two successors, or to
+  the successor by way of a third document. Obligations and supersessions are
+  now searched for cycles apart ([ADR-0005](0005-rules-are-queries.md)).
+- **A superseded document whose open question was delegated to a live
+  document still held an orphaned obligation.** The finding's own hint - move
+  each item to a live document - had been followed. An item delegated to a
+  document that can still take work is not counted
+  ([ADR-0003](0003-item-state-signals.md)).
+- **A link to a directory without its trailing slash was a reference outside
+  the corpus**, "resolves to a file that is not a specification", with a hint
+  to widen patterns that could never reach it. The disk now says whether the
+  path is a directory, and a directory is not a reference either way.
+
 ## Open Questions
 
 - [ ] Should the default include patterns be widened, or is naming the fix in

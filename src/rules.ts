@@ -21,6 +21,7 @@
  */
 
 import { buildGraph, OBLIGATION_EDGES, type SpecGraph } from './graph.js';
+import { receptivityOf } from './lifecycle.js';
 import { dirnamePosix, resolveFrom } from './paths.js';
 import { renderTemplate, type ProjectRule } from './project-rules.js';
 import { execute, parseQuery, type QuerySpec } from './select.js';
@@ -68,7 +69,7 @@ export const RULE_DESCRIPTIONS: Readonly<Record<RuleId, string>> = Object.freeze
   'broken-reference': 'a citation names a document or anchor that does not exist',
   'reference-outside-corpus': 'a citation names a real document the include patterns did not reach',
   'ambiguous-reference': 'a citation matches more than one document',
-  'circular-delegation': 'obligations or supersessions form a cycle, so none of them can ever land',
+  'circular-delegation': 'obligations form a cycle, so none of them can ever land, or supersessions do',
   'orphaned-obligation': 'a retired or frozen document still holds open obligations',
   'live-supersession': 'a document has been superseded but still presents itself as current',
   'unreciprocated-supersession': 'a retired or archived document does not say what replaced it',
@@ -535,8 +536,22 @@ function suggestPattern(ref: DanglingRef): string {
 /* -------------------------------------------------------------------------- */
 
 function circularDelegations(graph: SpecGraph, emit: Emit): void {
-  const kinds = [...OBLIGATION_EDGES, 'supersedes' as const];
-  const searched = withoutHandOffs(graph);
+  // Obligations and supersessions are searched apart. A loop that needs a
+  // supersession to close carries a question only as far as the document at
+  // the head of that supersession, which passes it no further: the question
+  // lands, and the loop is a cycle of neither kind (ADR-0005).
+  cycles(graph, withoutHandOffs(graph), OBLIGATION_EDGES, emit, (count) => `delegation cycle across ${count} documents: nothing in it can ever land`);
+  cycles(graph, graph, ['supersedes'], emit, (count) => `supersession cycle across ${count} documents`);
+}
+
+/** Reports each loop `searched` holds over relations of `kinds`. */
+function cycles(
+  graph: SpecGraph,
+  searched: SpecGraph,
+  kinds: readonly Edge['kind'][],
+  emit: Emit,
+  message: (count: number) => string,
+): void {
   // Projected onto documents, so a question handed back and forth between two
   // of them is found even though each delegation runs item -> document and the
   // raw graph therefore contains no cycle at all.
@@ -556,13 +571,10 @@ function circularDelegations(graph: SpecGraph, emit: Emit): void {
     if (members.some((member) => member.history)) continue;
 
     const edges = cycleEdges(searched, component, kinds);
-    const onlySupersession = edges.length > 0 && edges.every((edge) => edge.kind === 'supersedes');
     const head = members[0] as DocumentNode;
 
     emit('circular-delegation', () => ({
-      message: onlySupersession
-        ? `supersession cycle across ${members.length} documents`
-        : `delegation cycle across ${members.length} documents: nothing in it can ever land`,
+      message: message(members.length),
       at: edges[0]?.declaredAt ?? head.at,
       nodes: component,
       related: edges.map((edge) => related(edge.declaredAt, `${edge.from} ${EDGE_TRAITS[edge.kind].phrase} ${edge.to}`)),
@@ -576,11 +588,11 @@ function circularDelegations(graph: SpecGraph, emit: Emit): void {
  *
  * `ADR-0002 supersedes ADR-0001`, and ADR-0001 defers its open question to
  * ADR-0002: the question went to the decision that replaced the one asking it,
- * which is the hand-off a supersession is for. Projected onto documents the
- * two relations make a loop, and nothing in it is passed back - so it is not
- * searched for one (ADR-0006). Two documents passing a question back and forth
- * still close a cycle, and so does a question handed to any document other
- * than one that replaced the document handing it.
+ * which is the hand-off a supersession is for (ADR-0006). It closes no loop of
+ * obligations: a successor that hands a question back into the document it
+ * replaced is a ghost handover, reported as that. Two documents passing a
+ * question back and forth still close a cycle, and so does a question handed
+ * to any document other than one that replaced the document handing it.
  */
 function withoutHandOffs(graph: SpecGraph): SpecGraph {
   // Both ends of an edge are nodes, so the fallback is never taken.
@@ -636,7 +648,7 @@ function cycleEdges(graph: SpecGraph, component: readonly string[], kinds: reado
 function orphanedObligations(graph: SpecGraph, emit: Emit): void {
   for (const document of graph.documents) {
     if (document.phase !== 'retired' && document.phase !== 'frozen') continue;
-    const open = graph.itemsOf(document.id).filter((item) => item.openness !== 'closed');
+    const open = graph.itemsOf(document.id).filter((item) => item.openness !== 'closed' && !handedOn(graph, item.id));
     if (open.length === 0) continue;
 
     const sealed = document.phase === 'retired' ? 'retired' : 'frozen';
@@ -649,6 +661,22 @@ function orphanedObligations(graph: SpecGraph, emit: Emit): void {
       hint: `move each one to a live document or close it - as it stands, ${open.length === 1 ? 'it disappears' : 'they disappear'} with ${document.id}`,
     }));
   }
+}
+
+/**
+ * Whether an item's question went on to a document that can still take it.
+ *
+ * ADR-0001 was superseded, and its open question is delegated to ADR-0002: the
+ * question lives on in ADR-0002, which is what the finding would ask for.
+ * Delegated into another sealed document, it disappears all the same - and no
+ * ghost handover says so, since that rule leaves a retired source out.
+ */
+function handedOn(graph: SpecGraph, itemId: string): boolean {
+  return graph.out(itemId, ['delegates-to']).some((edge) => {
+    // Both ends of an edge are nodes, and every node has a document.
+    const target = graph.owningDocument(edge.to) as DocumentNode;
+    return receptivityOf(target.phase) !== 'sealed';
+  });
 }
 
 /* -------------------------------------------------------------------------- */
@@ -851,6 +879,7 @@ export function sortDiagnostics(diagnostics: readonly Diagnostic[]): Diagnostic[
 export const RULE_QUERIES: Readonly<Partial<Record<RuleId, string>>> = Object.freeze({
   'ghost-handover': '*[openness!=closed][phase!=retired] -delegates-to,blocked-by-> *[receptivity=sealed]',
   'stale-premise': '*[phase!=retired] -depends-on,assumes,amends,blocked-by-> document[phase=retired]',
-  'orphaned-obligation': 'document[receptivity=sealed] -contains-> item[openness!=closed]',
+  'orphaned-obligation':
+    'document[receptivity=sealed] -contains-> item[openness!=closed], less an item delegated to a document that is not sealed',
   'self-reference': 'see --format json; reflexive edges are excluded from traversal by default',
 });

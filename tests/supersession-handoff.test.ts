@@ -119,3 +119,67 @@ describe('a cycle the hand-off does not excuse', () => {
     ).toEqual([{ message: 'supersession cycle across 2 documents', nodes: ['ADR-0001', 'ADR-0002'] }]);
   });
 });
+
+describe('a loop that takes a supersession to close', () => {
+  // Obligations and supersessions are searched apart (ADR-0005): a question
+  // carried round such a loop stops at the head of its supersession, which
+  // passes it no further, so it lands.
+  it('is no cycle when a document superseded twice over hands its question to the latest successor', () => {
+    expect(
+      cycles({
+        'docs/adr/0001-one.md': doc('status: superseded', question('One', 'ADR-0003', '0003-three.md')),
+        'docs/adr/0002-two.md': doc('status: superseded\nsupersedes: ADR-0001', '# Two'),
+        'docs/adr/0003-three.md': doc('status: accepted\nsupersedes: ADR-0002', '# Three'),
+      }),
+    ).toEqual([]);
+  });
+
+  it('is no cycle when the question reaches the successor by way of a third document', () => {
+    expect(
+      cycles({
+        'docs/adr/0001-a.md': doc('status: accepted\nsupersedes: ADR-0002', '# A'),
+        'docs/adr/0002-b.md': doc('status: superseded', question('B', 'ADR-0003', '0003-c.md')),
+        'docs/adr/0003-c.md': doc('status: accepted', question('C', 'ADR-0001', '0001-a.md')),
+      }),
+    ).toEqual([]);
+  });
+
+  it('leaves each kind of loop reported on its own, with only its own relations', () => {
+    const { diagnostics } = analyse({
+      'docs/adr/0001-a.md': doc('status: superseded\nsupersedes: ADR-0002', question('A', 'ADR-0003', '0003-c.md')),
+      'docs/adr/0002-b.md': doc('status: superseded\nsupersedes: ADR-0001', '# B'),
+      'docs/adr/0003-c.md': doc('status: accepted', question('C', 'ADR-0001', '0001-a.md')),
+    });
+    const found = diagnostics.filter((diagnostic) => diagnostic.rule === 'circular-delegation');
+    expect(
+      found.map((diagnostic) => ({
+        message: diagnostic.message,
+        nodes: [...diagnostic.nodes].sort(),
+        related: diagnostic.related.map((related) => related.note).sort(),
+      })),
+    ).toEqual(
+      expect.arrayContaining([
+        {
+          message: 'delegation cycle across 2 documents: nothing in it can ever land',
+          nodes: ['ADR-0001', 'ADR-0003'],
+          related: ['ADR-0001#open-questions.1 delegates to ADR-0003', 'ADR-0003#open-questions.1 delegates to ADR-0001'],
+        },
+        {
+          message: 'supersession cycle across 2 documents',
+          nodes: ['ADR-0001', 'ADR-0002'],
+          related: ['ADR-0001 supersedes ADR-0002', 'ADR-0002 supersedes ADR-0001'],
+        },
+      ]),
+    );
+    expect(found).toHaveLength(2);
+  });
+
+  it('is a ghost handover, not a cycle, when the successor hands a question back into what it replaced', () => {
+    const rules = analyse({
+      'docs/adr/0001-old.md': doc('status: superseded', question('Old', 'ADR-0002', '0002-new.md')),
+      'docs/adr/0002-new.md': doc('status: accepted\nsupersedes: ADR-0001', question('New', 'ADR-0001', '0001-old.md')),
+    }).diagnostics.map((diagnostic) => diagnostic.rule);
+    expect(rules).toContain('ghost-handover');
+    expect(rules).not.toContain('circular-delegation');
+  });
+});

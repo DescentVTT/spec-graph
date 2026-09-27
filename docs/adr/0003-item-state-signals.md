@@ -74,6 +74,15 @@ so an editor that typographs its dashes left every such marker as prose. None
 of the three widens what counts as a statement's start, and a dash that runs
 into the next word still qualifies nothing.
 
+*Amended again 2026-09-27.* **An item delegated to a document that can still
+take work is not an orphaned obligation**, though its openness stays `open`.
+The question went on: `orphaned-obligation` asks for each item of a retired or
+frozen document to be moved to a live document or closed, and delegating it
+is the move. Delegated into another retired or frozen document, or a record,
+it disappears all the same and is still counted - no ghost handover reports it,
+since that rule leaves a retired source out. Blocked by a live document is not
+delegated to one: the work is still the sealed document's.
+
 ## Open Questions
 
 - [ ] Should `narrowed` items carry the *remaining* scope as structured data
