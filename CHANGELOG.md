@@ -62,6 +62,12 @@ a patch fixes behaviour without asking anything of a repository that upgrades.
   followed by a hyphen is: `Resolved – one node` closes the item. The pattern
   already found both dashes and the check after it asked for a hyphen. A
   status reading `Superseded – ADR-0009` names its successor.
+- **A link to a dotfile or to a file with a long extension is not a broken
+  reference.** `../.nvmrc` counted as having no extension and
+  `arch.excalidraw` as an identifier with a dot in it, so both were read as
+  documents and reported when no document answered. Both are links to files
+  now, like a link to source code or an image. A link to a missing `.md` is
+  still reported, and `ADR-0007.1` is still an identifier.
 
 ### Documentation
 

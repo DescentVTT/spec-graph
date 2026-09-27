@@ -266,19 +266,24 @@ const DOCUMENT_EXTENSION = /\.(md|markdown|mdx|txt|rst|adoc|asciidoc)$/i;
  * is a different tool's job. Treating it as a dangling specification reference
  * would report an error on one of the most ordinary things a design document
  * does, so targets carrying a non-document extension are not references at all.
+ *
+ * A dotfile is such a target too - `../.nvmrc` names a file whose extension is
+ * its whole name - and so is a file whose extension is long: `arch.excalidraw`
+ * is a drawing, not an identifier with a dot in it (ADR-0006).
  */
 export function isDocumentTarget(target: string): boolean {
   const withoutAnchor = splitAnchor(target).target;
   const base = withoutAnchor.slice(withoutAnchor.lastIndexOf('/') + 1);
   const dot = base.lastIndexOf('.');
   // No extension: a directory, or an extensionless spec such as `rfcs/0007`.
-  if (dot <= 0) return true;
+  if (dot === -1) return true;
   const extension = base.slice(dot);
-  // Only a plausible file extension disqualifies a target. An identifier like
-  // `v1.2` or `ADR-0007.1` keeps its dot and is still resolved as an id. The
-  // extension starts at the last dot and holds no other, so the leading anchor
-  // decides nothing; it says the dot is where the extension begins.
-  if (!/^\.[A-Za-z][A-Za-z0-9]{0,5}$/.test(extension)) return true;
+  // Only a file extension disqualifies a target, and one starts with a letter.
+  // An identifier like `v1.2` or `ADR-0007.1` keeps its dot and is still
+  // resolved as an id. The extension starts at the last dot and holds no
+  // other, so the leading anchor decides nothing; it says the dot is where the
+  // extension begins.
+  if (!/^\.[A-Za-z][A-Za-z0-9]*$/.test(extension)) return true;
   return DOCUMENT_EXTENSION.test(base);
 }
 

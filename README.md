@@ -283,6 +283,10 @@ trusts:
   so `[ADR-7](https://example.com/adr-7)` yields one reference rather than three.
 - **Source links are not spec links.** `[rules.ts](../../src/rules.ts)` is not a
   broken reference. That is [spec-guard](#relationship-to-spec-guard)'s job.
+  Nor is a link to any other file that is not a document: an image, a dotfile
+  such as `../.nvmrc`, or a drawing such as `arch.excalidraw`, however long its
+  extension. A dot followed by a digit, as in `ADR-0007.1`, is part of an
+  identifier and is still resolved.
 
 ### Registers: many specifications in one file
 
