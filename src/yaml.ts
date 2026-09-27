@@ -68,9 +68,12 @@ export function readEntries(scanned: ScannedDocument): FrontMatterReading {
   if (block === null) return neverClosed(scanned);
   const index = scanned.index;
   // The block and nothing after it: the reader splits what it is given into
-  // lines, and the body is none of its business.
+  // lines, and the body is none of its business. It stops at the closing
+  // delimiter all the same, so the mutant that hands it the whole text reads
+  // the same entries, and is equivalent.
   const read = readFrontMatter(scanned.text.slice(0, block.bodyStart), { nested: true });
-  // The scan found a closed block, and the reader closes one by the same rule.
+  // The scan found a closed block, and the reader closes one by the same rule,
+  // so this never returns and its mutant is equivalent.
   if (read === null) return NOTHING;
   const { entries, problems } = entriesOf(read, 0);
   return {
@@ -87,6 +90,8 @@ export function readEntries(scanned: ScannedDocument): FrontMatterReading {
           start: index.lineStart(problem.line + 1),
           end: index.lineEnd(problem.line + 1),
           unread,
+          // A match always has its one group, so `?.[1].` reads the same as
+          // `?.[1]?.`: that mutant is equivalent.
           key: KEY_SHAPE.exec(text)?.[1]?.toLowerCase() ?? null,
         };
       }),
@@ -138,7 +143,8 @@ export function parseFrontMatter(raw: string, baseOffset = 0): YamlEntry[] {
   // opening one takes. The line break before the closing one is a blank line
   // when `raw` already ends in one, and a blank line is no key's.
   const read = readFrontMatter(`---\n${raw}\n---`, { nested: true });
-  // Never null: the text opens with a delimiter and closes with one.
+  // Never null: the text opens with a delimiter and closes with one. The
+  // mutants of that branch are equivalent.
   return read === null ? [] : entriesOf(read, baseOffset - 4).entries;
 }
 
@@ -149,6 +155,8 @@ function entriesOf(read: Read, shift: number): { entries: YamlEntry[]; problems:
   for (const entry of read.entries) {
     const { value } = entry;
     if (value.kind === 'unsupported') {
+      // Only `readEntries` keeps these, and it shifts by 0, where adding and
+      // subtracting agree: the mutants of the two sums below are equivalent.
       problems.push({
         message: `front matter: "${entry.key}" is not read: ${value.reason}`,
         start: entry.valueStart + shift,
