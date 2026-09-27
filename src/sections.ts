@@ -22,7 +22,7 @@
  */
 
 import { attr, type Directive } from './directives.js';
-import { isExternal, parsePrefixedRef } from './identity.js';
+import { HAS_LETTER_OR_DIGIT, isExternal, parsePrefixedRef } from './identity.js';
 import { isStatusHeading } from './lifecycle.js';
 import {
   isMarkdownLine,
@@ -142,6 +142,8 @@ export function findSpecificationRegions(
   /** The file's own identifier, so its title heading is not read as a sub-region. */
   fileId: string,
 ): SpecificationRegion[] {
+  // The file's own relations come from its front matter and prose, never from
+  // here, and it claims no cell: nothing reads either list off this region.
   const whole: SpecificationRegion = {
     heading: null,
     row: null,
@@ -171,6 +173,8 @@ export function findSpecificationRegions(
     // Comparing the text alone made `# ADR-040` inside `0040-enforce.md` a
     // region within the file it names: one decision, two nodes, and a citation
     // arriving at whichever spelling it happened to use.
+    // `HEADING_ID` captures only what `PREFIXED_ID` parses, so `ref` is never
+    // null here; the check is for the type.
     const ref = parsePrefixedRef(declaredId);
     if (ref !== null && fileRef !== null && ref.family === fileRef.family && ref.number === fileRef.number) continue;
 
@@ -183,16 +187,24 @@ export function findSpecificationRegions(
     // ordinary `## Status` section in a normal ADR.
     if (status === null && directive === null) continue;
 
+    // A directive's id wins, but only if it is a name. One that is not - the
+    // lone backslash `id=\"ADR-9\"` parses to, written inside a string - would
+    // be discarded when the region is identified, and a region with nothing
+    // to go by falls back to the file's own name: the file then contained
+    // itself, and the section vanished. The heading's id is the one to keep.
+    const directiveId = directive ? attr(directive, 'id')?.value : undefined;
+
     regions.push({
       heading,
       row: null,
       start: heading.start,
       end,
-      declaredId: (directive ? attr(directive, 'id')?.value : null) ?? declaredId,
+      declaredId: directiveId !== undefined && HAS_LETTER_OR_DIGIT.test(directiveId) ? directiveId : declaredId,
       title: heading.text,
       status,
       directive,
       relations: [],
+      // Prose inside a section is prose: a heading region claims no cell.
       claimed: [],
     });
   }
@@ -223,8 +235,14 @@ export function findTableRegions(scanned: ScannedDocument): SpecificationRegion[
       const idCell = row.cells[schema.id];
       if (!idCell) continue;
       const id = flatten(idCell.text);
-      if (id.length === 0 || EMPTY_CELL.test(id)) continue;
+      // A row is named by its id cell or not at all. An empty one, a
+      // placeholder, or punctuation alone - `?` for a row nobody has numbered
+      // yet - names nothing, and a region with no name fell back to the file's:
+      // the register then contained itself, and the row vanished.
+      if (!HAS_LETTER_OR_DIGIT.test(id) || EMPTY_CELL.test(id)) continue;
 
+      // `row.cells[null]` is undefined too, so the null checks on the optional
+      // columns are for the type; and `statusText` is read only beside a cell.
       const statusCell = schema.status === null ? undefined : row.cells[schema.status];
       const statusText = statusCell ? flatten(statusCell.text) : '';
       const status: RegionStatus | null =
@@ -304,6 +322,8 @@ function readSchema(table: Table): TableSchema | null {
     if (title === null && TITLE_COLUMNS.test(name)) title = column;
   });
 
+  // Without an id column every row would be skipped for want of an id cell;
+  // this says so before reading any of them.
   if (id === null) return null;
   if (status === null && relations.length === 0) return null;
   return { id, status, title, relations };
@@ -341,6 +361,8 @@ function splitTargets(cell: TableCell): { text: string; start: number; end: numb
   let last = 0;
   for (let match = links.exec(cell.text); match !== null; match = links.exec(cell.text)) {
     prose(cell.text.slice(last, match.index));
+    // Both groups always take part in a match, so the `?? ''` below and in the
+    // label are for the type.
     const destination = (match[2] ?? '').trim();
     // A link states where its target lives; its label states only what the
     // target is called (ADR-0008). In a column the author has already typed,
@@ -410,6 +432,8 @@ function readLabelledStatus(scanned: ScannedDocument, start: number, end: number
 }
 
 function readHeadedStatus(scanned: ScannedDocument, start: number, end: number): RegionStatus | null {
+  // The upper bound decides nothing on its own: under a heading at or past
+  // `end` there is no line before `end`, and the loop below stops there.
   const heading = scanned.headings.find((h) => h.start >= start && h.start < end && isStatusHeading(h.text));
   if (!heading) return null;
 
@@ -428,7 +452,15 @@ function readHeadedStatus(scanned: ScannedDocument, start: number, end: number):
   return null;
 }
 
-/** The last `@spec-node` directive inside a region. */
+/**
+ * The last `@spec-node` directive inside a region: the one written last, which
+ * is the one a reader sees as the final word.
+ *
+ * Directives arrive in the order they were written, so each candidate starts
+ * after the one before it and the comparison below only restates that. And
+ * `start` is where a heading's line ends, a comment written on it included,
+ * so no directive begins exactly there and `<` against `<=` decides nothing.
+ */
 function directiveIn(directives: readonly Directive[], start: number, end: number): Directive | null {
   let found: Directive | null = null;
   for (const directive of directives) {
@@ -439,7 +471,13 @@ function directiveIn(directives: readonly Directive[], start: number, end: numbe
   return found;
 }
 
-/** Case- and separator-insensitive comparison, matching reference folding. */
+/**
+ * Case- and separator-insensitive comparison, matching reference folding.
+ *
+ * Applied to both sides of one comparison, so which case it folds to does not
+ * matter; the separators take every space with them, so the trim does not
+ * either; and `+` only saves work.
+ */
 function fold(value: string): string {
   return value.trim().toLowerCase().replace(/[\s._-]+/g, '');
 }
@@ -451,6 +489,8 @@ export function regionAt(regions: readonly SpecificationRegion[], offset: number
     // The whole-file region owns nothing in particular; it is the fallback.
     if (region.heading === null && region.row === null) continue;
     if (offset < region.start || offset >= region.end) continue;
+    // No two regions of one file open at the same offset, so `>` and `>=`
+    // agree here.
     if (best === null || region.start > best.start) best = region;
   }
   return best;

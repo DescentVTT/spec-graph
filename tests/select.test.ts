@@ -191,6 +191,93 @@ describe('attributes', () => {
     expect(attributesOf(item!, 'phase')).toEqual([]);
     expect(attributesOf(item!, 'path')).toEqual(['docs/adr/0004-new.md']);
   });
+
+  it('lets an item answer to its document\'s status and to every spelling of its name', () => {
+    // The README: items inherit their document's lifecycle, path and aliases.
+    const items = ['ADR-0004#open-questions.1', 'ADR-0004#open-questions.2', 'ADR-0004#open-questions.3'];
+    expect(ids('item[status=accepted]').sort()).toEqual(items);
+    expect(ids('item[alias=adr4]').sort()).toEqual(items);
+  });
+
+  it('answers title, file and document on either kind of node', () => {
+    expect(ids('document[title=Base]')).toEqual(['ADR-0001']);
+    expect(ids('*[file=docs/adr/0001-base.md]')).toEqual(['ADR-0001']);
+    // A document is its own document, so this is ADR-0004 and what it holds.
+    expect(ids('*[document=ADR-0004]').sort()).toEqual([
+      'ADR-0004',
+      'ADR-0004#open-questions.1',
+      'ADR-0004#open-questions.2',
+      'ADR-0004#open-questions.3',
+    ]);
+  });
+});
+
+describe('attributes a corpus has to be written for', () => {
+  const graph = (): SpecGraph =>
+    analyseSources([
+      {
+        path: 'docs/adr/0001-cache.md',
+        text: [
+          '---',
+          'status: accepted',
+          'owner: platform',
+          'reviewer: ""',
+          'tags: [cache, storage]',
+          '---',
+          '',
+          '# Use C++ for the cache',
+          '',
+          '## Open Questions',
+          '',
+          '- [ ] Eviction policy?',
+          '  Still argued about.',
+          '- [ ] Size? Resolved: 2 GB.',
+        ].join('\n'),
+      },
+      { path: 'docs/adr/0002-draft.md', text: '# A document that never says what state it is in\n' },
+    ]).graph;
+  const found = (selector: string): string[] => query(graph(), selector).map((m) => m.nodes[0]?.id ?? '');
+
+  it('answers status only where one was written', () => {
+    expect(found('document[status]')).toEqual(['ADR-0001']);
+    expect(found('document[status!=accepted]')).toEqual(['ADR-0002']);
+  });
+
+  it('reads front matter through the fm. namespace and nowhere else', () => {
+    expect(found('document[fm.owner=platform]')).toEqual(['ADR-0001']);
+    // An underscore for the dot is an unknown key, and an unknown key matches
+    // nothing rather than guessing which front-matter key was meant.
+    expect(found('document[fm_owner=platform]')).toEqual([]);
+  });
+
+  it('matches a list-valued front-matter key on any of its entries', () => {
+    expect(found('document[fm.tags=storage]')).toEqual(['ADR-0001']);
+    expect(found('document[fm.tags=cache]')).toEqual(['ADR-0001']);
+  });
+
+  it('does not count an empty value as present', () => {
+    expect(found('document[fm.owner]')).toEqual(['ADR-0001']);
+    expect(found('document[fm.reviewer]')).toEqual([]);
+  });
+
+  it('reads an item\'s first line as its text and all of it as its body', () => {
+    expect(found('item[text="Eviction policy?"]')).toEqual(['ADR-0001#open-questions.1']);
+    expect(found('item[body*=argued]')).toEqual(['ADR-0001#open-questions.1']);
+    expect(found('item[text*=argued]')).toEqual([]);
+  });
+
+  it('marks an item whose signals disagree about whether it is open', () => {
+    // An empty box under a body that says "Resolved" is worth a human's look.
+    expect(found('item[conflicted=true]')).toEqual(['ADR-0001#open-questions.2']);
+    expect(found('item[conflicted=false]')).toEqual(['ADR-0001#open-questions.1']);
+  });
+
+  it('matches = exactly, $= at the end only, and *= as literal text', () => {
+    expect(found('document[id=ADR-000]')).toEqual([]);
+    expect(found('document[id$=ADR]')).toEqual([]);
+    // `C++` is not a pattern, and matching it as one would refuse to compile.
+    expect(found('document[title*=c++]')).toEqual(['ADR-0001']);
+  });
 });
 
 describe('matching', () => {
@@ -310,6 +397,75 @@ describe('traversal', () => {
     expect(renderMatch(match!)).toBe('ADR-0004 -contains-> ADR-0004#open-questions.1 -delegates-to-> ADR-0002');
     expect(renderMatch({ nodes: [graph.document('ADR-0001')!], edges: [] })).toBe('ADR-0001');
   });
+
+  it('renders every node a transitive path passed through, and each edge the way it points', () => {
+    // `spec-graph query 'document[id=ADR-0009] =supersedes=> document'` is in
+    // the README. Reading the middle of a transitive path off its end printed
+    // `ADR-0004 -supersedes-> ADR-0002 -supersedes-> ADR-0002`, and a backward
+    // step printed as if the relation pointed the other way.
+    const graph = corpus();
+    const rendered = (selector: string): string[] => query(graph, selector).map(renderMatch).sort();
+    expect(rendered('document[id=ADR-0004] =supersedes=> document')).toEqual([
+      'ADR-0004 -supersedes-> ADR-0003',
+      'ADR-0004 -supersedes-> ADR-0003 -supersedes-> ADR-0002',
+    ]);
+    expect(rendered('document[id=ADR-0003] <-supersedes- document')).toEqual(['ADR-0003 <-supersedes- ADR-0004']);
+    expect(rendered('document[id=ADR-0002] <=supersedes= document')).toEqual([
+      'ADR-0002 <-supersedes- ADR-0003',
+      'ADR-0002 <-supersedes- ADR-0003 <-supersedes- ADR-0004',
+    ]);
+  });
+
+  it('reports a path once, however many relations join its nodes', () => {
+    const { graph } = analyseSources([
+      { path: 'docs/adr/0001-a.md', text: '---\nstatus: accepted\ndepends-on: ADR-0002\nassumes: ADR-0002\n---\n\n# A\n' },
+      { path: 'docs/adr/0002-b.md', text: '---\nstatus: accepted\n---\n\n# B\n' },
+    ]);
+    expect(graph.out('ADR-0001', ['depends-on', 'assumes'])).toHaveLength(2);
+    expect(query(graph, 'document[id=ADR-0001] --> document').map((m) => m.nodes[1]?.id)).toEqual(['ADR-0002']);
+  });
+
+  it('tells two paths apart by their nodes, not by their ids run together', () => {
+    // `a` then `bc`, and `ab` then `c`: the same letters, two different paths.
+    const doc = (name: string, dependsOn?: string): Source => ({
+      path: `docs/notes/${name}.md`,
+      text: `---\nstatus: accepted\n${dependsOn ? `depends-on: ${dependsOn}\n` : ''}---\n\n# ${name}\n`,
+    });
+    const { graph } = analyseSources([doc('a', 'bc'), doc('bc', 'x'), doc('ab', 'c'), doc('c', 'x'), doc('x')]);
+    const paths = query(graph, '* -depends-on-> * -depends-on-> document[id=x]').map((m) => m.nodes.map((n) => n.id).join(' > '));
+    expect(paths.sort()).toEqual(['a > bc > x', 'ab > c > x']);
+  });
+
+  it('walks backwards transitively by the shortest path, and reports each edge of it', () => {
+    // A reaches D directly and by way of B and C; the direct route is the one.
+    const doc = (name: string, dependsOn: string[] = []): Source => ({
+      path: `docs/adr/000${name}.md`,
+      text: `---\nstatus: accepted\n${dependsOn.length > 0 ? `depends-on: [${dependsOn.join(', ')}]\n` : ''}---\n\n# ${name}\n`,
+    });
+    const { graph } = analyseSources([doc('1', ['ADR-0002', 'ADR-0004']), doc('2', ['ADR-0003']), doc('3', ['ADR-0004']), doc('4')]);
+    const found = query(graph, 'document[id=ADR-0004] <=depends-on= document');
+    const hops = Object.fromEntries(found.map((m) => [m.nodes[1]?.id, m.edges.map((e) => `${e.from}>${e.to}`)]));
+    expect(hops).toEqual({
+      'ADR-0001': ['ADR-0001>ADR-0004'],
+      'ADR-0003': ['ADR-0003>ADR-0004'],
+      'ADR-0002': ['ADR-0003>ADR-0004', 'ADR-0002>ADR-0003'],
+    });
+  });
+
+  it('comes back round to where it started on a cycle, by the shortest way, in either direction', () => {
+    // P and Q depend on each other; P, R and S go round a longer loop.
+    const doc = (name: string, dependsOn: string[]): Source => ({
+      path: `docs/notes/${name}.md`,
+      text: `---\nstatus: accepted\ndepends-on: [${dependsOn.join(', ')}]\n---\n\n# ${name}\n`,
+    });
+    const { graph } = analyseSources([doc('p', ['q', 'r']), doc('q', ['p']), doc('r', ['s']), doc('s', ['p'])]);
+    const back = (selector: string): string[] | undefined =>
+      query(graph, selector)
+        .find((m) => m.nodes[1]?.id === 'p')
+        ?.edges.map((e) => `${e.from}>${e.to}`);
+    expect(back('document[id=p] =depends-on=> document')).toEqual(['p>q', 'q>p']);
+    expect(back('document[id=p] <=depends-on= document')).toEqual(['p>q', 'q>p'].reverse());
+  });
 });
 
 describe('reflexive edges', () => {
@@ -330,5 +486,34 @@ describe('reflexive edges', () => {
   it('can be opted into', () => {
     const found = execute(selfLinking(), parseQuery('document -depends-on-> document'), { allowReflexive: true });
     expect(found).toHaveLength(1);
+  });
+
+  it('are excluded from a transitive step that never leaves the document, and only from that', () => {
+    // An obligation handed to its own document goes nowhere. Handed on from
+    // there to another document, it has left, and that path is a relationship.
+    const { graph } = analyseSources([
+      {
+        path: 'docs/adr/0001-a.md',
+        text: [
+          '---',
+          'status: accepted',
+          'depends-on: ADR-0002',
+          '---',
+          '',
+          '# A',
+          '',
+          '## Open Questions',
+          '',
+          '- [ ] Which policy? Deferred to [ADR-0001](0001-a.md).',
+        ].join('\n'),
+      },
+      { path: 'docs/adr/0002-b.md', text: '---\nstatus: accepted\n---\n\n# B\n' },
+    ]);
+    const reached = (options: { allowReflexive?: boolean }): string[] =>
+      execute(graph, parseQuery('item =delegates-to,depends-on=> document'), options)
+        .map((m) => m.nodes[1]?.id ?? '')
+        .sort();
+    expect(reached({})).toEqual(['ADR-0002']);
+    expect(reached({ allowReflexive: true })).toEqual(['ADR-0001', 'ADR-0002']);
   });
 });

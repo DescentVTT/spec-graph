@@ -23,6 +23,22 @@ a patch fixes behaviour without asking anything of a repository that upgrades.
 - **A list item that opens a fence of five tildes is not struck through.**
   `~~~~~` begins and ends with `~~`, and read as a strikethrough of `~`, so
   the item read as done.
+- **`spec-graph query` prints a path the way the selector reads.** A
+  transitive step printed the end of its path in the middle of it:
+  `document[id=ADR-0004] =supersedes=> document`, the README's own kind of
+  query, printed `ADR-0004 -supersedes-> ADR-0002 -supersedes-> ADR-0002` for
+  a chain through ADR-0003. A backward step printed as a relation pointing the
+  other way. Every edge now names the node it reaches, as `-kind->` or
+  `<-kind-` in the direction it was walked. `--format json` was always right.
+- **A register row whose ID cell names nothing is not a specification.** A
+  row with only `?` in its ID cell, or a section whose `@spec-node` id is a
+  lone backslash, fell back to the file's own name: the file contained itself
+  and the row or section vanished. Such a row now stays part of the file, and
+  such a section keeps its heading's id.
+- **A declared id keeps its zero padding when its family has a digit in it.**
+  `id: S3-0012` was reported as `S3-12`, because the padding was read from the
+  first run of digits, which is the family's. An id is now written with the
+  number as it was declared. Citations resolved either way.
 
 ### Documentation
 

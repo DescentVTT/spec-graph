@@ -248,7 +248,11 @@ trusts:
   is a real dangling citation; `SHA-256` in the same repository is a sentence.
 - **Bare numbers are family-scoped.** `0007` inside an RFC means `RFC-0007`,
   never `ADR-0007`. A repository with both is ordinary, and guessing would be
-  worse than silence.
+  worse than silence. A document's family is the prefix of its identifier, or
+  else the nearest directory that names one: `adr/`, `adrs/`, `decisions/`,
+  `decision-records/` and `architecture-decisions/` hold ADRs; `rfc/` and
+  `rfcs/` RFCs; `kep/`, `keps/` and `enhancements/` KEPs; and `proposal(s)/`,
+  `design(s)/`, `prd(s)/` and `spec(s)/` a family each.
 - **Two candidates is worse than none.** An ambiguous citation is reported, not
   bound to whichever document was indexed first.
 - **Code never counts.** Links inside fences and inline spans are masked before
@@ -286,14 +290,18 @@ header you wrote:
 | ADR-0002 | Cache eviction | Accepted   | ADR-0001   | -             |
 ```
 
-Findings point at the declaring cell, not at the file.
+Findings point at the declaring cell, not at the file. A cell that is empty or
+holds only a placeholder — `-`, `—`, `n/a`, `none`, `nil`, `TBD` — says nothing.
 
-A row is named by its ID column, and a title is only a title. An identifier a
-title opens with belongs to the document the row is *about* — an issue reading
+A row is named by its ID column, and a title is only a title. A row whose ID cell
+names nothing — empty, a placeholder, or a `?` nobody has numbered yet — is not a
+specification. An identifier a title opens with belongs to the document the row
+is *about* — an issue reading
 `| OI-V-05 | ADR-040's enforcement point has no browser test |` is filed under
 `OI-V-05`, and citations of `ADR-040` still reach `ADR-040`. The same holds for
-a whole file: an explicit `id:`, then the file name, then the H1, and the H1 is
-read as a name only when neither of the others gave one.
+a whole file: an explicit `id:` (or `adr:`, `adr-id:`, `rfc:`, `rfc-id:`,
+`kep-number:`, `number:` or `slug:`), then the file name, then the H1, and the
+H1 is read as a name only when neither of the others gave one.
 
 The register itself stays in the graph as the thing that holds them, so
 `spec-graph query 'document[id=register] -contains-> document'` lists what is
@@ -441,7 +449,7 @@ document[phase=active] -delegates-to-> item[openness=open]
 └──────┘└────────────┘ └─────────────┘ └─────────────────┘
   node    predicate       relation            node
 
-Node types   document · item · *
+Node types   document · item · *        (also documents docs doc items nodes node any)
 Attributes   id kind title path file line phase status receptivity alias
              document state (or disposition) openness section text body
              evidence conflicted fm.<front-matter-key>
@@ -450,9 +458,12 @@ Relations    -kind->   <-kind-   =kind=>   <=kind=      (= forms are transitive)
              comma-separate kinds: -assumes,depends-on->
 ```
 
-Items inherit their document's lifecycle, so `item[phase=retired]` means what you
-expect. A query evaluates to **paths**, not endpoints, which is why a finding can
-name both ends and the line that connects them.
+Items inherit their document's lifecycle - `phase`, `receptivity`, `status` - and
+answer to its `path` and its `alias` spellings, so `item[phase=retired]` means
+what you expect. A query evaluates to **paths**, not endpoints, which is why a
+finding can name both ends and the line that connects them, and `query` prints
+each one the way the selector reads, every document a transitive step passed
+through included.
 
 `~=` is a regular expression matched by an automaton that cannot backtrack, so a
 predicate is linear in the subject whatever the pattern — `^([A-Za-z0-9_]+[ ]?)+$`

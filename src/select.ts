@@ -21,7 +21,6 @@
  */
 
 import { receptivityOf } from './lifecycle.js';
-import { documentOf } from './resolve.js';
 import type { SpecGraph } from './graph.js';
 import { EDGE_KINDS, type Edge, type EdgeKind, type NodeKind, type SpecNode } from './types.js';
 import { compileRegex, RegexError, type RegexMatcher } from './vendor/spec-core/pattern/index.js';
@@ -58,7 +57,13 @@ export interface QuerySpec {
   readonly steps: readonly StepSpec[];
 }
 
-/** One path through the graph. `edges` always has one fewer entry than `nodes`. */
+/**
+ * One path through the graph.
+ *
+ * `nodes` holds the start and the node each step matched; `edges` is the whole
+ * path in order. A transitive step contributes one node and every edge it
+ * walked, so the nodes it passed through are named only by those edges.
+ */
 export interface Match {
   readonly nodes: readonly SpecNode[];
   readonly edges: readonly Edge[];
@@ -121,6 +126,9 @@ class Parser {
   }
 
   skipSpace(): void {
+    // The bound decides nothing: past the end the character is `undefined`,
+    // which `test` reads as the word "undefined" and rejects. It is kept so the
+    // loop does not lean on that.
     while (this.position < this.source.length && /\s/.test(this.source[this.position] as string)) this.position += 1;
   }
 
@@ -196,6 +204,8 @@ class Parser {
       let out = '';
       while (this.position < this.source.length && this.source[this.position] !== quote) {
         if (this.source[this.position] === '\\') this.position += 1;
+        // `?? ''` meets only a backslash at the very end, and the value it
+        // builds then is thrown away with the unterminated quote below.
         out += this.source[this.position] ?? '';
         this.position += 1;
       }
@@ -203,6 +213,8 @@ class Parser {
       this.position += 1;
       return out;
     }
+    // The anchor decides nothing, since a starred class matches the empty
+    // string where the search starts; it says where the value begins.
     const match = /^[^\]\s]*/.exec(this.source.slice(this.position));
     const value = (match?.[0] ?? '') as string;
     this.position += value.length;
@@ -218,7 +230,9 @@ class Parser {
     const forward = /^(-|=)([A-Za-z,*-]*?)(->|=>)/.exec(rest);
     const backward = /^(<-|<=)([A-Za-z,*-]*)(-|=)(?=\s|$|[A-Za-z*[])/.exec(rest);
 
-    if (forward && (!backward || (forward.index ?? 0) <= (backward.index ?? 0))) {
+    // Both are anchored where the step starts and open with different
+    // characters, so at most one of them matches.
+    if (forward) {
       const transitive = (forward[1] as string) === '=';
       const closing = forward[3] as string;
       if ((closing === '=>') !== transitive) {
@@ -246,18 +260,26 @@ class Parser {
     );
   }
 
+  /**
+   * Reads the relation list between a step's arrows.
+   *
+   * Nothing is trimmed, because the step patterns admit no whitespace inside
+   * an arrow. An empty list is not a special case either: it splits into one
+   * empty name, which is skipped, and no names at all means any relation.
+   */
   private parseKinds(raw: string, offset: number): readonly EdgeKind[] | null {
-    const trimmed = raw.trim();
-    if (trimmed.length === 0 || trimmed === '*') return null;
+    if (raw === '*') return null;
     const kinds: EdgeKind[] = [];
-    for (const part of trimmed.split(',')) {
-      const name = part.trim().toLowerCase();
+    for (const part of raw.split(',')) {
+      const name = part.toLowerCase();
       if (name.length === 0) continue;
       if (!(EDGE_KINDS as readonly string[]).includes(name)) {
         throw new QueryError(`unknown relation "${name}", expected one of: ${EDGE_KINDS.join(', ')}`, offset);
       }
       kinds.push(name as EdgeKind);
     }
+    // `null` rather than an empty list, which the graph would read the same
+    // way: the spec says "any relation" in the form its type documents.
     return kinds.length > 0 ? kinds : null;
   }
 }
@@ -318,8 +340,6 @@ export function attributesOf(node: SpecNode, key: string, graph?: SpecGraph): st
       return [String(node.at.span.start.line)];
     case 'document':
       return [node.kind === 'item' ? node.document : node.id];
-    default:
-      break;
   }
 
   if (node.kind === 'document') {
@@ -334,8 +354,6 @@ export function attributesOf(node: SpecNode, key: string, graph?: SpecGraph): st
         return [receptivityOf(node.phase)];
       case 'alias':
         return [...node.aliases];
-      default:
-        break;
     }
     if (key.startsWith('fm.')) {
       const value = node.frontMatter[key.slice(3)];
@@ -397,6 +415,8 @@ function testPredicate(node: SpecNode, predicate: Predicate, graph?: SpecGraph):
       case '~=':
         return pattern(predicate.value).test(raw);
       default:
+        // Unreachable: `exists` and `!=` returned above, and the type knows
+        // no other operator. Narrowing does not reach into this callback.
         return false;
     }
   });
@@ -409,6 +429,8 @@ const patterns = new Map<string, RegexMatcher>();
  *
  * Cached because a rule runs its predicate against every node in the corpus,
  * and because compiling is the expensive half now that matching is linear.
+ * The cache changes the cost and nothing else: a pattern compiled twice
+ * matches what it matched once.
  */
 export function pattern(source: string): RegexMatcher {
   const cached = patterns.get(source);
@@ -482,6 +504,8 @@ export function execute(graph: SpecGraph, spec: QuerySpec, options: ExecuteOptio
     }
 
     frontier = next;
+    // An empty frontier stays empty through every later step; this only stops
+    // walking them.
     if (frontier.length === 0) break;
   }
 
@@ -493,6 +517,9 @@ interface Expansion {
   readonly path: readonly Edge[];
 }
 
+// `buildGraph` drops every edge that names an unknown node, so the `if (node)`
+// guards below never skip anything in a graph it built. They stand for a
+// `SpecGraph` built some other way.
 function expand(graph: SpecGraph, from: SpecNode, step: StepSpec, allowReflexive: boolean): Expansion[] {
   const kinds = step.kinds ?? [];
   const out: Expansion[] = [];
@@ -551,13 +578,22 @@ export function query(graph: SpecGraph, selector: string, options?: ExecuteOptio
   return execute(graph, parseQuery(selector), options);
 }
 
-/** Renders a match as `A -kind-> B`, for reports and for `--explain`. */
+/**
+ * Renders a match the way the selector reads, for `spec-graph query`.
+ *
+ * Every edge is written in the direction it was walked - `A -kind-> B`
+ * forwards, `A <-kind- B` backwards - and names the node it arrives at, so a
+ * transitive step shows each document it passed through. Reading the nodes off
+ * `match.nodes` instead printed the end of a transitive path in its middle, and
+ * a backward step as a relation pointing the other way.
+ */
 export function renderMatch(match: Match): string {
-  const parts: string[] = [match.nodes[0]?.id ?? ''];
-  for (let i = 0; i < match.edges.length; i += 1) {
-    const edge = match.edges[i] as Edge;
-    const node = match.nodes[i + 1];
-    parts.push(`-${edge.kind}->`, node?.id ?? documentOf(edge.to));
+  let at = (match.nodes[0] as SpecNode).id;
+  const parts: string[] = [at];
+  for (const edge of match.edges) {
+    const forwards = edge.from === at;
+    at = forwards ? edge.to : edge.from;
+    parts.push(forwards ? `-${edge.kind}->` : `<-${edge.kind}-`, at);
   }
   return parts.join(' ');
 }
