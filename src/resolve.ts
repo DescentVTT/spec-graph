@@ -87,6 +87,10 @@ export interface ResolvedCorpus {
   readonly suppressed: readonly SuppressedRef[];
 }
 
+/**
+ * Every set in these maps is created holding its first member, so an entry
+ * that is there is never empty and a lookup asks only whether it is there.
+ */
 interface Index {
   readonly byId: Map<string, string>;
   readonly byAlias: Map<string, Set<string>>;
@@ -162,9 +166,14 @@ export function resolveCorpus(
   const byKey = new Map<string, number>();
 
   // Structural edges: a register contains the specifications written inside it.
+  // A duplicate id leaves another file's document under that id, so the edge is
+  // drawn only from this file's own document to a region of it the graph kept:
+  // checked by presence alone, it said an unrelated file held the row. A
+  // region's file is extracted before it, so its container's id is taken.
   for (const entry of extracted) {
     if (entry.containerId === null) continue;
-    if (!nodes.has(entry.containerId) || !nodes.has(entry.document.id)) continue;
+    const container = nodes.get(entry.containerId) as SpecNode;
+    if (container.at.file !== entry.document.at.file || nodes.get(entry.document.id) !== entry.document) continue;
     edges.push({
       kind: 'contains',
       from: entry.containerId,
@@ -289,6 +298,8 @@ function buildIndex(extracted: readonly ExtractedDocument[]): Index {
     for (const item of entry.items) index.itemIds.add(item.id);
   }
 
+  // A bucket seeded with anything but the empty list would hold a spelling no
+  // document answers to, which a suggestion finds no id for and skips.
   for (const alias of index.byAlias.keys()) {
     const bucket = index.aliasesByLength.get(alias.length) ?? [];
     bucket.push(alias);
@@ -304,21 +315,29 @@ function stemOf(path: string): string {
   return base.slice(0, base.length - extnamePosix(base).length);
 }
 
-/** Every spelling of a path that addresses a file without naming it exactly. */
+/**
+ * Every spelling of a path that addresses a file without naming it exactly.
+ *
+ * None of them is ever a file's own whole path, and one that is another file's
+ * - the stem of `docs/a.md.md` is `docs/a.md` - cannot make a link to that file
+ * ambiguous, because `lookupExact` asks for the literal path first.
+ */
 function pathAliases(path: string): string[] {
   const keys = new Set<string>();
   const extension = extnamePosix(path);
+  // Without an extension the stem is the path itself, which the literal path
+  // already answers to first: adding it anyway changes no lookup.
   if (extension.length > 0) keys.add(path.slice(0, path.length - extension.length).toLowerCase());
   // `docs/adr/0007/README.md` is also addressed as `docs/adr/0007`.
   const base = basenamePosix(path);
   if (/^(readme|index)\./i.test(base)) {
+    // A repository-relative path never starts with `/`, so this is never
+    // empty and the check decides nothing. At the root it is the name cut
+    // short, `readme.m`: `.m` is not a document's extension, so only a link
+    // that percent-escaped that dot would ever be looked up by it.
     const parent = path.slice(0, path.length - base.length - 1);
     if (parent.length > 0) keys.add(parent.toLowerCase());
   }
-  // A file never addresses itself inexactly. Leaving this in would let a
-  // contrived name - `docs/a.md.md`, whose stem is another file's whole path -
-  // make an exact link look ambiguous.
-  keys.delete(path.toLowerCase());
   return [...keys];
 }
 
@@ -335,7 +354,9 @@ function resolveOne(
 ): Edge | DanglingRef | SuppressedRef | null {
   const { target: bare, anchor } = splitAnchor(candidate.target);
 
-  // A pure `#anchor` points inside the citing document.
+  // A pure `#anchor` points inside the citing document. Extraction never hands
+  // over an empty target, so an empty part before the `#` always has an anchor
+  // after it: the second test is for the type.
   if (bare.length === 0 && anchor !== null) {
     return bindAnchor(candidate, entry.document.id, anchor, index, nodes, options);
   }
@@ -396,6 +417,8 @@ interface Lookup {
  * `decodeURIComponent` throws on it.
  */
 function percentDecoded(target: string): string | null {
+  // Either test stands in for the other: with no `%` the decode gives the text
+  // back unchanged, and with one a decode that succeeds always changes it.
   if (!target.includes('%')) return null;
   try {
     const decoded = decodeURIComponent(target);
@@ -405,6 +428,7 @@ function percentDecoded(target: string): string | null {
   }
 }
 
+/** `near` is read only when nothing resolved, so what the early returns put there is never read. */
 function lookup(target: string, entry: ExtractedDocument, index: Index): Lookup {
   const exact = lookupExact(target, entry, index);
   if (exact.length > 0) return { ids: exact, near: [] };
@@ -431,11 +455,11 @@ function lookupExact(target: string, entry: ExtractedDocument, index: Index): re
     // ambiguous-reference the author can settle, rather than a silent pick of
     // whichever happened to be indexed last.
     const spelled = index.byPathAlias.get(resolved);
-    if (spelled && spelled.size > 0) return [...spelled];
+    if (spelled) return [...spelled];
     // A path may still be spelled as an identifier in a nested folder layout.
     const stem = basenamePosix(resolved);
     const byStem = index.byAlias.get(normaliseRef(stem.replace(/\.[^.]+$/, '')));
-    if (byStem && byStem.size > 0) return [...byStem];
+    if (byStem) return [...byStem];
     return [];
   }
 
@@ -446,24 +470,26 @@ function lookupExact(target: string, entry: ExtractedDocument, index: Index): re
   if (byId) return [byId];
 
   const byAlias = index.byAlias.get(key);
-  if (byAlias && byAlias.size > 0) return [...byAlias];
+  if (byAlias) return [...byAlias];
 
   const prefixed = parsePrefixedRef(target);
   if (prefixed) {
     const byFamily = index.byFamilyNumber.get(`${prefixed.family}:${prefixed.number}`);
-    if (byFamily && byFamily.size > 0) return [...byFamily];
+    if (byFamily) return [...byFamily];
     return [];
   }
 
   // A bare number resolves only inside the citing document's own family. A
   // repository with both `adr/0007` and `rfc/0007` is ordinary, and guessing
   // between them would be worse than reporting nothing.
+  // Without a number, or without a family, the key names no entry either, so
+  // the two tests that return early save a lookup and decide nothing alone.
   const number = parseBareRef(target);
   if (number !== null) {
     const family = index.familyOf.get(entry.document.id) ?? null;
     if (family === null) return [];
     const byFamily = index.byFamilyNumber.get(`${family}:${number}`);
-    if (byFamily && byFamily.size > 0) return [...byFamily];
+    if (byFamily) return [...byFamily];
   }
 
   return [];
@@ -529,6 +555,8 @@ function nearMisses(target: string, entry: ExtractedDocument, index: Index): str
   const key = normaliseRef(target);
   if (key.length < MIN_SUGGESTIBLE) return [];
   const hits: string[] = [];
+  // Every bucketed spelling is a key of `byAlias`, so its `?? []` is for the
+  // type; and a spelling in place of an empty bucket names no document here.
   for (const length of [key.length - 1, key.length, key.length + 1]) {
     for (const alias of index.aliasesByLength.get(length) ?? []) {
       if (!withinOneEdit(alias, key)) continue;
@@ -607,13 +635,15 @@ function bindAnchor(
   const itemId = `${documentId}#${anchor}`;
   if (index.itemIds.has(itemId)) return makeEdge(candidate, itemId);
 
-  const anchors = index.anchors.get(documentId);
-  if (anchors?.has(anchor.toLowerCase())) return makeEdge(candidate, documentId);
+  // Every document, a file or a region of one, registered its anchors, and a
+  // document id here is always one of theirs.
+  const anchors = index.anchors.get(documentId) as ReadonlySet<string>;
+  if (anchors.has(anchor.toLowerCase())) return makeEdge(candidate, documentId);
 
   // Some renderers slugify differently; try the loosest reasonable match before
   // calling it broken.
   const loose = anchor.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-|-$/g, '');
-  if (anchors?.has(loose)) return makeEdge(candidate, documentId);
+  if (anchors.has(loose)) return makeEdge(candidate, documentId);
 
   const silenced = filteredBy(candidate.target, splitAnchor(candidate.target).target, options);
   if (silenced !== null) return suppression(candidate, silenced);

@@ -85,6 +85,12 @@ a patch fixes behaviour without asking anything of a repository that upgrades.
   title, `ADR-0002: B`, for its own status. A line that opens a heading ends
   the search now, whichever kind of heading it is; one that starts with `#`
   and is not a heading is read.
+- **A duplicate document id draws no containment between unrelated files.** A
+  register whose own id another file already had was drawn as that other
+  file containing the register's rows, and a row whose id another file had
+  was drawn inside the register as that other file. Containment is drawn only
+  between a file and a region of it the graph kept; the duplicate is still
+  reported as a parse problem.
 
 ### Documentation
 
