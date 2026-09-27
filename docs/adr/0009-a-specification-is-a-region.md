@@ -86,6 +86,13 @@ Three further details keep the model honest:
 - **Cells a column already typed are skipped by prose scanning**, so a link in a
   `Depends on` column yields one typed edge rather than a typed edge and a
   neutral citation beside it.
+
+  *Amended 2026-09-27.* **A status cell types nothing, so it is not skipped.**
+  It was, and so a row whose status read `Superseded by` and a successor named
+  no successor, where the same words on a status line under a heading did: the
+  two forms of one register disagreed about what it said. The status cell is
+  read as that status line is read now, which is what "the same way" above
+  promised.
 - **A link in such a cell is read by its destination, not its label.** A link
   states where its target lives; the label states only what it is called
   ([ADR-0008](0008-wiki-links-carry-no-path.md)). `[see](adr/0050.md)` is a

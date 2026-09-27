@@ -254,8 +254,10 @@ export function findTableRegions(scanned: ScannedDocument): SpecificationRegion[
       const title = titleCell ? flatten(titleCell.text) : null;
 
       const relations: TableRelation[] = [];
+      // The status cell is left to prose, as a status line under a heading is:
+      // `Superseded by ADR-0002` there names the row's successor, and claimed
+      // it named nothing at all.
       const claimed: Range[] = [{ start: idCell.start, end: idCell.end }];
-      if (statusCell) claimed.push({ start: statusCell.start, end: statusCell.end });
 
       for (const [column, relation] of schema.relations) {
         const cell = row.cells[column];

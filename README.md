@@ -319,6 +319,8 @@ header you wrote:
 
 Findings point at the declaring cell, not at the file. A cell that is empty or
 holds only a placeholder — `-`, `—`, `n/a`, `none`, `nil`, `TBD` — says nothing.
+A status cell is read as a status line under a heading is, so
+`Superseded by ADR-0003` there names the row's successor.
 
 A row is named by its ID column, and a title is only a title. A row whose ID cell
 names nothing — empty, a placeholder, or a `?` nobody has numbered yet — is not a

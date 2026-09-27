@@ -74,6 +74,11 @@ a patch fixes behaviour without asking anything of a repository that upgrades.
   two, though nothing in it is passed back. Two documents delegating to each
   other are still a cycle, as is a question handed anywhere but to the
   document that superseded the one handing it.
+- **A register row whose status cell says `Superseded by ADR-0002` is
+  superseded by ADR-0002**, as a section of a register kept under headings
+  already was. The status cell was skipped by prose scanning like a relation
+  column, though it types no relation, so the row was retired with no
+  successor.
 
 ### Documentation
 
