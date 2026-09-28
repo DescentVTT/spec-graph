@@ -3,6 +3,26 @@
 Notable changes, newest first. Versions follow [semver](https://semver.org):
 a patch fixes behaviour without asking anything of a repository that upgrades.
 
+## Unreleased
+
+### Fixed
+
+- **A plain name for a directory the walk skips reads that directory.**
+  `spec-graph check docs/vendor` and `spec-graph check vendor` found nothing
+  and stopped with exit `2`, where `docs/vendor/` read the directory: a name
+  with no slash at its end may be a file, so its walk started in the directory
+  above, and that walk pruned `vendor` on its way in. The default list now
+  gives way to the directory a pattern names outright, as it gives way to one a
+  pattern starts inside - `docs/vendor`, `vendor/dist`, or a literal a brace
+  expands to, `docs/{vendor,drafts}` - and the rest of the list is still
+  pruned inside it. A file of that name is read as the file, as before; every
+  directory no pattern names is skipped, and a negated name names none. A
+  bare `--ignore` name still prunes it at any depth, and a path `--ignore`
+  still takes it out where it takes it out of a walk passing through
+  (ADR-0022). No configuration in this repository, its fixtures or the rest of
+  the family names such a directory, and over them every `check` format and
+  every graph export is byte for byte what 0.9.7 wrote.
+
 ## 0.9.7
 
 spec-core at f9ce375. A `/` ending a brace alternative means what it means

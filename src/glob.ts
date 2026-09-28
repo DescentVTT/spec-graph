@@ -331,7 +331,7 @@ export async function walkFiles(options: WalkOptions): Promise<WalkedFile[]> {
   // a typo or an unset variable, and was an ignore that ignored nothing.
   const bare = (pattern: string): boolean => pattern.length > 0 && !isGlob(pattern) && !pattern.includes('/');
   const named = new Set(ignores.filter(bare));
-  const ignoredNames = new Set([...DEFAULT_IGNORED_DIRECTORIES, ...named]);
+  const skippedByDefault = new Set(DEFAULT_IGNORED_DIRECTORIES);
   const ignoreList = pathList(ignores.filter((pattern) => !bare(pattern)));
   const excluded = (path: string): boolean => ignoreList.match(path);
 
@@ -342,9 +342,27 @@ export async function walkFiles(options: WalkOptions): Promise<WalkedFile[]> {
   // Markdown file in `node_modules`. No positive pattern at all walks nothing,
   // which is the answer.
   const bases = new Set<string>();
+  // The paths a positive pattern names outright: `docs/vendor`, or each literal
+  // a brace expands to. Such a name may be a file, so its walk starts in the
+  // directory above, which pruned `vendor` on its way in: `docs/vendor` found
+  // nothing where `docs/vendor/` read the directory. The default list gives way
+  // to the directory a pattern names as it gives way to one a pattern starts
+  // inside. A negated name adds none, for the reason it adds no base.
+  const literals = new Set<string>();
   for (const entry of patterns.entries) {
     if (entry.negated) continue;
     for (const base of entry.glob.bases) bases.add(base);
+    // The dialect is what knows a literal when it reads one, so each pattern
+    // is compiled a second time to be told of them. That glob is thrown away:
+    // the reading answered here decides nothing, and a mutant that changes it
+    // is equivalent.
+    parseGlob(entry.glob.source, {
+      ...PATH,
+      literal: (path) => {
+        literals.add(path);
+        return 'either';
+      },
+    });
   }
   // Every base is walked, even one inside another, because the outer walk
   // prunes `vendor` and the rest of the default list on its way down, and a
@@ -380,7 +398,9 @@ export async function walkFiles(options: WalkOptions): Promise<WalkedFile[]> {
       if (entry.isDirectory()) {
         // Pruning a whole subtree is an optimisation; a pattern that only
         // matches the files inside it is still honoured when they are filtered.
-        if (ignoredNames.has(entry.name) || excluded(child)) continue;
+        // A bare `--ignore` name prunes a directory a pattern names as well:
+        // only the default list gives way.
+        if (named.has(entry.name) || (skippedByDefault.has(entry.name) && !literals.has(child)) || excluded(child)) continue;
         await walk(child);
         continue;
       }
