@@ -5,8 +5,37 @@ a patch fixes behaviour without asking anything of a repository that upgrades.
 
 ## Unreleased
 
+### Changed
+
+- **spec-core 56c7e54: a refusal of braces names the alternative that names
+  no path.** `{/,docs}`, `{//,docs}` and `{.,docs}` stop the run on
+  `invalid glob "{/,docs}": the braces expand to "/", which names no path`
+  and the like, where they said `the pattern names no path` of a pattern
+  that names `docs`; `{,docs}`, `{docs,}` and `{}` stop it on
+  `the braces expand to an empty pattern`. The exit `2` is as it was, and a
+  pattern without braces is refused in the words it was (ADR-0022).
+
 ### Fixed
 
+- **spec-core 56c7e54: a brace alternative that names no path is refused,
+  as the same text written alone is.** `./` alone stopped the run, but
+  `{./,docs}` read every path: inside braces its slash was read first, as
+  the contents of `.`. As a pattern to check it read every Markdown file in
+  the repository; as an `--ignore` it took every one out and stopped on
+  `no specifications matched`; as a `--history` pattern it made every
+  document a record, whose links are checked and whose open items are
+  nobody's; and as an `--ignore-ref` it passed over every reference target,
+  so no reference was reported broken. `{docs,./}`, `{.//,docs}` and `.{/,docs}` did the same.
+  Each now stops the run with exit `2` on
+  `invalid glob "{./,docs}": the braces expand to "./", which names no path`,
+  from the configuration as from the command line. Outside braces, `/./` and
+  `/.//` are refused as `/.` is, `the pattern names no path`, where as a
+  pattern they found nothing and as an `--ignore` or `--history` pattern
+  matched nothing. A `./` inside an alternative that names a path is dropped
+  as before: `docs/{./,adr}` and `{./docs,specs}` read what they read
+  (ADR-0022). No configuration in this repository, its fixtures or the rest
+  of the family writes such a pattern, and over them every `check` format
+  and every graph export is byte for byte what 0.9.7 wrote.
 - **A plain name for a directory the walk skips reads that directory.**
   `spec-graph check docs/vendor` and `spec-graph check vendor` found nothing
   and stopped with exit `2`, where `docs/vendor/` read the directory: a name

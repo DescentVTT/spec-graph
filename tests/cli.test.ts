@@ -448,6 +448,28 @@ describe('a configuration that did not load', () => {
     });
   });
 
+  it('refuses a brace alternative that names no path, wherever a pattern is read', async () => {
+    // `./` alone was refused, and `{./,docs}` read every path: the patterns
+    // checked every Markdown file in the repository, `--ignore` took every one
+    // out, `--history` made every document a record, and `--ignore-ref`
+    // passed over every reference target (spec-core 56c7e54).
+    const refusal = 'spec-graph: invalid glob "{./,docs}": the braces expand to "./", which names no path\n';
+    const project = ['--root', 'tests/fixtures/project', '--no-config'];
+    for (const argv of [['{./,docs}'], ['--ignore', '{./,docs}'], ['--history', '{./,docs}'], ['--ignore-ref', '{./,docs}']]) {
+      const result = await run('check', ...argv, ...project);
+      expect(result.code, argv[0]).toBe(EXIT_ERROR);
+      expect(result.err).toBe(refusal);
+      expect(result.out).toBe('');
+    }
+    for (const key of ['patterns', 'ignore']) {
+      await withConfig(`cli-no-path-${key}`, `{ "${key}": ["{./,docs}"] }\n`, async (root) => {
+        const result = await run('check', '--root', root);
+        expect(result.code, key).toBe(EXIT_ERROR);
+        expect(result.err).toBe(refusal);
+      });
+    }
+  });
+
   it('refuses an empty pattern wherever a pattern is read', async () => {
     // Four of these were refused and `--ignore ""` was a directory nothing is
     // called. An empty pattern is a typo or an unset variable, whichever list

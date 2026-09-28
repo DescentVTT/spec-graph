@@ -105,6 +105,27 @@ refused as the rest are: `invalid glob "<pattern>": the pattern compiles to
 more than 65536 states`. Braces that expand to more than 256 patterns were
 refused that way already.
 
+*Amended 2026-09-29.* A brace alternative that names no path is refused, as
+the same text written alone is, from spec-core 56c7e54. `./` alone was
+refused, but inside braces its slash was read first, as the contents of `.`,
+so `{./,docs}`, `{docs,./}`, `{.//,docs}` and `.{/,docs}` matched every path:
+as patterns to check they read every Markdown file in the repository, as an
+`--ignore` they took every one out, as a `--history` pattern they made every
+document a record, and as an `--ignore-ref` they passed over every reference
+target - `--ignore-ref` reads a `.` segment as text only outside braces.
+Each is now `invalid glob "{./,docs}": the braces expand to "./", which
+names no path`, and the refusals that already happened name the alternative
+too: `{/,docs}`, `{//,docs}` and `{.,docs}` say `the braces expand to "/",
+which names no path` and the like, where they said `the pattern names no
+path` of a pattern that names `docs`, and `{,docs}`, `{docs,}` and `{}` say
+`the braces expand to an empty pattern`. Outside braces, `/./` and `/.//`
+are refused as `/.` is: they matched every rooted path, which no path the
+walk finds is. A `./` beside a name still counts for nothing: `docs/{./,adr}`
+is `docs/` or `docs/adr`, and `{./docs,specs}` is `docs` or `specs`. Such a
+pattern is refused as the list is compiled, before the walk compiles each
+positive pattern again to be told the literals it names, and before any
+directory is read.
+
 Two refusals are narrower than they could be, on purpose. `**` inside a name
 is refused rather than read as `*`: the tools the dialect replaced read
 `docs/**.md` three ways, and the quiet reading turned a scope that reached every

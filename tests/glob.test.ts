@@ -228,9 +228,37 @@ describe('the dialect every spec-* tool reads', () => {
     expect(() => createGlobMatcher(['docs/../specs'])).toThrow('a pattern cannot climb out of its root');
     expect(() => createGlobMatcher(['../elsewhere/**'])).toThrow('a pattern cannot climb out of its root');
     // A brace alternative of slashes alone names the root, and is refused
-    // rather than read as everything under it.
-    expect(() => createGlobMatcher(['{/,docs}'])).toThrow('invalid glob "{/,docs}": the pattern names no path');
-    expect(() => createGlobMatcher(['{//,docs}'])).toThrow('invalid glob "{//,docs}": the pattern names no path');
+    // rather than read as everything under it. The refusal names the
+    // alternative: it said `the pattern names no path` of a pattern that
+    // names `docs` (spec-core 56c7e54).
+    expect(() => createGlobMatcher(['{/,docs}'])).toThrow('invalid glob "{/,docs}": the braces expand to "/", which names no path');
+    expect(() => createGlobMatcher(['{//,docs}'])).toThrow('invalid glob "{//,docs}": the braces expand to "//", which names no path');
+  });
+
+  it('refuses a brace alternative that names no path, which read as every path', () => {
+    // `./` alone is refused, but inside braces its slash was read first, as
+    // the contents of `.`: `{./,docs}` matched every path, and in a reference
+    // filter every target (spec-core 56c7e54).
+    const refusal = 'invalid glob "{./,docs}": the braces expand to "./", which names no path';
+    expect(() => createGlobMatcher(['{./,docs}'])).toThrow(refusal);
+    expect(() => createGlobMatcher(['docs/adr/*.md', '!{./,docs}'])).toThrow('invalid glob "!{./,docs}": the braces expand to "./"');
+    expect(() => compileGlob('{./,docs}')).toThrow(refusal);
+    expect(() => globBase('{./,docs}')).toThrow(refusal);
+    expect(() => createReferenceFilter(['{./,docs}'])).toThrow(refusal);
+    // Named as the braces gave it, wherever it stands in them.
+    expect(() => createGlobMatcher(['{docs,./}'])).toThrow('invalid glob "{docs,./}": the braces expand to "./", which names no path');
+    expect(() => createGlobMatcher(['{.//,docs}'])).toThrow('invalid glob "{.//,docs}": the braces expand to ".//", which names no path');
+    expect(() => createGlobMatcher(['.{/,docs}'])).toThrow('invalid glob ".{/,docs}": the braces expand to "./", which names no path');
+    expect(() => createGlobMatcher(['{,docs}'])).toThrow('invalid glob "{,docs}": the braces expand to an empty pattern');
+    // Outside braces, `/./` is refused as `/.` is. It matched every rooted
+    // path, which no repository-relative one is, so as an `--ignore` it
+    // ignored nothing.
+    expect(() => createGlobMatcher(['/./'])).toThrow('invalid glob "/./": the pattern names no path');
+    // A `./` inside a pattern that names a path is dropped, as it always was.
+    const inside = createGlobMatcher(['docs/{./,adr}']);
+    expect(inside('docs/a.md')).toBe(true);
+    expect(inside('specs/a.md')).toBe(false);
+    expect(createGlobMatcher(['{./docs,specs}'])('docs/a.md')).toBe(true);
   });
 
   it('never matches a separator with a class, negated or not', () => {
