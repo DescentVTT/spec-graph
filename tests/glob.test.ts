@@ -88,6 +88,21 @@ describe('glob compilation', () => {
     expect(() => createGlobMatcher(['docs/**', 'docs/{a'])).toThrow('invalid glob "docs/{a": a "{" is never closed');
   });
 
+  it('refuses a pattern too large to compile as it refuses a malformed one, naming it', async () => {
+    // 256 alternatives of 308 characters each, past the 65,536 states the
+    // automaton may hold. It escaped as spec-core's `AutomatonTooLarge`, whose
+    // message named no pattern (spec-core f9ce375).
+    const huge = `${'{a,b}'.repeat(8)}${'x'.repeat(300)}`;
+    const refusal = `invalid glob "${huge}": the pattern compiles to more than 65536 states`;
+    expect(() => compileGlob(huge)).toThrow(refusal);
+    expect(() => createGlobMatcher(['docs/**', huge])).toThrow(refusal);
+    expect(() => createReferenceFilter([huge])).toThrow(refusal);
+    expect(() => globBase(huge)).toThrow(refusal);
+    await expect(walkFiles({ root: ROOT, patterns: ['docs/**/*.md'], ignore: [huge] })).rejects.toThrow(refusal);
+    // Half as many alternatives is inside the ceiling, and compiles.
+    expect(compileGlob(`${'{a,b}'.repeat(7)}${'x'.repeat(300)}`).test(`${'ab'.repeat(3)}a${'x'.repeat(300)}`)).toBe(true);
+  });
+
   it('counts its states, which is what a size budget reads', () => {
     expect(compileGlob('a').size).toBeLessThan(compileGlob('a/b/c').size);
   });
@@ -174,6 +189,27 @@ describe('the dialect every spec-* tool reads', () => {
     expect(createGlobMatcher(['docs/'])('docs')).toBe(false);
   });
 
+  it('reads a trailing / on a brace alternative as it reads one on the whole pattern', () => {
+    // The slash was read only at the end of the whole pattern, so inside braces
+    // it was dropped: `{docs/,x}` named `docs` itself, a file or the directory,
+    // as the literal `docs` does (spec-core f9ce375).
+    const matcher = createGlobMatcher(['{docs/,x}']);
+    expect(matcher('docs/a.md')).toBe(true);
+    expect(matcher('docs')).toBe(false);
+    expect(matcher('x')).toBe(true);
+    const nested = createGlobMatcher(['docs/{adr/,rfcs/*.md}']);
+    expect(nested('docs/adr/0001.md')).toBe(true);
+    expect(nested('docs/adr')).toBe(false);
+    expect(nested('docs/rfcs/0001.md')).toBe(true);
+    // An alternative without the slash is the literal it always was.
+    expect(createGlobMatcher(['{docs,x}'])('docs')).toBe(true);
+    // One glob, and a reference target, read the slash the same way.
+    expect(compileGlob('{docs/,x}').test('docs/a.md')).toBe(true);
+    expect(compileGlob('{docs/,x}').test('docs')).toBe(false);
+    expect(createReferenceFilter(['{docs/,x}'])('docs/gone.md')).toBe(true);
+    expect(createReferenceFilter(['{docs/,x}'])('docs')).toBe(false);
+  });
+
   it('expands braces to literals, each naming a file or a directory', () => {
     // `{docs,specs}` was a glob matching two names exactly; now it is two
     // literals, and a literal covers what is beneath it.
@@ -191,6 +227,10 @@ describe('the dialect every spec-* tool reads', () => {
     // It used to be resolved: `docs/../specs` was `specs`.
     expect(() => createGlobMatcher(['docs/../specs'])).toThrow('a pattern cannot climb out of its root');
     expect(() => createGlobMatcher(['../elsewhere/**'])).toThrow('a pattern cannot climb out of its root');
+    // A brace alternative of slashes alone names the root, and is refused
+    // rather than read as everything under it.
+    expect(() => createGlobMatcher(['{/,docs}'])).toThrow('invalid glob "{/,docs}": the pattern names no path');
+    expect(() => createGlobMatcher(['{//,docs}'])).toThrow('invalid glob "{//,docs}": the pattern names no path');
   });
 
   it('never matches a separator with a class, negated or not', () => {

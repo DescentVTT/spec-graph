@@ -74,9 +74,36 @@ differs:
 | `.`, `./`, `docs/../specs`, `../other/**` | read as nothing, resolved, or walked outside the root | refused: a pattern names a path under the root |
 | `""`, in any list | read as nothing, or dropped | refused: `the pattern is empty` |
 
+*Amended 2026-09-28.* A trailing `/` on a brace alternative means what it
+means on the whole pattern, as spec-core reads it from f9ce375:
+`{docs/,specs}` is what is in `docs`, or `specs`, and
+`docs/{adr/,rfcs/*.md}` what is in `docs/adr`, or `docs/rfcs/*.md`. The
+slash was read only at the end of the whole pattern, so inside braces it was
+dropped, and `docs/` there was the literal `docs`: a file of that name, or
+the directory and what it holds. Three things change, in the patterns to
+check, `--ignore`, `--history` and the configuration alike. A file with the
+alternative's name is no longer matched: `{notes/,docs/*.md}` reads no file
+called `notes`. The walk starts inside the directory, as it does for
+`docs/vendor/`, so `docs/{vendor/,adr/}` reads `docs/vendor`, which a walk
+started at `docs` pruned. And `--ignore-ref "{docs/,x}"` passes over the
+targets under `docs/`, as `--ignore-ref docs/` does, where it passed over the
+target `docs` alone.
+
 A pattern that does not compile is refused the way a malformed `{` already
 was: the run stops with exit `2` and the pattern named, whether it came from
 the command line or the configuration file.
+
+*Amended 2026-09-28.* One refusal did not name its pattern: a pattern too
+large to compile, past the 65,536 states spec-core's automaton holds.
+spec-core threw it as an `AutomatonTooLarge` rather than giving it as a
+reason, so the run stopped with exit `2` on `spec-graph: the pattern compiles
+to more than 65536 states`, whichever pattern it was, and a program calling
+`analyse`, `walkFiles`, `createGlobMatcher`, `compileGlob`,
+`createReferenceFilter` or `globBase` caught an `AutomatonTooLarge` where
+every other refusal is an `invalid glob` error. From spec-core f9ce375 it is
+refused as the rest are: `invalid glob "<pattern>": the pattern compiles to
+more than 65536 states`. Braces that expand to more than 256 patterns were
+refused that way already.
 
 Two refusals are narrower than they could be, on purpose. `**` inside a name
 is refused rather than read as `*`: the tools the dialect replaced read

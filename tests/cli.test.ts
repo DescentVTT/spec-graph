@@ -428,6 +428,26 @@ describe('a configuration that did not load', () => {
     expect(typed.err).toContain('invalid glob "docs/[a"');
   });
 
+  it('refuses a pattern too large to compile, and names it, wherever a pattern is read', async () => {
+    // The run stopped with exit 2, but on `the pattern compiles to more than
+    // 65536 states`, which named none of the patterns it was given: spec-core
+    // threw it as an `AutomatonTooLarge` rather than a refusal (f9ce375).
+    const huge = `${'{a,b}'.repeat(8)}${'x'.repeat(300)}`;
+    const refusal = `spec-graph: invalid glob "${huge}": the pattern compiles to more than 65536 states\n`;
+    const project = ['--root', 'tests/fixtures/project', '--no-config'];
+    for (const argv of [[huge], ['--ignore', huge], ['--history', huge], ['--ignore-ref', huge]]) {
+      const result = await run('check', ...argv, ...project);
+      expect(result.code, argv[0]).toBe(EXIT_ERROR);
+      expect(result.err).toBe(refusal);
+      expect(result.out).toBe('');
+    }
+    await withConfig('cli-too-large', `{ "ignore": ["${huge}"] }\n`, async (root) => {
+      const result = await run('check', '--root', root);
+      expect(result.code).toBe(EXIT_ERROR);
+      expect(result.err).toBe(refusal);
+    });
+  });
+
   it('refuses an empty pattern wherever a pattern is read', async () => {
     // Four of these were refused and `--ignore ""` was a directory nothing is
     // called. An empty pattern is a typo or an unset variable, whichever list
