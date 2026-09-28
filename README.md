@@ -878,13 +878,16 @@ automaton states. A parenthesis with no `|` in its group
 is itself, so `C++(notes).md` names that file. A `..` typed below the root,
 `spec-graph "../*.md"` from `docs/deep`, is resolved against where you typed
 it. A bare `--ignore` name, `--ignore drafts`, still prunes that directory at
-any depth, even where a pattern starts inside it.
+any depth, even where a pattern starts inside it or names it.
 
 The walk never enters `.git`, `.hg`, `.svn`, `.cache`, `.next`, `.nuxt`,
 `.turbo`, `.venv`, `node_modules`, `bower_components`, `vendor`, `dist`,
 `build`, `out`, `target`, `coverage` or `__pycache__` on its way to what the
 patterns name. Unlike an `--ignore`, these yield to a pattern that starts inside
 one: `vendor/specs/*.md` is read from there, whatever the other patterns reach.
+They yield to a plain name for one as well: `vendor` and `docs/vendor` read
+those directories as `vendor/` and `docs/vendor/` do, or the file, where one
+of them is a file.
 
 `--ignore-ref` is matched against reference targets rather than paths: a bare
 pattern names one target exactly, case is ignored on every host, a `\` escapes

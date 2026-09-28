@@ -141,6 +141,22 @@ pattern's own starting point included, so `--ignore adr` still takes out the
 it takes files back, and starting at its prefix would enter what the walk
 skips.
 
+*Amended 2026-09-29.* The default list gives way to a directory a pattern
+names outright as well. A plain name may be a file, so its walk starts in the
+directory above, and that walk pruned `vendor` on its way in:
+`spec-graph check docs/vendor` and `spec-graph check vendor` found nothing
+where `docs/vendor/` read the directory, though a literal is read as a file,
+or a directory and everything beneath it. The walk now enters the
+directory a positive pattern names as a literal - `docs/vendor`, or a literal
+a brace expands to, `docs/{vendor,drafts}` - and reads its documents as
+`docs/vendor/` does, the rest of the default list still pruned inside it; a
+name nested in another, `vendor/dist`, is read the same way. Nothing else
+changes. A file of that name is read as the file. Every other directory on the
+list is still skipped: another `vendor` elsewhere, and every one for a
+negated name, which names nothing to read. An `--ignore` still takes the
+directory out, a bare name at any depth and a path such as `docs/*` as it does
+from the walk passing through `docs`.
+
 **A `..` typed below the root is resolved where it was typed.** A pattern may
 no longer climb out of its root, and `cd docs/deep && spec-graph "../*.md"` is
 not doing that: it names the root's `docs/*.md`, and re-anchoring it

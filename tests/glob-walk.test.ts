@@ -125,6 +125,65 @@ describe('a brace alternative that ends in /', () => {
   });
 });
 
+describe('a plain name for a directory the walk skips', () => {
+  const root = `${ROOT}/plain`;
+  const vendored = ['docs/vendor/specs/s.md', 'docs/vendor/v.md'];
+
+  beforeAll(async () => {
+    await write(`${root}/docs/a.md`, '# A\n');
+    await write(`${root}/docs/drafts/d.md`, '# D\n');
+    await write(`${root}/docs/vendor/v.md`, '# V\n');
+    await write(`${root}/docs/vendor/specs/s.md`, '# S\n');
+    await write(`${root}/docs/vendor/node_modules/n.md`, '# N\n');
+    await write(`${root}/vendor/r.md`, '# R\n');
+    await write(`${root}/vendor/dist/built.md`, '# Built\n');
+    await write(`${root}/notes/vendor`, 'a file called vendor\n');
+  });
+
+  it('reads that directory, as the same name ending in / does', async () => {
+    // A plain name may be a file, so its walk starts in the directory above,
+    // and that walk pruned `vendor` on its way in: `docs/vendor` and `vendor`
+    // found nothing, while `docs/vendor/` read the directory.
+    expect(await paths(root, ['docs/vendor/'])).toEqual(vendored);
+    expect(await paths(root, ['docs/vendor'])).toEqual(vendored);
+    expect(await paths(root, ['vendor/'])).toEqual(['vendor/r.md']);
+    expect(await paths(root, ['vendor'])).toEqual(['vendor/r.md']);
+    expect(await paths(root, ['docs/{vendor,drafts}'])).toEqual(['docs/drafts/d.md', ...vendored]);
+  });
+
+  it('reads one skipped directory named inside another', async () => {
+    expect(await paths(root, ['vendor/dist'])).toEqual(['vendor/dist/built.md']);
+    expect(await paths(root, ['docs/vendor/node_modules'])).toEqual(['docs/vendor/node_modules/n.md']);
+  });
+
+  it('reads a file of that name as the file, and nothing beside it', async () => {
+    expect(await paths(root, ['notes/vendor'])).toEqual(['notes/vendor']);
+    expect(await paths(root, ['{notes,docs}/vendor'])).toEqual([...vendored, 'notes/vendor']);
+  });
+
+  it('gives way for the directory named and no other, whatever the other patterns reach', async () => {
+    // The skip list still holds for every directory a pattern does not name:
+    // another `vendor`, one inside the named directory, and all of them for a
+    // negated name, which takes files back and names nothing to read.
+    const elsewhere = ['docs/a.md', 'docs/drafts/d.md'];
+    expect(await paths(root, ['**/*.md', 'docs/vendor'])).toEqual([...elsewhere, ...vendored]);
+    expect(await paths(root, ['**/*.md', 'vendor'])).toEqual([...elsewhere, 'vendor/r.md']);
+    expect(await paths(root, ['!vendor', '**/*.md'])).toEqual(elsewhere);
+    expect(await paths(root, ['!docs/vendor', '**/*.md'])).toEqual(elsewhere);
+  });
+
+  it("is pruned by an --ignore all the same, which is the user's", async () => {
+    expect(await paths(root, ['docs/vendor', 'vendor/dist'])).toEqual([...vendored, 'vendor/dist/built.md']);
+    expect(await paths(root, ['docs/vendor', 'vendor/dist'], ['vendor'])).toEqual([]);
+    expect(await paths(root, ['docs/vendor', 'vendor/dist'], ['dist'])).toEqual(vendored);
+    expect(await paths(root, ['docs/vendor', 'vendor/dist'], ['specs'])).toEqual(['docs/vendor/v.md', 'vendor/dist/built.md']);
+    expect(await paths(root, ['docs/vendor', 'docs/drafts'], ['drafts'])).toEqual(vendored);
+    // A path takes the directory out as it takes it out of a walk that passes
+    // through: the plain name is read from `docs`, where `docs/*` prunes it.
+    expect(await paths(root, ['docs/vendor'], ['docs/*'])).toEqual([]);
+  });
+});
+
 describe('a bare --ignore name', () => {
   beforeAll(async () => {
     await write(`${ROOT}/named/docs/a.md`, '# A\n');

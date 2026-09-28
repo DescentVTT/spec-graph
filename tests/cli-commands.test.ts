@@ -255,6 +255,16 @@ describe('paths typed below the root', () => {
     expect(await files(absolute(`${PROJECT}/docs/deep`), '--ignore', '*.md')).toEqual(['docs/0001.md', 'docs/0002.md']);
     expect(await files(absolute(PROJECT), '--ignore', '*.md')).toEqual(['docs/0001.md', 'docs/0002.md', 'docs/deep/0003.md']);
   });
+
+  it('reads a directory the walk skips when a plain name names it, wherever it was typed', async () => {
+    // Each of these found no specification, and stopped with exit 2.
+    const repo = { '.spec-graph.json': '{}\n', 'vendor/0001.md': '# One\n', 'docs/vendor/0002.md': '# Two\n', 'docs/0003.md': '# Three\n' };
+    await withRepo('cli-plain-vendor', repo, async (root) => {
+      expect(await files(absolute(root), 'vendor')).toEqual(['vendor/0001.md']);
+      expect(await files(absolute(root), 'docs/vendor')).toEqual(['docs/vendor/0002.md']);
+      expect(await files(absolute(`${root}/docs`), 'vendor')).toEqual(['docs/vendor/0002.md']);
+    });
+  });
 });
 
 describe('the rules command', () => {
