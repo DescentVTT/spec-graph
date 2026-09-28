@@ -3,6 +3,44 @@
 Notable changes, newest first. Versions follow [semver](https://semver.org):
 a patch fixes behaviour without asking anything of a repository that upgrades.
 
+## Unreleased
+
+spec-core at f9ce375. A `/` ending a brace alternative means what it means
+ending a pattern, and a pattern too large to compile is refused with its name,
+as every other pattern that does not compile is. On upgrading, a repository
+whose patterns hold no brace alternative ending in `/` sees nothing change.
+
+### Changed
+
+- **spec-core f9ce375: a trailing `/` on a brace alternative means the
+  directory's contents**, as it does on the whole pattern, in the patterns to
+  check, `--ignore`, `--history` and the configuration alike: `{docs/,specs}`
+  is what is in `docs`, or `specs`, and `docs/{adr/,rfcs/*.md}` what is in
+  `docs/adr`, or `docs/rfcs/*.md`. Inside braces the slash was dropped, so
+  `docs/` there was the literal `docs`: a file of that name, or the directory
+  and what it holds. A file with the alternative's name is no longer read or
+  ignored - `{notes/,docs/*.md}` reads no file called `notes` - and the walk
+  starts inside the directory, as it does for `docs/vendor/`:
+  `docs/{vendor/,adr/}` reads `docs/vendor`, which a walk started at `docs`
+  pruned. `--ignore-ref "{docs/,x}"` passes over the targets under `docs/`, as
+  `--ignore-ref docs/` does, where it passed over the target `docs` alone
+  (ADR-0022).
+
+### Fixed
+
+- **A pattern too large to compile is refused with its name.** One past the
+  65,536 states spec-core's automaton holds stopped the run with exit `2` on
+  `spec-graph: the pattern compiles to more than 65536 states`, which named
+  none of the patterns given; it now reads `invalid glob "<pattern>": the
+  pattern compiles to more than 65536 states`, as every other refusal does. A
+  program calling `analyse`, `walkFiles`, `createGlobMatcher`, `compileGlob`,
+  `createReferenceFilter` or `globBase` gets the `invalid glob` error it gets
+  for any pattern that does not compile, where it got spec-core's
+  `AutomatonTooLarge` (ADR-0022). No configuration in this repository, its
+  fixtures or the rest of the family writes such a pattern or a brace
+  alternative ending in `/`, and over them every `check` format and every
+  graph export is byte for byte what 0.9.6 wrote.
+
 ## 0.9.6
 
 spec-core at 65ef842: a link reference definition is read only where

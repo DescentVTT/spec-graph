@@ -98,6 +98,33 @@ describe('a pattern that starts inside a skipped directory', () => {
   });
 });
 
+describe('a brace alternative that ends in /', () => {
+  const root = `${ROOT}/braces`;
+
+  beforeAll(async () => {
+    await write(`${root}/docs/a.md`, '# A\n');
+    await write(`${root}/docs/vendor/specs/b.md`, '# B\n');
+    await write(`${root}/notes`, '# Notes\n');
+  });
+
+  it('is read from inside, as the same directory written alone is, and names no file of its name', async () => {
+    // The slash inside braces was dropped, so `docs/{vendor/,x}` held the
+    // literal `docs/vendor`, a file or a directory: its walk started at `docs`
+    // and pruned `vendor` there, and `{notes/,docs/*.md}` read a file called
+    // `notes` (spec-core f9ce375).
+    expect(await paths(root, ['docs/vendor/'])).toEqual(['docs/vendor/specs/b.md']);
+    expect(await paths(root, ['docs/{vendor/,x}'])).toEqual(['docs/vendor/specs/b.md']);
+    expect(await paths(root, ['{notes/,docs/*.md}'])).toEqual(['docs/a.md']);
+    expect(await paths(root, ['{notes,docs/*.md}'])).toEqual(['docs/a.md', 'notes']);
+  });
+
+  it('is what an ignore takes out, and a file of its name is not', async () => {
+    const patterns = ['docs/**/*.md', 'docs/vendor/specs/*.md', 'notes'];
+    expect(await paths(root, patterns)).toEqual(['docs/a.md', 'docs/vendor/specs/b.md', 'notes']);
+    expect(await paths(root, patterns, ['{notes/,docs/vendor/}'])).toEqual(['docs/a.md', 'notes']);
+  });
+});
+
 describe('a bare --ignore name', () => {
   beforeAll(async () => {
     await write(`${ROOT}/named/docs/a.md`, '# A\n');

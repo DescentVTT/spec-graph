@@ -864,6 +864,7 @@ recorded on a Windows checkout holds in Linux CI:
 | `docs` | a file called `docs`, or everything under the directory |
 | `docs/` | everything under `docs`, and not `docs` itself |
 | `{docs,specs}` | two literals, so both directories and what they hold |
+| `{docs/,specs}` | everything under `docs`, and `specs` as the literal it is: a `/` ends an alternative as it ends a pattern |
 | `adr/[0-9]*.md`, `adr/[!0-9]*.md` | a class, and a negated one; `[^0-9]` negates too |
 | `!docs/drafts/**` | takes back what an earlier pattern matched; the last to match wins |
 | `docs\adr\*.md` | the same as `docs/adr/*.md`: a `\` is a separator |
@@ -871,7 +872,9 @@ recorded on a Windows checkout holds in Linux CI:
 A class never matches a `/`, and a pattern that cannot mean a path under the
 root — an unclosed `[` or `{`, `..`, a lone `.`, an empty one — stops the run
 with exit `2` and names the pattern, wherever it was written. So does an
-extended glob, `+(a|b)`: write `{a,b}`. A parenthesis with no `|` in its group
+extended glob, `+(a|b)`: write `{a,b}`. So does one too large to compile:
+braces that expand to more than 256 patterns, or a pattern past 65,536
+automaton states. A parenthesis with no `|` in its group
 is itself, so `C++(notes).md` names that file. A `..` typed below the root,
 `spec-graph "../*.md"` from `docs/deep`, is resolved against where you typed
 it. A bare `--ignore` name, `--ignore drafts`, still prunes that directory at
