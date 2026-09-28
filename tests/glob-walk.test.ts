@@ -182,6 +182,16 @@ describe('a plain name for a directory the walk skips', () => {
     // through: the plain name is read from `docs`, where `docs/*` prunes it.
     expect(await paths(root, ['docs/vendor'], ['docs/*'])).toEqual([]);
   });
+
+  it('refuses a brace alternative that names no path before it asks for literals', async () => {
+    // `{./,docs}` read every path, `vendor` included, and as an ignore took
+    // every path out (spec-core 56c7e54). The list is compiled before the
+    // literals are asked for, so the refusal comes first.
+    const refusal = 'invalid glob "{./,docs}": the braces expand to "./", which names no path';
+    await expect(paths(root, ['{./,docs}'])).rejects.toThrow(refusal);
+    await expect(paths(root, ['docs/vendor', '{./,docs}'])).rejects.toThrow(refusal);
+    await expect(paths(root, ['docs/vendor'], ['{./,docs}'])).rejects.toThrow(refusal);
+  });
 });
 
 describe('a bare --ignore name', () => {

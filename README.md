@@ -870,8 +870,9 @@ recorded on a Windows checkout holds in Linux CI:
 | `docs\adr\*.md` | the same as `docs/adr/*.md`: a `\` is a separator |
 
 A class never matches a `/`, and a pattern that cannot mean a path under the
-root — an unclosed `[` or `{`, `..`, a lone `.`, an empty one — stops the run
-with exit `2` and names the pattern, wherever it was written. So does an
+root — an unclosed `[` or `{`, `..`, a lone `.` or `./`, an empty one, or
+braces that give one of them, `{./,docs}` — stops the run with exit `2` and
+names the pattern, wherever it was written. So does an
 extended glob, `+(a|b)`: write `{a,b}`. So does one too large to compile:
 braces that expand to more than 256 patterns, or a pattern past 65,536
 automaton states. A parenthesis with no `|` in its group
