@@ -3,7 +3,7 @@
 Notable changes, newest first. Versions follow [semver](https://semver.org):
 a patch fixes behaviour without asking anything of a repository that upgrades.
 
-## Unreleased
+## 0.9.7
 
 spec-core at f9ce375. A `/` ending a brace alternative means what it means
 ending a pattern, and a pattern too large to compile is refused with its name,
