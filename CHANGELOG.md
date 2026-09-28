@@ -3,7 +3,12 @@
 Notable changes, newest first. Versions follow [semver](https://semver.org):
 a patch fixes behaviour without asking anything of a repository that upgrades.
 
-## Unreleased
+## 0.9.8
+
+A plain name such as `docs/vendor` reads a directory the default list skips,
+as `docs/vendor/` does, where it found nothing; and spec-core is at 56c7e54,
+which refuses braces that name no path, such as `{./,docs}`, where they read
+as every path. A repository whose patterns name neither sees nothing change.
 
 ### Changed
 
