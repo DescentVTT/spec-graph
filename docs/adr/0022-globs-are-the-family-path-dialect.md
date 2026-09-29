@@ -178,6 +178,23 @@ negated name, which names nothing to read. An `--ignore` still takes the
 directory out, a bare name at any depth and a path such as `docs/*` as it does
 from the walk passing through `docs`.
 
+*Amended 2026-09-29.* **A path `--ignore` takes out a pattern's starting
+point** as it takes out a directory the walk passes through. A walk that
+starts inside the repository never passed through the directories above its
+starting point, and only a bare name was asked of them, so the answer
+depended on where a pattern's walk began: under `--ignore "docs/*"`,
+`docs/**/*.md` pruned `docs/drafts` and read nothing there, while
+`docs/drafts/**/*.md`, `docs/drafts/deep/*.md`, `docs/drafts/d.md` and
+`docs/vendor/` were read. Each directory from the root to a starting point,
+the starting point included, is now matched against the path ignores as the
+walk from the root matches it on its way down, and each of those patterns
+finds nothing under `--ignore "docs/*"`. A later `!docs/drafts` gives the
+directory back to all of them alike. The root itself is matched against no
+ignore, from the walk or a starting point: `*` matches the empty path, and
+`**/*.md` under `--ignore "*" --ignore "!{docs,specs}"` reads those two. The
+default list still gives way to a starting point inside one of its
+directories.
+
 **A `..` typed below the root is resolved where it was typed.** A pattern may
 no longer climb out of its root, and `cd docs/deep && spec-graph "../*.md"` is
 not doing that: it names the root's `docs/*.md`, and re-anchoring it

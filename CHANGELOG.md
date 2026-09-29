@@ -3,6 +3,25 @@
 Notable changes, newest first. Versions follow [semver](https://semver.org):
 a patch fixes behaviour without asking anything of a repository that upgrades.
 
+## Unreleased
+
+### Fixed
+
+- **A path `--ignore` takes out the directory a pattern starts in, as it
+  takes out one the walk passes through.** Under `--ignore "docs/*"`,
+  `docs/**/*.md` read nothing in `docs/drafts`, but `docs/drafts/**/*.md`,
+  `docs/drafts/deep/*.md`, `docs/drafts/d.md` and `docs/vendor/` read what
+  is there: a walk that starts below the root never passed through the
+  directories above its starting point, and only a bare `--ignore` name was
+  asked of them. Each directory from the root to a starting point is now
+  matched against the path ignores, the starting point included, so the
+  answer no longer depends on where a pattern's walk starts; a later
+  `!docs/drafts` gives the directory back to every pattern alike, and the
+  root is matched against none (ADR-0022). No configuration in this
+  repository, its fixtures or the rest of the family combines such a pattern
+  and ignore, and over them every `check` format and every graph export is
+  byte for byte what 0.9.8 wrote.
+
 ## 0.9.8
 
 A plain name such as `docs/vendor` reads a directory the default list skips,

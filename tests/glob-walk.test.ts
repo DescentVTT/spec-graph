@@ -216,6 +216,44 @@ describe('a bare --ignore name', () => {
   });
 });
 
+describe('a path --ignore', () => {
+  const root = `${ROOT}/pathed`;
+  const drafts = ['docs/drafts/d.md', 'docs/drafts/deep/e.md'];
+
+  beforeAll(async () => {
+    await write(`${root}/docs/a.md`, '# A\n');
+    await write(`${root}/docs/drafts/d.md`, '# D\n');
+    await write(`${root}/docs/drafts/deep/e.md`, '# E\n');
+    await write(`${root}/docs/vendor/v.md`, '# V\n');
+    await write(`${root}/README.md`, '# Root\n');
+  });
+
+  it('takes out a directory a pattern starts inside, as it takes it out of a walk that passes through', async () => {
+    // The walk from `docs` prunes `docs/drafts`, but a pattern that started
+    // there, or below it, was read: the answer depended on where the walk began.
+    expect(await paths(root, ['docs/**/*.md'], ['docs/*'])).toEqual([]);
+    expect(await paths(root, ['docs/drafts/**/*.md'], ['docs/*'])).toEqual([]);
+    expect(await paths(root, ['docs/drafts/deep/*.md'], ['docs/*'])).toEqual([]);
+    expect(await paths(root, ['docs/drafts/d.md'], ['docs/*'])).toEqual([]);
+    expect(await paths(root, ['docs/vendor/'], ['docs/*'])).toEqual([]);
+    expect(await paths(root, ['docs/vendor'], ['docs/*'])).toEqual([]);
+  });
+
+  it('gives back a directory a later ! entry takes back, wherever the walk starts', async () => {
+    const ignore = ['docs/*', '!docs/drafts'];
+    expect(await paths(root, ['docs/**/*.md'], ignore)).toEqual(drafts);
+    expect(await paths(root, ['docs/drafts/**/*.md'], ignore)).toEqual(drafts);
+    expect(await paths(root, ['docs/drafts/deep/*.md'], ignore)).toEqual(['docs/drafts/deep/e.md']);
+  });
+
+  it('leaves a starting point it does not match, and the root, which nothing matches it against', async () => {
+    expect(await paths(root, ['docs/drafts/**/*.md'], ['docs/drafts/*.md'])).toEqual(['docs/drafts/deep/e.md']);
+    // `*` matches the empty path. Everything at the top is out and `docs` back
+    // in, so a pattern that starts at the root reads what is under `docs`.
+    expect(await paths(root, ['**/*.md'], ['*', '!{docs,specs}'])).toEqual(['docs/a.md', ...drafts]);
+  });
+});
+
 describe('the answer', () => {
   beforeAll(async () => {
     await write(`${ROOT}/order/specs/rfcs/0004.md`, '# Four\n');

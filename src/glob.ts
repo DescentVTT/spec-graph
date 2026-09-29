@@ -368,11 +368,22 @@ export async function walkFiles(options: WalkOptions): Promise<WalkedFile[]> {
   // prunes `vendor` and the rest of the default list on its way down, and a
   // pattern that starts inside one of those is read from there. Dropping the
   // inner base as already covered meant `docs/**/*.md` beside
-  // `docs/vendor/specs/*.md` found less than the second pattern alone. A bare
-  // `--ignore` name is not overruled that way: it is the user's, and prunes at
-  // any depth, a pattern's own starting point included - so `--ignore adr`
-  // still takes out `adr/`, which the default `adr/**/*.md` starts inside.
-  const startable = (base: string): boolean => !base.split('/').some((segment) => named.has(segment));
+  // `docs/vendor/specs/*.md` found less than the second pattern alone. An
+  // `--ignore` is not overruled that way: it is the user's. A walk that starts
+  // at a base never passed through the directories above it, so each of them,
+  // and the base, is asked what the walk from the root would have asked on its
+  // way down. A bare name prunes at any depth - `--ignore adr` still takes out
+  // `adr/`, which the default `adr/**/*.md` starts inside - and a path takes
+  // out what it matches, so under `--ignore "docs/*"` `docs/drafts/**/*.md`
+  // finds what `docs/**/*.md` finds, which is nothing there. The root is not
+  // asked, as the walk from it never asks: `*` matches the empty path, and
+  // `**/*.md` under `--ignore "*" --ignore "!{docs,specs}"` would read nothing
+  // where it reads those two.
+  const startable = (base: string): boolean => {
+    if (base.length === 0) return true;
+    const segments = base.split('/');
+    return !segments.some((segment, i) => named.has(segment) || excluded(segments.slice(0, i + 1).join('/')));
+  };
   const out = new Map<string, WalkedFile>();
   // Where two walks overlap, whichever reaches a directory first reads it and
   // the other stops there. Reading it twice would find the same files under
