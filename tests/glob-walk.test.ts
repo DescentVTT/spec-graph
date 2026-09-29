@@ -405,6 +405,40 @@ describe('a pattern that starts beyond a link', () => {
   });
 });
 
+describe('a followed link to a directory', () => {
+  const root = `${ROOT}/followed/tree`;
+  let linked = false;
+
+  beforeAll(async () => {
+    await write(`${root}/docs/b.md`, '# B\n');
+    await write(`${ROOT}/followed/elsewhere/c.md`, '# C\n');
+    // pnpm writes `node_modules` as links; the other two are named by an ignore.
+    linked = true;
+    for (const name of ['node_modules', 'private', 'shared']) {
+      linked &&= await linkDirectory(`${ROOT}/followed/elsewhere`, `${root}/docs/${name}`);
+    }
+  });
+
+  const walk = (patterns: string[], ignore?: string[]) =>
+    walkFiles({ root, patterns, ignore, followSymlinks: true }).then((files) => files.map((file) => file.path));
+
+  it('is pruned as a directory of its name and path is: by the default list, a bare --ignore name and a path', async (context) => {
+    if (!linked) context.skip();
+    // It was entered whatever its name, and whatever an ignore said of it.
+    expect(await walk(['docs/**/*.md'])).toEqual(['docs/b.md', 'docs/private/c.md', 'docs/shared/c.md']);
+    expect(await walk(['docs/**/*.md'], ['private'])).toEqual(['docs/b.md', 'docs/shared/c.md']);
+    expect(await walk(['docs/**/*.md'], ['docs/p*'])).toEqual(['docs/b.md', 'docs/shared/c.md']);
+    expect(await walk(['docs/node_modules'], ['node_modules'])).toEqual([]);
+  });
+
+  it('is read where a pattern names it or starts inside it, as a directory the default list skips is', async (context) => {
+    if (!linked) context.skip();
+    expect(await walk(['docs/node_modules'])).toEqual(['docs/node_modules/c.md']);
+    expect(await walk(['docs/node_modules/*.md'])).toEqual(['docs/node_modules/c.md']);
+    expect(await walk(['**/*.md', 'docs/node_modules/'])).toEqual(['docs/b.md', 'docs/node_modules/c.md', 'docs/private/c.md', 'docs/shared/c.md']);
+  });
+});
+
 describe('an entry that is neither a file nor a directory', () => {
   it('is never read, since reading a named pipe waits for a writer', async (context) => {
     if (process.platform === 'win32') context.skip();

@@ -208,6 +208,19 @@ and one that is a link ends that walk before it starts, as silently as the
 walk passes over the link. With `followSymlinks` on, the starting point is
 walked through the link, as the walk from the root walks into it.
 
+*Amended 2026-09-29.* **A followed link to a directory is pruned as a
+directory is.** With `followSymlinks` on, the walk entered a link to a
+directory whatever its name or path: a link called `node_modules`, which
+pnpm writes, a link a bare `--ignore` name names, and one a path `--ignore`
+matches, such as `docs/private` under `--ignore "docs/p*"`. What was inside
+was pruned as usual, but the link itself was never asked. It is now asked
+what a directory of its name and path is asked: the default list, a bare
+name and the path ignores take it out, and the default list gives way to a
+link a pattern names or starts inside, as it does to a directory -
+`docs/node_modules` and `docs/node_modules/*.md` read through the link,
+unless `--ignore node_modules` says otherwise. A link to a file is read as
+it was, matched and ignored by its own path.
+
 **A `..` typed below the root is resolved where it was typed.** A pattern may
 no longer climb out of its root, and `cd docs/deep && spec-graph "../*.md"` is
 not doing that: it names the root's `docs/*.md`, and re-anchoring it
