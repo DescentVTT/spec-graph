@@ -83,6 +83,17 @@ it disappears all the same and is still counted - no ghost handover reports it,
 since that rule leaves a retired source out. Blocked by a live document is not
 delegated to one: the work is still the sealed document's.
 
+*Amended 2026-09-30.* Markers and obligation headings are read in Chinese,
+Traditional and Simplified, each as the English word it translates: `已解決`
+and `已決定` are `resolved` and `decided`, `部分解決` is `partially resolved`,
+`已移交` is `handed off`, `技術債` is `technical debt`, and `待辦事項` holds
+obligations as `To Do` does. The qualification is the same: a Chinese marker
+has no case to shout in, so it counts punctuated, `已決定：`, or emphasised,
+`**已決定**`, and never as a word in a sentence, `我們已決定採用`. A statement
+also starts after a Chinese sentence end, `。`, `？`, `！` or `；`, with a space
+after it or none, since Chinese writes none: `是否分片？已決定：不分片。` closes
+its item. The README lists every word, and the tests read the list.
+
 ## Open Questions
 
 - [ ] Should `narrowed` items carry the *remaining* scope as structured data

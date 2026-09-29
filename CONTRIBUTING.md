@@ -56,7 +56,8 @@ files ─▶ markdown.ts ─▶ extract.ts ─▶ resolve.ts ─▶ graph.ts ─
 a code change. That is the whole point of the design:
 
 - a status word → `VOCABULARY` in `lifecycle.ts`
-- a relation phrase (`"deferred to"`) → `VERB_RULES` in `extract.ts`
+- a relation phrase (`"deferred to"`, `"延後至"`) → `VERB_RULES` in `extract.ts`; a
+  word that cancels a Chinese phrase after it → `HAN_NEGATIONS` there
 - a front-matter relation key → `RELATION_KEYS` in `extract.ts`
 - a resolution marker (`"**Moot**"`) → `MARKERS` in `state.ts`
 - a heading that holds obligations → `OBLIGATION_SECTIONS` in `extract.ts`

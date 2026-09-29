@@ -60,7 +60,9 @@ const CHECKBOX_STATE: Readonly<Record<string, Disposition>> = {
  *
  * Matched only in the qualified forms real documents use - `**Resolved:**`,
  * `RESOLVED -`, `**Moot**` - never as bare words, so ordinary prose such as
- * "we resolved to keep the queue" does not close an item.
+ * "we resolved to keep the queue" does not close an item. A Chinese marker,
+ * Traditional or Simplified, is the English one it translates, and has no
+ * case to shout in: `已決定：` or `**已決定**`, never `我們已決定採用`.
  */
 const MARKERS: Readonly<Record<Disposition, readonly string[]>> = {
   satisfied: [
@@ -78,6 +80,11 @@ const MARKERS: Readonly<Record<Disposition, readonly string[]>> = {
     'implemented',
     'solved',
     'confirmed',
+    '已解決',
+    '已解决',
+    '已決定',
+    '已决定',
+    '已定案',
   ],
   narrowed: [
     'partially resolved',
@@ -93,6 +100,8 @@ const MARKERS: Readonly<Record<Disposition, readonly string[]>> = {
     'in progress',
     'remaining',
     'split',
+    '部分解決',
+    '部分解决',
   ],
   delegated: [
     'delegated',
@@ -109,6 +118,7 @@ const MARKERS: Readonly<Record<Disposition, readonly string[]>> = {
     'followup in',
     'continued in',
     'owned by',
+    '已移交',
   ],
   'accepted-debt': [
     'accepted debt',
@@ -125,6 +135,9 @@ const MARKERS: Readonly<Record<Disposition, readonly string[]>> = {
     'by design',
     'tolerated',
     'living with it',
+    '技術債',
+    '技术债',
+    '已知限制',
   ],
   rejected: [
     'rejected',
@@ -327,8 +340,11 @@ function buildMarkerPattern(): RegExp {
 
   return new RegExp(
     // A marker only counts at the start of a statement: the start of the item,
-    // a new line, after a sentence ends, or after an emphasis opener.
-    String.raw`(?:^|\n|[.?!]\s+|[(\[])` +
+    // a new line, after a sentence ends, or after an emphasis opener. A
+    // Chinese sentence ends at `。？！；` with a space after it or none -
+    // `是否分片？已決定：不分片。` - and the space before the phrase below
+    // takes any that follows.
+    String.raw`(?:^|\n|[.?!]\s+|[。？！；]|[(\[])` +
       // Skip block-quote and list markers, but only when the marker character is
       // followed by whitespace. Without that guard the `*` of `**Resolved**`
       // reads as a bullet and the emphasis wrapper is lost.

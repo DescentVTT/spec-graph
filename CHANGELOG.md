@@ -3,6 +3,29 @@
 Notable changes, newest first. Versions follow [semver](https://semver.org):
 a patch fixes behaviour without asking anything of a repository that upgrades.
 
+## Unreleased
+
+### Changed
+
+- **Relations, obligations and markers written in Chinese are read.**
+  `延後至`, `移交給`, `留待`, `交由`, `併入` and their kin before a
+  reference hand the work on as `deferred to` does, not directly after a
+  negation (`未移交給`); `待辦事項` and `未決問題` hold obligations,
+  `參考資料` and `附錄` hold bookkeeping, and `已解決：`, `已決定：` and
+  `**技術債**` close an item. An English phrase beside Chinese counts too,
+  `此問題deferred to ADR-0002` (ADR-0003, ADR-0006). Upgrading: run `check`;
+  a `ghost-handover` or `state-conflict` on a Chinese document is a rule
+  reaching it for the first time - fix it, or accept it in a baseline with
+  `--record-baseline <file>`.
+
+### Fixed
+
+- **A statement ends at `。`, `？`, `！` and `；`.** A phrase no longer
+  governs a reference in the next Chinese sentence, as `上次延後至別處。另見
+  ADR-0002` did, and a marker counts after one. Over this repository, its
+  fixtures and the rest of the family, every `check` format and every graph
+  export is byte for byte what 0.9.10 wrote.
+
 ## 0.9.10
 
 A `!` before a bare `--ignore` name gives the name back, as `.gitignore`
