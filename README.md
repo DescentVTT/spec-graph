@@ -891,7 +891,9 @@ patterns name. Unlike an `--ignore`, these yield to a pattern that starts inside
 one: `vendor/specs/*.md` is read from there, whatever the other patterns reach.
 They yield to a plain name for one as well: `vendor` and `docs/vendor` read
 those directories as `vendor/` and `docs/vendor/` do, or the file, where one
-of them is a file.
+of them is a file. Nor does the walk follow a link, a pattern that starts
+beyond one included: `docs/linked/*.md` reads nothing through the link
+`docs/linked`, as `docs/**/*.md` reads nothing there.
 
 `--ignore-ref` is matched against reference targets rather than paths: a bare
 pattern names one target exactly, case is ignored on every host, a `\` escapes

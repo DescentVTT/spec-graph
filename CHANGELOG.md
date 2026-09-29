@@ -21,6 +21,18 @@ a patch fixes behaviour without asking anything of a repository that upgrades.
   repository, its fixtures or the rest of the family combines such a pattern
   and ignore, and over them every `check` format and every graph export is
   byte for byte what 0.9.8 wrote.
+- **A pattern that starts beyond a link is not read through it.** The walk
+  passes over a link unless the API's `followSymlinks` is on, but
+  `docs/linked/*.md`, `docs/linked/` and `docs/linked/c.md` read what the
+  link `docs/linked` leads to, where `docs/**/*.md` passed over it: reading
+  a directory by its path follows every link in the path. Each directory on
+  the way to a starting point is now looked up in its parent, and a link
+  among them ends that walk before it starts, as silently as the walk
+  passes over the link; with `followSymlinks` on it is walked as before
+  (ADR-0022). No repository in the family holds a link a pattern starts
+  beyond, and over this repository, its fixtures and the rest of the family
+  every `check` format and every graph export is byte for byte what 0.9.8
+  wrote.
 
 ## 0.9.8
 

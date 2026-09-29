@@ -37,6 +37,21 @@ async function write(path: string, text: string): Promise<void> {
   await writeFile(path, text);
 }
 
+/**
+ * Links a directory: a junction on Windows, which allows one without
+ * privilege, and a symbolic link on every other host, which ignores the type.
+ * False where the host refuses it, for the tests that need one to skip.
+ */
+async function linkDirectory(target: string, path: string): Promise<boolean> {
+  try {
+    await symlink(resolve(target), path, 'junction');
+    return true;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'EPERM') return false;
+    throw error;
+  }
+}
+
 beforeAll(async () => {
   await rm(ROOT, { recursive: true, force: true });
   await mkdir(ROOT, { recursive: true });
@@ -352,6 +367,41 @@ describe('links', () => {
       ['docs/b.md', `${root}/docs/b.md`, size],
       ['docs/c-link.md', `${root}/docs/c-link.md`, size],
     ]);
+  });
+});
+
+describe('a pattern that starts beyond a link', () => {
+  const root = `${ROOT}/beyond/tree`;
+  let linked = false;
+
+  beforeAll(async () => {
+    await write(`${root}/docs/a.md`, '# A\n');
+    await write(`${ROOT}/beyond/elsewhere/c.md`, '# C\n');
+    await write(`${ROOT}/beyond/elsewhere/specs/s.md`, '# S\n');
+    linked = await linkDirectory(`${ROOT}/beyond/elsewhere`, `${root}/docs/linked`);
+  });
+
+  const walk = (patterns: string[], followSymlinks?: boolean) =>
+    walkFiles({ root, patterns, followSymlinks }).then((files) => files.map((file) => file.path));
+
+  it('is not read through a link the walk does not follow, where the walk from the root stops', async (context) => {
+    if (!linked) context.skip();
+    // Reading a directory by its path follows every link in it, so these were
+    // read through `docs/linked`, which `docs/**/*.md` passes over.
+    for (const followSymlinks of [undefined, false]) {
+      expect(await walk(['docs/**/*.md'], followSymlinks)).toEqual(['docs/a.md']);
+      expect(await walk(['docs/linked/*.md'], followSymlinks)).toEqual([]);
+      expect(await walk(['docs/linked/'], followSymlinks)).toEqual([]);
+      expect(await walk(['docs/linked/specs/*.md'], followSymlinks)).toEqual([]);
+      expect(await walk(['docs/linked/c.md'], followSymlinks)).toEqual([]);
+    }
+  });
+
+  it('is read through a link the walk follows, as the walk from the root reads it', async (context) => {
+    if (!linked) context.skip();
+    expect(await walk(['docs/**/*.md'], true)).toEqual(['docs/a.md', 'docs/linked/c.md', 'docs/linked/specs/s.md']);
+    expect(await walk(['docs/linked/*.md'], true)).toEqual(['docs/linked/c.md']);
+    expect(await walk(['docs/linked/specs/*.md'], true)).toEqual(['docs/linked/specs/s.md']);
   });
 });
 

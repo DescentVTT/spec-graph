@@ -9,6 +9,7 @@
  * enters, and how a reference target - which is not a path - is matched.
  */
 
+import type { Dirent } from 'node:fs';
 import { readdir, stat } from 'node:fs/promises';
 
 import { isAbsolutePath, joinPosix, toPosix } from './paths.js';
@@ -279,7 +280,8 @@ export function globBase(pattern: string): string {
 }
 
 /**
- * Whether a base names directories that exist with exactly that spelling.
+ * Whether a base names directories the walk from the root would reach, each
+ * with exactly that spelling and none a link it would not follow.
  *
  * A walk starts where a pattern's literal prefix points rather than at the
  * root, and on a filesystem that ignores case, `readdir('Docs')` lists `docs`.
@@ -287,21 +289,27 @@ export function globBase(pattern: string): string {
  * baseline key - and `Docs/**` would find it on Windows and macOS and nothing
  * on Linux. Asking each parent for the name gives git's answer on every host. A
  * base with an empty segment is rooted at `/`, which is never inside the root.
+ *
+ * Reading a directory by its path follows every link in the path, so
+ * `docs/linked/*.md` was read through the link `docs/linked`, which the walk
+ * from the root passes over. Asking each parent for the entry says which it
+ * is, and a base beyond a link is left as silently as the walk leaves the link.
  */
-async function spelledAsOnDisk(root: string, base: string): Promise<boolean> {
+async function reachable(root: string, base: string, followSymlinks: boolean | undefined): Promise<boolean> {
   if (base.length === 0) return true;
   let directory = root;
   for (const segment of base.split('/')) {
-    let names: string[];
+    let entries: Dirent[];
     try {
-      names = await readdir(directory);
+      entries = await readdir(directory, { withFileTypes: true });
     } catch {
       // Answering `true` here would change nothing a test can see: the walk
       // would then read a directory beneath this one, fail the same way, and
       // find nothing.
       return false;
     }
-    if (!names.includes(segment)) return false;
+    const entry = entries.find((candidate) => candidate.name === segment);
+    if (entry === undefined || (entry.isSymbolicLink() && !followSymlinks)) return false;
     directory = `${directory}/${segment}`;
   }
   return true;
@@ -445,7 +453,7 @@ export async function walkFiles(options: WalkOptions): Promise<WalkedFile[]> {
     }
   };
 
-  for (const base of bases) if (startable(base) && (await spelledAsOnDisk(root, base))) await walk(base);
+  for (const base of bases) if (startable(base) && (await reachable(root, base, options.followSymlinks))) await walk(base);
 
   // No two paths are equal, since they are the keys of `out`, so the order
   // needs only `<`, and `<=` would read the same.

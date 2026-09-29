@@ -195,6 +195,19 @@ ignore, from the walk or a starting point: `*` matches the empty path, and
 default list still gives way to a starting point inside one of its
 directories.
 
+*Amended 2026-09-29.* **A starting point beyond a link is not walked unless
+links are followed.** The walk passes over a link it meets, a file's or a
+directory's, and says nothing of it: following links is `followSymlinks` in
+the API, off by default, because a link can lead back up the tree. A pattern
+that starts beyond one was read through it all the same, since reading a
+directory by its path follows every link in the path: `docs/linked/*.md`,
+`docs/linked/` and `docs/linked/c.md` read what the link `docs/linked` leads
+to, where `docs/**/*.md` passed over it. Each directory on the way to a
+starting point is now looked up in its parent, as its spelling already was,
+and one that is a link ends that walk before it starts, as silently as the
+walk passes over the link. With `followSymlinks` on, the starting point is
+walked through the link, as the walk from the root walks into it.
+
 **A `..` typed below the root is resolved where it was typed.** A pattern may
 no longer climb out of its root, and `cd docs/deep && spec-graph "../*.md"` is
 not doing that: it names the root's `docs/*.md`, and re-anchoring it
