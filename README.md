@@ -17,6 +17,12 @@ checked.
 
 Exit code 1. The obligation was about to disappear.
 
+The terms the spec-* tools share are defined in the family
+[glossary](https://github.com/DescentVTT/spec-core/blob/main/docs/concepts.md),
+and the [tutorial](https://github.com/DescentVTT/spec-core/blob/main/docs/tutorial.md)
+takes one small repository through a round of work, from the brief to the
+archive, in ten steps.
+
 ---
 
 ## Why this exists
@@ -104,11 +110,13 @@ spec-graph --strict
 ```
 
 Every escalated finding says so, so you can always tell what the build would do
-without the flag. Two deliberate limits: strict leaves `info` rules alone, since
-those are advisory by design and promoting them would reintroduce exactly the
-noise the defaults avoid; and an explicit `--rule` always wins, so
-`--strict --rule state-conflict=warn` turns strict on and exempts one rule
-rather than making you choose between all of it and none.
+without the flag. Two deliberate limits:
+
+- Strict leaves `info` rules alone. Those are advisory by design, and promoting
+  them would reintroduce exactly the noise the defaults avoid.
+- An explicit `--rule` always wins, so `--strict --rule state-conflict=warn`
+  turns strict on and exempts one rule rather than making you choose between
+  all of it and none.
 
 ## How it reads your documents
 
@@ -125,12 +133,18 @@ onto four phases, chosen so one question can be answered from the phase alone:
 | `frozen` | `final`, `ratified`, `locked`, `published`, … | **no** |
 | `retired` | `superseded`, `deprecated`, `rejected`, `withdrawn`, … | **no** |
 
-The status is found wherever your team writes it — front matter (`status:`,
-`state:`, `stage:`), a `## Status` section, a `| Status | Accepted |` table at
-the top, `**Accepted** (2026-03-01) ✅`, or a `docs/adr/archive/` directory -
-and in English or in Chinese, `## 狀態` / `已接受`. `Accepted, later superseded
-by ADR-0009` is retired: retirement is terminal, so a retirement word anywhere
-wins. Front matter is read as YAML reads it, and a value YAML would not read -
+The status is found wherever your team writes it, in English or in Chinese
+(`## 狀態` / `已接受`), and however it is dressed (`**Accepted** (2026-03-01) ✅`):
+
+- front matter: `status:`, `state:`, `stage:`
+- a `## Status` section
+- a `| Status | Accepted |` table at the top
+- a `docs/adr/archive/` directory
+
+`Accepted, later superseded by ADR-0009` is retired: retirement is terminal, so
+a retirement word anywhere wins.
+
+Front matter is read as YAML reads it, and a value YAML would not read -
 `status: Superseded by ADR-9: see notes`, where a plain value cannot hold `: ` -
 is left out rather than guessed at. Every run says how many statuses, ids and
 relations it left out that way, and `--verbose` says where and why: quote the
@@ -156,17 +170,20 @@ that `provisionally accepted` is a draft.
 Chinese is read in Traditional and Simplified characters, each word as the
 English word it translates, so it lands in that word's row: `延後` is
 `deferred` and retired, `封存` is `archived` and a record, and `暫定` is
-`provisionally accepted`, so `暫定接受` is a draft. Chinese puts no space
-between words, so a Chinese word counts wherever it stands in the status -
-`已接受，後被ADR-0003取代` holds `已接受` and a supersession - except directly
-after a negation: `不`, `未`, `非`, `沒`, `没`, `無`, `无`, `勿`, `尚未` or
-`不再`. `未接受`, `尚未核准` and `不再生效` say nothing; a word that starts with
-one, `不採納`, is itself. Superseded is also `被` followed, within 30
-characters and in the same sentence, by `取代`, `替代` or `取而代之`:
-`已被 ADR-0003 取代` is retired, and names ADR-0003 as what replaced it.
-`已取代` alone is retired; followed by a name, after spaces or a colon -
-`已取代 ADR-0002` - it says what this document replaced, and is not read.
-`取代` with no `被`, as in `已接受（取代 ADR-0002）`, retires nothing.
+`provisionally accepted`, so `暫定接受` is a draft.
+
+- **A Chinese word counts wherever it stands in the status**, because Chinese
+  puts no space between words: `已接受，後被ADR-0003取代` holds `已接受` and a
+  supersession.
+- **Except directly after a negation:** `不`, `未`, `非`, `沒`, `没`, `無`,
+  `无`, `勿`, `尚未` or `不再`. `未接受`, `尚未核准` and `不再生效` say nothing;
+  a word that starts with one, `不採納`, is itself.
+- **Superseded is also `被` followed by `取代`, `替代` or `取而代之`**, within 30
+  characters and in the same sentence: `已被 ADR-0003 取代` is retired, and
+  names ADR-0003 as what replaced it.
+- **`已取代` alone is retired.** Followed by a name, after spaces or a colon -
+  `已取代 ADR-0002` - it says what this document replaced, and is not read.
+- **`取代` with no `被`**, as in `已接受（取代 ADR-0002）`, retires nothing.
 
 | Phase | Chinese status words |
 | --- | --- |
@@ -184,23 +201,32 @@ characters and in the same sentence, by `取代`, `替代` or `取而代之`:
 | A directory, for a document that declares no status | `archive`, `archived`, `attic`, `deprecated`, `graveyard`, `historical`, `obsolete`, `rejected`, `retired`, `superseded`, `superceded`, `withdrawn` |
 
 A front-matter key is read in ASCII letters, so write `status: 已接受` rather
-than `狀態: 已接受`. The table is where many teams put a document's fields,
-`| 狀態 | 已接受 |` or `| Status | Accepted |`, and is read where a
-`## Status` section is, after one: a document with both is read from the
-section, and front matter still wins over either. A key is compared whole, in
-any case, emphasis stripped. A table with more columns, one under a heading
-below the title, and one spec-graph reads as a register are never read for the
-document's status: a legend or a register describes other things.
+than `狀態: 已接受`.
+
+The table is where many teams put a document's fields, `| 狀態 | 已接受 |` or
+`| Status | Accepted |`:
+
+- It is read where a `## Status` section is, after one: a document with both is
+  read from the section, and front matter still wins over either.
+- A key is compared whole, in any case, emphasis stripped.
+- A table with more columns, one under a heading below the title, and one
+  spec-graph reads as a register are never read for the document's status: a
+  legend or a register describes other things.
 
 </details>
 
 `archived` is none of the four. It is what spec-brief writes on a round of work
-it has closed, and every spec-* tool reads it as a **record**: depending on it
-is normal, its unticked boxes are not anyone's work, its links are still
-checked, and new work handed to it is still a ghost handover. See
-[Journals, changelogs and minutes](#journals-changelogs-and-minutes). Unlike a
-journal, it still answers for what it claims: a supersession it declares, a
+it has closed, and every spec-* tool reads it as a **record**:
+
+- depending on it is normal;
+- its unticked boxes are not anyone's work;
+- its links are still checked;
+- new work handed to it is still a ghost handover.
+
+See [Journals, changelogs and minutes](#journals-changelogs-and-minutes). Unlike
+a journal, it still answers for what it claims: a supersession it declares, a
 cycle it closes and a link to itself are reported as they would be anywhere.
+
 To retire a decision, say `superseded` or `deprecated` -
 `archived, superseded by ADR-0009` is retired - and a document under an
 `archive/` directory that says nothing about itself is still retired.
@@ -256,30 +282,35 @@ code. *"We resolved to keep the queue"* does not close anything.
 | `rejected` | `[-]` | `rejected`, `declined`, `dropped`, `not doing`, `will not do`, `abandoned`, `cancelled`, `canceled`, `withdrawn` | `rejected`, `declined` |
 | `obviated` | | `no longer applicable`, `no longer relevant`, `no longer needed`, `overtaken by events`, `premise invalid`, `obviated`, `obsolete`, `not applicable`, `moot`, `void`, `n/a`, `obe` | `obviated`, `moot` |
 
-A marker counts where a statement starts: at the start of the item or of a line,
-after the end of a sentence - a Chinese one, `。`, `？`, `！` or `；`, with a
-space after it or none - or after `(` or `[`. Punctuated means followed by
-`:`, `：`, `-`, `–`, `—` or `.`, so `Done.` closes an item; emphasised means the
-emphasis closes on the marker, so `**Closed beta**` does not. A marker of more
-than one word may be spaced, hyphenated or joined by an underscore, whichever
-the table has: `**Tech-debt:**` and `TECH_DEBT:` are `tech debt`. An apostrophe
-may be straight or curly. A Chinese marker is the English one it translates,
-and has no case to shout in: `已決定：` and `**已決定**` close an item, and
-`我們已決定採用` does not.
+Where a marker counts, and how it may be written:
+
+- A marker counts where a statement starts: at the start of the item or of a
+  line, after the end of a sentence - a Chinese one, `。`, `？`, `！` or `；`,
+  with a space after it or none - or after `(` or `[`.
+- Punctuated means followed by `:`, `：`, `-`, `–`, `—` or `.`, so `Done.`
+  closes an item; emphasised means the emphasis closes on the marker, so
+  `**Closed beta**` does not.
+- A marker of more than one word may be spaced, hyphenated or joined by an
+  underscore, whichever the table has: `**Tech-debt:**` and `TECH_DEBT:` are
+  `tech debt`. An apostrophe may be straight or curly.
+- A Chinese marker is the English one it translates, and has no case to shout
+  in: `已決定：` and `**已決定**` close an item, and `我們已決定採用` does not.
 
 </details>
 
 Without a box, a bullet is an obligation only at the top level of a section
 whose heading names open work, however the heading is cased, spaced, emphasised
 or punctuated - `## ❓ **Open questions:**` is one. The section ends at the next
-heading of its level. **Headings that hold obligations:** `Open Questions`,
-`Open Question`, `Unresolved Questions`, `Unanswered Questions`, `Questions`,
-`Open Issues`, `Action Items`, `Actions`, `TODO`, `To Do`, `To-Do`, `TODOs`,
-`Next Steps`, `Follow Ups`, `Follow-Ups`, `Followups`, `Follow Up`, `Follow-Up`,
+heading of its level. Every other bullet is the document's own prose.
+
+**Headings that hold obligations:** `Open Questions`, `Open Question`,
+`Unresolved Questions`, `Unanswered Questions`, `Questions`, `Open Issues`,
+`Action Items`, `Actions`, `TODO`, `To Do`, `To-Do`, `TODOs`, `Next Steps`,
+`Follow Ups`, `Follow-Ups`, `Followups`, `Follow Up`, `Follow-Up`,
 `Unresolved`, `Outstanding`, `Outstanding Questions`, `Tasks`, `Task List`,
 `Work Items`, `Remaining Work`, `Decisions Needed`, `Blockers`, `Parking Lot`,
-`Future Work`, `Deferred`, `待決事項`, `待决事项`, `未決問題`, `未决问题`, `待辦事項`,
-`待办事项`, `後續工作`, `后续工作`. Every other bullet is the document's own prose.
+`Future Work`, `Deferred`, `待決事項`, `待决事项`, `未決問題`, `未决问题`,
+`待辦事項`, `待办事项`, `後續工作`, `后续工作`.
 
 ### References, resolved forgivingly and validated strictly
 
@@ -298,15 +329,16 @@ trusts:
 - **Bare identifiers in prose are opportunistic.** They are reported only when
   their family already exists in the corpus. `ADR-0099` in a repository of ADRs
   is a real dangling citation; `SHA-256` in the same repository is a sentence.
-  A one-letter prefix is never a family - `Q3`, `x86`, `p99` - and nor are the
-  prefixes of versions, pages, protocols and platforms, even in a repository
-  that has a family of that name. **Never a citation:** `ver 3`, `version 4`,
-  `pp.12`, `Fig.3`, `Figure 4`, `Table 2`, `tbl 1`, `section 4`, `sect 2`,
-  `sec 5`, `step 2`, `item 3`, `No.5`, `num 7`, `line 42`, `ln 12`, `col 3`,
-  `port 8080`, `PR 45`, `issue 42`, `GH-123`, `UTF-8`, `ASCII 7`, `SHA-256`,
-  `MD5`, `HTTP 2`, `HTTPS 2`, `IPv6`, `IPv4 32`, `IPv6 128`, `TLS 1.3`,
-  `SSL 3`, `ES2015`, `ECMA-262`, `p99 250`, `base64`, `SQL-92`, `ARM64`,
-  `x86-64`, `Win32`, `Node 22`, `Python 3`, `Java 21`, `Go 1.22`, `cpp20`.
+  - A one-letter prefix is never a family - `Q3`, `x86`, `p99` - and nor are
+    the prefixes of versions, pages, protocols and platforms, even in a
+    repository that has a family of that name.
+  - **Never a citation:** `ver 3`, `version 4`, `pp.12`, `Fig.3`, `Figure 4`,
+    `Table 2`, `tbl 1`, `section 4`, `sect 2`, `sec 5`, `step 2`, `item 3`,
+    `No.5`, `num 7`, `line 42`, `ln 12`, `col 3`, `port 8080`, `PR 45`,
+    `issue 42`, `GH-123`, `UTF-8`, `ASCII 7`, `SHA-256`, `MD5`, `HTTP 2`,
+    `HTTPS 2`, `IPv6`, `IPv4 32`, `IPv6 128`, `TLS 1.3`, `SSL 3`, `ES2015`,
+    `ECMA-262`, `p99 250`, `base64`, `SQL-92`, `ARM64`, `x86-64`, `Win32`,
+    `Node 22`, `Python 3`, `Java 21`, `Go 1.22`, `cpp20`.
 - **Bare numbers are family-scoped.** `0007` inside an RFC means `RFC-0007`,
   never `ADR-0007`. A repository with both is ordinary, and guessing would be
   worse than silence. A document's family is the prefix of its identifier, or
@@ -321,68 +353,20 @@ trusts:
   so `[ADR-7](https://example.com/adr-7)` yields one reference rather than three.
 - **Source links are not spec links.** `[rules.ts](../../src/rules.ts)` is not a
   broken reference. That is [spec-guard](#relationship-to-spec-guard)'s job.
-  Nor is a link to any other file that is not a document: an image, a dotfile
-  such as `../.nvmrc`, or a drawing such as `arch.excalidraw`, however long its
-  extension. A dot followed by a digit, as in `ADR-0007.1`, is part of an
-  identifier and is still resolved. A link to a directory is not a reference
-  either, `../guides/` or `../guides` alike - without the slash the disk says
-  which it is, and a name with no slash at all, `guides`, is an identifier.
+  Nor is a link to:
+  - any other file that is not a document: an image, a dotfile such as
+    `../.nvmrc`, or a drawing such as `arch.excalidraw`, however long its
+    extension. A dot followed by a digit, as in `ADR-0007.1`, is part of an
+    identifier and is still resolved.
+  - a directory, `../guides/` or `../guides` alike - without the slash the disk
+    says which it is, and a name with no slash at all, `guides`, is an
+    identifier.
 
-### Registers: many specifications in one file
-
-One file per decision is the MADR, KEP and RFC layout, and it is what most
-repositories do. Plenty keep a register instead — one document holding dozens of
-decisions. **A specification is a region of a file, not a file**, so both work:
-
-```md
-## ADR-0007: Shard the write path
-
-**Status:** Superseded by ADR-0012
-
-Shard by tenant id.
-```
-
-Each section with an identifier *and* a status - a `**Status:**` line,
-`**狀態：**` in Chinese, or a `### Status` section under its heading - becomes a
-specification in its own right, with its own lifecycle, its own obligations and
-its own relations — resolvable from anywhere in the corpus as `ADR-0007`,
-whether it lives in a register or in its own file. Moving it out later breaks
-no citation.
-
-A register kept as a table works the same way, with relations typed by the column
-header you wrote:
-
-```md
-| ID       | Title          | Status     | Depends on | Superseded by |
-| :------- | :------------- | :--------- | :--------- | :------------ |
-| ADR-0001 | Use one writer | Superseded | -          | ADR-0003      |
-| ADR-0002 | Cache eviction | Accepted   | ADR-0001   | -             |
-```
-
-Findings point at the declaring cell, not at the file. A cell that is empty or
-holds only a placeholder — `-`, `—`, `n/a`, `none`, `nil`, `TBD` — says nothing.
-A status cell is read as a status line under a heading is, so
-`Superseded by ADR-0003` there names the row's successor.
-
-A row is named by its ID column, and a title is only a title. A row whose ID cell
-names nothing — empty, a placeholder, or a `?` nobody has numbered yet — is not a
-specification. An identifier a title opens with belongs to the document the row
-is *about* — an issue reading
-`| OI-V-05 | ADR-040's enforcement point has no browser test |` is filed under
-`OI-V-05`, and citations of `ADR-040` still reach `ADR-040`. The same holds for
-a whole file: an explicit `id:` (or `adr:`, `adr-id:`, `rfc:`, `rfc-id:`,
-`kep-number:`, `number:` or `slug:`), then the file name, then the H1, and the
-H1 is read as a name only when neither of the others gave one.
-
-The register itself stays in the graph as the thing that holds them, so
-`spec-graph query 'document[id=register] -contains-> document'` lists what is
-inside it.
-
-Both forms need **two** signals, and that is deliberate: `## Q3 2026 Roadmap`
-parses as family `Q`, number 3, and `## v1.2.0` in a changelog parses as family
-`v`, number 1. Neither declares a status, so neither is a specification. A table
-of identifiers and prose is a citation list, not a register. See
-[ADR-0009](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0009-a-specification-is-a-region.md).
+A document is named by an explicit `id:` (or `adr:`, `adr-id:`, `rfc:`,
+`rfc-id:`, `kep-number:`, `number:` or `slug:`), then by its file name, then by
+its H1, and the H1 is read as a name only when neither of the others gave one.
+A row of a register is named by its ID column instead: see
+[Registers](#registers-many-specifications-in-one-file).
 
 ### When `[[...]]` tags a concept
 
@@ -414,7 +398,7 @@ still a relation in the graph no matter what you exclude — not even
 `--ignore-ref "*"` can delete one. See
 [ADR-0008](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0008-wiki-links-carry-no-path.md).
 
-#### A gap that is deliberate
+### A gap that is deliberate
 
 Real filing histories have holes: an ADR number reserved and then withdrawn, a
 document that was folded into another before it was ever committed. Something
@@ -487,27 +471,33 @@ Blocked by [ADR-0009](0009-compliance.md).                       → blocked-by
 
 A phrase governs a reference when it stands no more than 40 characters before
 it, in the same statement: a sentence, a paragraph, a list item or a table cell.
-A negation between the two - `owned by nobody` - cancels it. Prose reads both
-directions too: `supersedes` and `superseded by`, `amends` and `amended by`,
-`blocked by` and `blocks` or `blocking`, `depends on` and `depended on by` - the
-second of each pair points back at the document that wrote it. A phrase that follows the reference
-makes the reference its subject - `[ADR-0009](0009.md) supersedes this` - except
-a `depends-on` or `assumes` phrase: `[ADR-0002](0002.md) requires a migration`
-says nothing about this document.
+
+- A negation between the two - `owned by nobody` - cancels it.
+- Prose reads both directions too: `supersedes` and `superseded by`, `amends`
+  and `amended by`, `blocked by` and `blocks` or `blocking`, `depends on` and
+  `depended on by` - the second of each pair points back at the document that
+  wrote it.
+- A phrase that follows the reference makes the reference its subject -
+  `[ADR-0009](0009.md) supersedes this` - except a `depends-on` or `assumes`
+  phrase: `[ADR-0002](0002.md) requires a migration` says nothing about this
+  document.
 
 In Chinese a phrase before the reference hands the work on, as `deferred to`
 does. **Chinese hand-off phrases:** `延後至`, `延后至`, `延至`, `移交至`,
-`移交給`, `移交给`, `留待`, `交由`, `併入`, `并入`. Chinese puts no space
-between words, so one counts wherever it stands, `此問題延後至ADR-0002`, except
-directly after a negation - `不`, `未`, `非`, `沒`, `没`, `無`, `无`, `勿`,
-`尚未` or `不再` - so `未移交給 ADR-0002` hands nothing on. An English phrase
-counts beside Chinese as well, `此問題deferred to ADR-0002`: a Han character is
-not part of an English word. A statement also ends at `。`, `？`, `！` and `；`,
-with a space after it or none, so `上次延後至別處。另見 ADR-0002` hands nothing to
-ADR-0002. A phrase written around the reference, `由 ADR-0002 決定` or
-`在 ADR-0002 中追蹤`, is not read, and neither are `根據`, `依據` and `基於`:
-Chinese uses them for any citation, and an `assumes` read from one would make a
-stale premise of it.
+`移交給`, `移交给`, `留待`, `交由`, `併入`, `并入`.
+
+- Chinese puts no space between words, so one counts wherever it stands,
+  `此問題延後至ADR-0002`, except directly after a negation - `不`, `未`, `非`,
+  `沒`, `没`, `無`, `无`, `勿`, `尚未` or `不再` - so `未移交給 ADR-0002` hands
+  nothing on.
+- An English phrase counts beside Chinese as well, `此問題deferred to ADR-0002`:
+  a Han character is not part of an English word.
+- A statement also ends at `。`, `？`, `！` and `；`, with a space after it or
+  none, so `上次延後至別處。另見 ADR-0002` hands nothing to ADR-0002.
+- A phrase written around the reference, `由 ADR-0002 決定` or
+  `在 ADR-0002 中追蹤`, is not read, and neither are `根據`, `依據` and `基於`:
+  Chinese uses them for any citation, and an `assumes` read from one would make
+  a stale premise of it.
 
 A link under a heading that files it as bookkeeping is `relates-to` unless a
 phrase beside it says more. **Bookkeeping headings:** `See also`, `References`,
@@ -517,12 +507,142 @@ phrase beside it says more. **Bookkeeping headings:** `See also`, `References`,
 `Appendix`, `More information`, `Resources`, `Index`, `參考資料`, `参考资料`,
 `相關文件`, `相关文件`, `延伸閱讀`, `延伸阅读`, `附錄`, `附录`, `修訂紀錄`, `修订记录`.
 
-Two properties do the work. `loadBearing` relations (`assumes`, `depends-on`,
-`blocked-by`, `amends`) make the source's validity depend on the target — those
-are what turn stale. `transfersObligation` relations (`delegates-to`,
-`blocked-by`) move work — those are what become ghosts. A "See also" link is
-neither, and is never reported, which is what keeps the signal-to-noise ratio
-high enough to leave the tool switched on.
+Two properties do the work:
+
+- `loadBearing` relations (`assumes`, `depends-on`, `blocked-by`, `amends`) make
+  the source's validity depend on the target — those are what turn stale.
+- `transfersObligation` relations (`delegates-to`, `blocked-by`) move work —
+  those are what become ghosts.
+
+A "See also" link is neither, and is never reported, which is what keeps the
+signal-to-noise ratio high enough to leave the tool switched on.
+
+### Registers: many specifications in one file
+
+One file per decision is the MADR, KEP and RFC layout, and it is what most
+repositories do. Plenty keep a register instead — one document holding dozens of
+decisions. **A specification is a region of a file, not a file**, so both work:
+
+```md
+## ADR-0007: Shard the write path
+
+**Status:** Superseded by ADR-0012
+
+Shard by tenant id.
+```
+
+Each section with an identifier *and* a status - a `**Status:**` line,
+`**狀態：**` in Chinese, or a `### Status` section under its heading - becomes a
+specification in its own right, with its own lifecycle, its own obligations and
+its own relations — resolvable from anywhere in the corpus as `ADR-0007`,
+whether it lives in a register or in its own file. Moving it out later breaks
+no citation.
+
+A register kept as a table works the same way, with relations typed by the column
+header you wrote:
+
+```md
+| ID       | Title          | Status     | Depends on | Superseded by |
+| :------- | :------------- | :--------- | :--------- | :------------ |
+| ADR-0001 | Use one writer | Superseded | -          | ADR-0003      |
+| ADR-0002 | Cache eviction | Accepted   | ADR-0001   | -             |
+```
+
+Findings point at the declaring cell, not at the file. A cell that is empty or
+holds only a placeholder — `-`, `—`, `n/a`, `none`, `nil`, `TBD` — says nothing.
+A status cell is read as a status line under a heading is, so
+`Superseded by ADR-0003` there names the row's successor.
+
+A row is named by its ID column, and a title is only a title:
+
+- A row whose ID cell names nothing — empty, a placeholder, or a `?` nobody has
+  numbered yet — is not a specification.
+- An identifier a title opens with belongs to the document the row is *about* —
+  an issue reading `| OI-V-05 | ADR-040's enforcement point has no browser test |`
+  is filed under `OI-V-05`, and citations of `ADR-040` still reach `ADR-040`.
+
+The same holds for a whole file, whose H1 is a name only when nothing else gave
+one: see [References](#references-resolved-forgivingly-and-validated-strictly).
+
+The register itself stays in the graph as the thing that holds them, so
+`spec-graph query 'document[id=register] -contains-> document'` lists what is
+inside it.
+
+Both forms need **two** signals, and that is deliberate: `## Q3 2026 Roadmap`
+parses as family `Q`, number 3, and `## v1.2.0` in a changelog parses as family
+`v`, number 1. Neither declares a status, so neither is a specification. A table
+of identifiers and prose is a citation list, not a register. See
+[ADR-0009](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0009-a-specification-is-a-region.md).
+
+## Directives
+
+Inference covers almost everything, but inference you cannot override is a trap.
+Directives are ordinary HTML comments — invisible in every Markdown renderer:
+
+```md
+<!-- @spec-node id="ADR-0007" status="accepted" aliases="sharding, adr-7" -->
+<!-- @spec-item id="shard-key" state="narrowed" -->
+<!-- @spec-edge kind="delegates-to" to="ADR-0011#scope" -->
+<!-- @spec-ignore -->
+<!-- @spec-history -->
+```
+
+Each takes these attributes. Any other is a parse problem, listed by
+`--verbose`, and the directive still applies:
+
+| directive | attributes |
+| --- | --- |
+| `@spec-node` | `id`, `status`, `title`, `aliases`, `kind` |
+| `@spec-item` | `id`, `state`, `title`, `owner`, `note` |
+| `@spec-edge` | `kind`, `to`, `from`, `reason` |
+| `@spec-ignore` | `reason` |
+| `@spec-history` | none |
+
+- `reason`, `note`, `owner` and a node's `kind` are for whoever reads the
+  source; spec-graph reads nothing from them.
+- `aliases` splits at commas, semicolons and spaces.
+- A value is quoted with either quote mark, or bare when it holds no space or
+  quote, and an attribute with no value is a flag.
+- A directive is the first thing in its comment, so a comment that only
+  mentions one is a comment.
+
+A directive always wins, and the report says the state came from a directive, so
+an override is visible rather than mysterious.
+
+A `@spec-item` annotates one item: the one directly below it, with nothing but
+blank lines or other comments between, or else the one it is written on or
+indented under. An id that two items end up with is a parse problem, listed by
+`--verbose`, and the first item keeps it.
+
+## Journals, changelogs and minutes
+
+A 2024 journal noting *"decision deferred to ADR-002"* is not delegating
+anything. It is reporting that somebody once did. When ADR-002 retires in 2026,
+the note does not become a defect — there is nothing in it for anyone to fix.
+
+Declare those files and spec-graph stops holding them to a lifecycle they never
+had:
+
+```json
+{ "historyPatterns": ["**/JOURNAL_*.md", "archive/**"] }
+```
+
+or, for one file, `<!-- @spec-history -->` at the top of it. A brief whose
+status is `archived` is a record already, with nothing declared, though not a
+log: the supersessions, cycles and self-references it declares are still
+checked.
+
+|  |  |
+| --- | --- |
+| its links resolve | **still checked** — a broken link is broken whoever wrote it |
+| its checkboxes | not obligations, and not in the headline count |
+| its delegations | reports of what was said |
+| work handed **into** it | **still checked** — a log will never act on it |
+
+That last row is the point. Excluding the file with `--ignore` would have
+silenced the whole lot, including the links, and a journal full of 404s is
+exactly what this tool is for. See
+[ADR-0011](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0011-a-record-is-not-a-specification.md).
 
 ## The query language
 
@@ -590,12 +710,10 @@ predicate is linear in the subject whatever the pattern — `^([A-Za-z0-9_]+[ ]?
 against a fifty-four-character title takes `RegExp` 103 seconds and this 13
 microseconds. It reads the usual syntax minus backreferences and lookaround,
 which are not regular; both are refused when the selector is read, with the
-character pointed at. Globs - the patterns to check, `--ignore`, `--ignore-ref`,
-`--history` - are matched by an automaton too, because a glob with three stars
-in it is enough to keep `RegExp` busy for two minutes over a long reference
-target. See [ADR-0017](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0017-a-predicate-must-finish.md). Both automata
-are spec-core's, the library the spec-* tools share, copied into this package
-rather than installed.
+character pointed at. The automaton is spec-core's, the library the spec-* tools
+share, copied into this package rather than installed, and so is the one
+[globs](#patterns) are matched by. See
+[ADR-0017](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0017-a-predicate-must-finish.md).
 
 On a register, a region answers its file's front matter for every descriptive
 key — `fm.owner` on a decision inside a register is the register's owner — while
@@ -667,74 +785,6 @@ spec-graph: .spec-graph.json: rules.owner: "{1.phse}" asks for an attribute
 
 See [ADR-0016](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0016-a-query-needs-a-sentence.md).
 
-## Directives
-
-Inference covers almost everything, but inference you cannot override is a trap.
-Directives are ordinary HTML comments — invisible in every Markdown renderer:
-
-```md
-<!-- @spec-node id="ADR-0007" status="accepted" aliases="sharding, adr-7" -->
-<!-- @spec-item id="shard-key" state="narrowed" -->
-<!-- @spec-edge kind="delegates-to" to="ADR-0011#scope" -->
-<!-- @spec-ignore -->
-<!-- @spec-history -->
-```
-
-Each takes these attributes. Any other is a parse problem, listed by
-`--verbose`, and the directive still applies:
-
-| directive | attributes |
-| --- | --- |
-| `@spec-node` | `id`, `status`, `title`, `aliases`, `kind` |
-| `@spec-item` | `id`, `state`, `title`, `owner`, `note` |
-| `@spec-edge` | `kind`, `to`, `from`, `reason` |
-| `@spec-ignore` | `reason` |
-| `@spec-history` | none |
-
-`reason`, `note`, `owner` and a node's `kind` are for whoever reads the source;
-spec-graph reads nothing from them. `aliases` splits at commas, semicolons and
-spaces. A value is quoted with either quote mark, or bare when it holds no space
-or quote, and an attribute with no value is a flag. A directive is the first
-thing in its comment, so a comment that only mentions one is a comment.
-
-A directive always wins, and the report says the state came from a directive, so
-an override is visible rather than mysterious.
-
-A `@spec-item` annotates one item: the one directly below it, with nothing but
-blank lines or other comments between, or else the one it is written on or
-indented under. An id that two items end up with is a parse problem, listed by
-`--verbose`, and the first item keeps it.
-
-## Journals, changelogs and minutes
-
-A 2024 journal noting *"decision deferred to ADR-002"* is not delegating
-anything. It is reporting that somebody once did. When ADR-002 retires in 2026,
-the note does not become a defect — there is nothing in it for anyone to fix.
-
-Declare those files and spec-graph stops holding them to a lifecycle they never
-had:
-
-```json
-{ "historyPatterns": ["**/JOURNAL_*.md", "archive/**"] }
-```
-
-or, for one file, `<!-- @spec-history -->` at the top of it. A brief whose
-status is `archived` is a record already, with nothing declared, though not a
-log: the supersessions, cycles and self-references it declares are still
-checked.
-
-|  |  |
-| --- | --- |
-| its links resolve | **still checked** — a broken link is broken whoever wrote it |
-| its checkboxes | not obligations, and not in the headline count |
-| its delegations | reports of what was said |
-| work handed **into** it | **still checked** — a log will never act on it |
-
-That last row is the point. Excluding the file with `--ignore` would have
-silenced the whole lot, including the links, and a journal full of 404s is
-exactly what this tool is for. See
-[ADR-0011](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0011-a-record-is-not-a-specification.md).
-
 ## Adopting this on a repository that predates it
 
 Fifty findings on day one is not a report, it is a decision to be ignored. So
@@ -791,89 +841,6 @@ the other case and stays optional, because a repository declares the path before
 the first run records the file — `--verbose` says when it read nothing. Either
 may be absolute. See [ADR-0012](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0012-a-baseline-is-a-ratchet.md).
 
-## In CI
-
-The exit code is the contract: `0` clean, `1` findings, `2` the tool could not
-run. That is all most pipelines need.
-
-For annotations on the diff rather than a line in a log, emit SARIF and hand it
-to the uploader that already exists. The upload needs `security-events: write`,
-and a job that declares its permissions has only those, so it names
-`contents: read` for its checkout as well:
-
-```yaml
-permissions:
-  contents: read
-  security-events: write
-steps:
-  # check out the repository and set up Node, then:
-  - run: npx spec-graph --format sarif > spec-graph.sarif
-    continue-on-error: true
-  - uses: github/codeql-action/upload-sarif@v4
-    with:
-      sarif_file: spec-graph.sarif
-```
-
-Findings land as comments on the changed lines, and they persist across commits
-without drifting, because the `partialFingerprints` spec-graph writes are the
-same identity a baseline is keyed on — the rule, the specification, and the
-citation, with no line number in it (ADR-0012).
-
-Without code scanning, `--format github` writes one GitHub Actions workflow
-command per finding, and the job's log turns each into an annotation on the
-diff, with no upload step:
-
-```yaml
-- run: npx spec-graph --format github
-```
-
-```text
-::error file=docs/adr/0003-event-log.md,line=13,title=ghost-handover::open obligation delegates to ADR-0002, which is retired. nothing will be read from ADR-0002 again - re-home this in a live document, or close it here
-```
-
-An `error` finding is an `error`, a `warn` a `warning` and an `info` a
-`notice`, as spec-guard writes them, and one only `--strict` made an error is
-titled `ghost-handover (strict)`. The message carries the hint. `%` and line
-breaks are escaped everywhere, and `:` and `,` in the file and the title, as
-GitHub reads them. A clean run writes nothing.
-
-On GitLab, `--format gitlab` writes the Code Quality report a merge request
-reads, and the merge request shows which findings it introduced and which it
-resolved:
-
-```yaml
-spec-graph:
-  script:
-    - npx spec-graph --format gitlab > gl-code-quality-report.json
-  artifacts:
-    when: always
-    reports:
-      codequality: gl-code-quality-report.json
-```
-
-Each finding is an issue with its rule as `check_name`, its message and hint as
-`description`, and its file and line as `location`. Severities map as `error`
-to `critical` - or `major` when only `--strict` made it an error - `warn` to
-`minor` and `info` to `info`. The `fingerprint` is a SHA-256 of the rule, the
-specification and what within it - a citation's target, or the document at the
-other end - which is what a baseline counts by. There is no line in it, so a
-finding a paragraph moved is not reported as new, and no message, so ticking
-one of three open boxes does not make an `orphaned-obligation` new either; the
-second of two findings identical in all three is told apart by its order. `when: always` keeps the report when the job fails, which
-it does, with exit `1`, whenever there is an error to report.
-
-`--format json` is the machine-readable output to parse if you are building
-something of your own: it carries the baseline note, the summary and the
-per-file detail that SARIF and Code Quality have nowhere to put.
-
-**There is no `--watch`.** A full run on this repository takes 60 ms, so the
-loop that would justify a resident process is one line of shell, and it belongs
-to whatever the developer already uses rather than to this tool:
-
-```bash
-npx spec-graph --format json | jq -r '.summary'
-```
-
 ## Configuration
 
 Anything you repeat on every run belongs to the repository rather than to the
@@ -903,10 +870,13 @@ command. spec-graph reads the first of `.spec-graph.json`,
 The file is looked for in the working directory and then upward, as far as the
 repository — a directory holding `.git` — and **the directory holding it becomes
 the root**. So a run from `packages/auth` reports what a run from the top
-reports, byte for byte, because every path here is relative to the root. The
-nearest file wins, `--root` names the root yourself and turns discovery off, and
-a path typed on the command line stays relative to where you typed it. See
-[ADR-0018](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0018-the-configuration-file-is-the-root.md).
+reports, byte for byte, because every path here is relative to the root.
+
+- The nearest file wins.
+- `--root` names the root yourself and turns discovery off.
+- A path typed on the command line stays relative to where you typed it.
+
+See [ADR-0018](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0018-the-configuration-file-is-the-root.md).
 
 A flag always wins over the file, and list flags **add** to it rather than
 replacing it — a `--ignore-ref` on the command line is one more exclusion, not a
@@ -919,15 +889,19 @@ it can be combined with any `--format` and leave the document on stdout intact.
 — the lines under it in the terminal, `related` in JSON, `relatedLocations` in
 SARIF — and is 8 unless set; `0` lists none.
 
-A broken config stops the run with exit `2`, each problem named on stderr —
+A broken config stops the run with exit `2`, each problem named on stderr:
 invalid JSON, a value of the wrong type, an unknown key, a rule that does not
-compile. A configuration that did not load checks a different repository than
-the one configured, and would report *that* one as consistent: a `{1.phse}` for
-`{1.phase}` in one rule's message is a green build over the files the correctly
-spelled rule fails. An unknown key counts, for the same reason it is reported at
-all — a silently ignored `ignoreReference` is a configuration that looks applied
-and is not. `--no-config` checks on defaults instead, and the exit code then
-says which run it was.
+compile. Why a mistake stops the run:
+
+- A configuration that did not load checks a different repository than the one
+  configured, and would report *that* one as consistent: a `{1.phse}` for
+  `{1.phase}` in one rule's message is a green build over the files the
+  correctly spelled rule fails.
+- An unknown key counts, for the same reason it is reported at all — a silently
+  ignored `ignoreReference` is a configuration that looks applied and is not.
+
+`--no-config` checks on defaults instead, and the exit code then says which run
+it was.
 
 ### Patterns
 
@@ -950,52 +924,74 @@ recorded on a Windows checkout holds in Linux CI:
 | `!docs/drafts/**` | takes back what an earlier pattern matched; the last to match wins |
 | `docs\adr\*.md` | the same as `docs/adr/*.md`: a `\` is a separator |
 
-A class never matches a `/`, and a pattern that cannot mean a path under the
-root — an unclosed `[` or `{`, `..`, a lone `.` or `./`, an empty one, or
-braces that give one of them, `{./,docs}` — stops the run with exit `2` and
-names the pattern, wherever it was written. So does an
-extended glob, `+(a|b)`: write `{a,b}`. So does one too large to compile:
-braces that expand to more than 256 patterns, or a pattern past 65,536
-automaton states. A parenthesis with no `|` in its group
-is itself, so `C++(notes).md` names that file. A `..` typed below the root,
-`spec-graph "../*.md"` from `docs/deep`, is resolved against where you typed
-it. A bare `--ignore` name, `--ignore drafts`, still prunes that directory at
-any depth, even where a pattern starts inside it or names it. A `!` before one
-gives the name back, as a `.gitignore` line does:
-`--ignore drafts --ignore '!drafts'` reads every `drafts`, and the last bare
-name to name a directory decides. A path,
-`--ignore "docs/*"`, takes out what it matches wherever a pattern starts:
-`docs/drafts/**/*.md` finds nothing under it, as `docs/**/*.md` finds nothing
-in `docs/drafts`.
+Three kinds of pattern stop the run with exit `2`, and the run names the
+pattern, wherever it was written:
+
+- a pattern that cannot mean a path under the root — an unclosed `[` or `{`,
+  `..`, a lone `.` or `./`, an empty one, or braces that give one of them,
+  `{./,docs}`;
+- an extended glob, `+(a|b)`: write `{a,b}`;
+- one too large to compile: braces that expand to more than 256 patterns, or a
+  pattern past 65,536 automaton states.
+
+Globs - the patterns to check, `--ignore`, `--ignore-ref`, `--history` - are
+matched by an automaton rather than by `RegExp`, because a glob with three stars
+in it is enough to keep `RegExp` busy for two minutes over a long reference
+target. See
+[ADR-0017](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0017-a-predicate-must-finish.md).
+
+A class never matches a `/`. A parenthesis with no `|` in its group is itself,
+so `C++(notes).md` names that file. A `..` typed below the root,
+`spec-graph "../*.md"` from `docs/deep`, is resolved against where you typed it.
+
+A bare name and a path read differently as an `--ignore`:
+
+- A bare `--ignore` name, `--ignore drafts`, still prunes that directory at any
+  depth, even where a pattern starts inside it or names it.
+- A `!` before one gives the name back, as a `.gitignore` line does:
+  `--ignore drafts --ignore '!drafts'` reads every `drafts`, and the last bare
+  name to name a directory decides.
+- A path, `--ignore "docs/*"`, takes out what it matches wherever a pattern
+  starts: `docs/drafts/**/*.md` finds nothing under it, as `docs/**/*.md` finds
+  nothing in `docs/drafts`.
 
 The walk never enters `.git`, `.hg`, `.svn`, `.cache`, `.next`, `.nuxt`,
 `.turbo`, `.venv`, `node_modules`, `bower_components`, `vendor`, `dist`,
 `build`, `out`, `target`, `coverage` or `__pycache__` on its way to what the
-patterns name. Unlike an `--ignore`, these yield to a pattern that starts inside
-one: `vendor/specs/*.md` is read from there, whatever the other patterns reach.
-They yield to a plain name for one as well: `vendor` and `docs/vendor` read
-those directories as `vendor/` and `docs/vendor/` do, or the file, where one
-of them is a file. And they yield to a `!` before their name:
-`--ignore '!vendor'` reads every `vendor`, the rest of the list still skipped
-inside it. A `!` before a path takes back only what a path `--ignore` took
-out, so `!docs/vendor` gives back nothing the walk skips: name it among the
-patterns. Nor does the walk follow a link, a pattern that starts
-beyond one included: `docs/linked/*.md` reads nothing through the link
-`docs/linked`, as `docs/**/*.md` reads nothing there. `followSymlinks` in the
-[API](#programmatic-api) follows links, and prunes a link to a directory as it
-prunes a directory of that name and path: a linked `node_modules` is skipped,
-and an `--ignore` takes a link out. It never follows a link back into a
-directory the walk is inside, so a cycle is read once, and says nothing of it,
-as it says nothing of a link it does not follow.
+patterns name. Unlike an `--ignore`, these yield:
 
-`--ignore-ref` is matched against reference targets rather than paths: a bare
-pattern names one target exactly, case is ignored on every host, a `\` escapes
-the next character, and `.` and `..` are the text of the link, in a brace
-alternative as anywhere else: `docs/{.,x}` names `docs/.` and `docs/x`, and
-`{./,docs}` the targets under `./`, and `docs`. A leading `/` is the text of
-the link too: `{/docs/a.md,x}` names the target `/docs/a.md`, as `/docs/a.md`
-does, and not `docs/a.md`. See
-[ADR-0022](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0022-globs-are-the-family-path-dialect.md).
+- to a pattern that starts inside one: `vendor/specs/*.md` is read from there,
+  whatever the other patterns reach;
+- to a plain name for one: `vendor` and `docs/vendor` read those directories
+  as `vendor/` and `docs/vendor/` do, or the file, where one of them is a file;
+- to a `!` before their name: `--ignore '!vendor'` reads every `vendor`, the
+  rest of the list still skipped inside it. A `!` before a path takes back only
+  what a path `--ignore` took out, so `!docs/vendor` gives back nothing the walk
+  skips: name it among the patterns.
+
+Nor does the walk follow a link, a pattern that starts beyond one included:
+`docs/linked/*.md` reads nothing through the link `docs/linked`, as
+`docs/**/*.md` reads nothing there. `followSymlinks` in the
+[API](#programmatic-api) follows links, and:
+
+- prunes a link to a directory as it prunes a directory of that name and path:
+  a linked `node_modules` is skipped, and an `--ignore` takes a link out;
+- never follows a link back into a directory the walk is inside, so a cycle is
+  read once, and says nothing of it, as it says nothing of a link it does not
+  follow.
+
+`--ignore-ref` is matched against reference targets rather than paths:
+
+- a bare pattern names one target exactly;
+- case is ignored on every host;
+- a `\` escapes the next character;
+- `.` and `..` are the text of the link, in a brace alternative as anywhere
+  else: `docs/{.,x}` names `docs/.` and `docs/x`, and `{./,docs}` the targets
+  under `./`, and `docs`;
+- a leading `/` is the text of the link too: `{/docs/a.md,x}` names the target
+  `/docs/a.md`, as `/docs/a.md` does, and not `docs/a.md`.
+
+See [ADR-0022](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0022-globs-are-the-family-path-dialect.md).
 
 ### Family rules
 
@@ -1074,12 +1070,109 @@ never masquerades as a passing build, and neither does a pattern that matches
 nothing, a configuration file that did not load, or a `--baseline` that is not
 there.
 
-## Continuous integration
+**There is no `--watch`.** A full run on this repository takes 60 ms, so the
+loop that would justify a resident process is one line of shell, and it belongs
+to whatever the developer already uses rather than to this tool:
+
+```bash
+npx spec-graph --format json | jq -r '.summary'
+```
+
+## In CI
+
+The exit code is the contract: `0` clean, `1` findings, `2` the tool could not
+run. That is all most pipelines need.
+
+Beyond that, a format puts the findings where somebody will look:
+
+| Format | Where the findings land |
+| --- | --- |
+| `--format sarif` | GitHub code scanning: comments on the changed lines |
+| `--format github` | annotations on the diff, from the job's log, with no upload step |
+| `--format gitlab` | the Code Quality report of a GitLab merge request |
+| `--format markdown` | a table for the job summary, where reviewers look |
+| `--format json` | a script or a bot of your own |
+
+### Code scanning, with SARIF
+
+For annotations on the diff rather than a line in a log, emit SARIF and hand it
+to the uploader that already exists. The upload needs `security-events: write`,
+and a job that declares its permissions has only those, so it names
+`contents: read` for its checkout as well:
 
 ```yaml
-- name: Check the specification graph
-  run: npx spec-graph "docs/**/*.md" --format json > spec-graph.json
+permissions:
+  contents: read
+  security-events: write
+steps:
+  # check out the repository and set up Node, then:
+  - run: npx spec-graph --format sarif > spec-graph.sarif
+    continue-on-error: true
+  - uses: github/codeql-action/upload-sarif@v4
+    with:
+      sarif_file: spec-graph.sarif
 ```
+
+Findings land as comments on the changed lines, and they persist across commits
+without drifting, because the `partialFingerprints` spec-graph writes are the
+same identity a baseline is keyed on — the rule, the specification, and the
+citation, with no line number in it (ADR-0012).
+
+### Annotations, with `--format github`
+
+Without code scanning, `--format github` writes one GitHub Actions workflow
+command per finding, and the job's log turns each into an annotation on the
+diff, with no upload step:
+
+```yaml
+- run: npx spec-graph --format github
+```
+
+```text
+::error file=docs/adr/0003-event-log.md,line=13,title=ghost-handover::open obligation delegates to ADR-0002, which is retired. nothing will be read from ADR-0002 again - re-home this in a live document, or close it here
+```
+
+- An `error` finding is an `error`, a `warn` a `warning` and an `info` a
+  `notice`, as spec-guard writes them, and one only `--strict` made an error is
+  titled `ghost-handover (strict)`.
+- The message carries the hint.
+- `%` and line breaks are escaped everywhere, and `:` and `,` in the file and
+  the title, as GitHub reads them.
+- A clean run writes nothing.
+
+### Code Quality, with `--format gitlab`
+
+On GitLab, `--format gitlab` writes the Code Quality report a merge request
+reads, and the merge request shows which findings it introduced and which it
+resolved:
+
+```yaml
+spec-graph:
+  script:
+    - npx spec-graph --format gitlab > gl-code-quality-report.json
+  artifacts:
+    when: always
+    reports:
+      codequality: gl-code-quality-report.json
+```
+
+Each finding is an issue:
+
+- `check_name` is its rule, `description` its message and hint, and `location`
+  its file and line.
+- Severities map as `error` to `critical` - or `major` when only `--strict` made
+  it an error - `warn` to `minor` and `info` to `info`.
+- The `fingerprint` is a SHA-256 of the rule, the specification and what within
+  it - a citation's target, or the document at the other end - which is what a
+  baseline counts by. There is no line in it, so a finding a paragraph moved is
+  not reported as new, and no message, so ticking one of three open boxes does
+  not make an `orphaned-obligation` new either; the second of two findings
+  identical in all three is told apart by its order.
+
+`when: always` keeps the report when the job fails, which it does, with exit
+`1`, whenever there is an error to report.
+
+### A summary for reviewers, with `--format markdown`
 
 `--format markdown` writes the same facts as a table, for the place reviewers
 actually look:
@@ -1093,6 +1186,17 @@ actually look:
 It leads with the verdict, counts the corpus, gives every finding its hint, and
 *names* the baseline entries that no longer occur rather than counting them —
 on a pull request a count is the one thing a reader cannot act on.
+
+### JSON, for anything of your own
+
+`--format json` is the machine-readable output to parse if you are building
+something of your own: it carries the baseline note, the summary and the
+per-file detail that SARIF and Code Quality have nowhere to put.
+
+```yaml
+- name: Check the specification graph
+  run: npx spec-graph "docs/**/*.md" --format json > spec-graph.json
+```
 
 The JSON report is versioned, flat, and carries start and end positions for
 every finding, so a bot can annotate a diff:
@@ -1118,6 +1222,8 @@ every finding, so a bot can annotate a diff:
 }
 ```
 
+### What a pull request changed
+
 A check says what is wrong. `spec-graph diff` says what a pull request changed:
 documents added, removed, moved or accepted, relations added or removed, and
 obligations resolved or reopened. It compares two exports made by the same
@@ -1130,15 +1236,20 @@ binary, so CI makes one from the base branch and one from the pull request:
 - run: npx spec-graph diff base.json head.json --format markdown >> "$GITHUB_STEP_SUMMARY"
 ```
 
-It names only what it can tell apart. A document keeps its id through a rename,
-so a moved document reads as moved. An obligation's id is its position in its
-section, so inserting a question renumbers every question below it; an
-obligation is therefore paired only by an id its author declared, or by its
-document, section and title when nothing else shares them. Anything unpaired
-is reported as having appeared or disappeared, never as resolved or reopened.
-Findings are left to `--baseline`, which already reports what is new. The exit
-code is `0` whether anything changed or not: a diff describes, and `check`
-gates. See [ADR-0020](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0020-a-diff-names-what-it-can-tell-apart.md).
+It names only what it can tell apart:
+
+- A document keeps its id through a rename, so a moved document reads as moved.
+- An obligation's id is its position in its section, so inserting a question
+  renumbers every question below it. An obligation is therefore paired only by
+  an id its author declared, or by its document, section and title when nothing
+  else shares them.
+- Anything unpaired is reported as having appeared or disappeared, never as
+  resolved or reopened.
+- Findings are left to `--baseline`, which already reports what is new.
+
+The exit code is `0` whether anything changed or not: a diff describes, and
+`check` gates. See
+[ADR-0020](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0020-a-diff-names-what-it-can-tell-apart.md).
 
 ## Visualising
 
@@ -1236,6 +1347,14 @@ about it.
 `spec-graph` checks the **horizontal** dimension: whether your specifications are
 consistent with *each other*. They share conventions and a philosophy, compose
 cleanly, and neither requires the other.
+
+## Contributing
+
+How to build, test and release spec-graph, and where a change usually goes, is
+in [CONTRIBUTING.md](https://github.com/DescentVTT/spec-graph/blob/main/CONTRIBUTING.md).
+Report a vulnerability privately, as
+[SECURITY.md](https://github.com/DescentVTT/spec-graph/blob/main/SECURITY.md)
+describes, and not in a public issue.
 
 ## Licence
 
