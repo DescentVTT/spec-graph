@@ -42,6 +42,21 @@ a patch fixes behaviour without asking anything of a repository that upgrades.
   list gives way to a link a pattern names or starts inside, as it does to
   a directory (ADR-0022). The command line never follows a link, so it sees
   nothing change.
+- **`--ignore-ref` reads a `.` or `..` in a brace alternative as text, as it
+  reads one anywhere else.** The dots were escaped before the braces were
+  expanded, so an alternative's dot was read as a direction:
+  `--ignore-ref "docs/{.,x}"` passed over the target `docs` where
+  `docs/.` passes over `docs/.`, `{./docs,x}` over `docs` where `./docs`
+  passes over `./docs`, and `docs/{x,..}`, `{../notes/*.md,x}`, `{.,docs}`,
+  `{./,docs}` and `.{/,docs}` stopped the run with exit `2`, as climbing out
+  of the root or naming no path. Each alternative now reads as it does
+  written alone: `docs/{.,x}` passes over `docs/.` and `docs/x`, and
+  `{./,docs}` over the targets under `./` and the target `docs` - never
+  every target, which it passed over before 0.9.8 refused it. A `\` escapes
+  inside braces as outside, as it did, and the path patterns still refuse
+  `{./,docs}` (ADR-0022). No configuration in this repository, its fixtures
+  or the rest of the family writes such a pattern, and over them every
+  `check` format and every graph export is byte for byte what 0.9.8 wrote.
 
 ## 0.9.8
 
