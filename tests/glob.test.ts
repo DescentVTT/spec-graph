@@ -556,9 +556,8 @@ describe('reference filter', () => {
   it('leaves a dot inside a name as it is, and escapes with a backslash inside braces as outside', () => {
     expect(createReferenceFilter(['{*.md,x}'])('gone.md')).toBe(true);
     expect(createReferenceFilter(['docs/{...,x}'])('docs/...')).toBe(true);
-    // Only a `.` or `..` that may be a segment is escaped, so the advice for
-    // a `**` inside a name, written from the pattern, reads as it was typed
-    // wherever no such dot is in it.
+    // The advice for a `**` inside a name reads as it was typed, a dot that
+    // begins a name included.
     const advice = (pattern: string) => () => createReferenceFilter([pattern]);
     expect(advice('.github/**.md')).toThrow('write ".github/**/*.md" for any depth, or ".github/*.md" for one level');
     expect(advice('docs/**.{md,txt}')).toThrow('write "docs/**/*.{md,txt}" for any depth, or "docs/*.{md,txt}" for one level');
@@ -567,9 +566,39 @@ describe('reference filter', () => {
     expect([escaped('trap *'), escaped('trap 55'), escaped('a,b')]).toEqual([true, false, true]);
   });
 
+  it('advises a refused pattern in the words it was typed in, dots and all', () => {
+    // The dots that may be a segment are escaped for the dialect, which wrote
+    // its advice from what it was given: `\.\./notes/**/*.md`.
+    const advice = (pattern: string) => () => createReferenceFilter([pattern]);
+    expect(advice('../notes/**.md')).toThrow(
+      'invalid glob "../notes/**.md": "**" means any number of directories only as a whole segment: write "../notes/**/*.md" for any depth, or "../notes/*.md" for one level',
+    );
+    expect(advice('docs/./**.md')).toThrow('write "docs/./**/*.md" for any depth, or "docs/./*.md" for one level');
+    expect(advice('{../notes/**.md,x}')).toThrow('write "{../notes/**/*.md,x}" for any depth, or "{../notes/*.md,x}" for one level');
+    expect(advice('docs/{.,..}/**.md')).toThrow('write "docs/{.,..}/**/*.md" for any depth, or "docs/{.,..}/*.md" for one level');
+    expect(advice('..{/,x}/**.md')).toThrow('write "..{/,x}/**/*.md" for any depth, or "..{/,x}/*.md" for one level');
+  });
+
+  it('keeps in the advice what was typed and was not escaped for the dialect', () => {
+    const advice = (pattern: string) => () => createReferenceFilter([pattern]);
+    // A `\` typed before a dot is the writer's, and stays.
+    const slash = String.fromCharCode(92);
+    expect(advice(`docs/${slash}./**.md`)).toThrow(`write "docs/${slash}./**/*.md" for any depth, or "docs/${slash}./*.md" for one level`);
+    // So does a character the dialect could have been given in place of a dot.
+    const own = String.fromCodePoint(0xe000);
+    expect(advice(`../${own}/**.md`)).toThrow(`write "../${own}/**/*.md" for any depth, or "../${own}/*.md" for one level`);
+    // And a refusal that quotes no part of the pattern names it as typed.
+    expect(advice('  ../[x  ')).toThrow('invalid glob "  ../[x  ": a "[" is never closed');
+  });
+
   it('escapes with a backslash, since a target is not a host path', () => {
     expect(createReferenceFilter(['trap \\*'])('trap *')).toBe(true);
     expect(createReferenceFilter(['trap \\*'])('trap 55')).toBe(false);
+    // A dot the writer escaped is left alone, not escaped a second time into
+    // a backslash and a dot.
+    const slash = String.fromCharCode(92);
+    const escapedDot = createReferenceFilter([`docs/${slash}./gone.md`]);
+    expect([escapedDot('docs/./gone.md'), escapedDot(`docs/${slash}./gone.md`)]).toEqual([true, false]);
   });
 
   it('names the pattern as written when it does not compile', () => {

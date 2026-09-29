@@ -145,6 +145,22 @@ escaped, so the advice for a `**` inside a name still reads as typed. A `\`
 escapes inside braces as outside, as it did. The path patterns are
 unchanged: `{./,docs}` is refused there.
 
+*Amended 2026-09-29.* **A refused `--ignore-ref` pattern is advised as it
+was typed.** The dialect writes its advice for a `**` inside a name from the
+text it is given, and the filter gave it the pattern with its dots escaped:
+`../notes/**.md` was told `\.\./notes/**/*.md` or `\.\./notes/*.md`, and
+`{../notes/**.md,x}` was told `{\.\./notes/**/*.md,x}`, advice that typed
+back is another pattern. A refusal is now worded again from the pattern as
+typed, with a character it does not hold standing in for each escaped dot
+and read back as the dot: `../notes/**/*.md` or `../notes/*.md`, inside
+braces as outside. A `\` the writer typed stays in the advice, as it did,
+and so does the pattern named in the first clause. With the advice worded
+from what was typed, the filter escapes each dot that may begin a segment
+rather than each whole `.` or `..` segment: an escaped dot is the character
+a dot in a name is, and the two readings agree on 43,069 generated patterns,
+on what each matches and on every refusal. What a pattern matches, and which
+patterns are refused, is as it was.
+
 Two refusals are narrower than they could be, on purpose. `**` inside a name
 is refused rather than read as `*`: the tools the dialect replaced read
 `docs/**.md` three ways, and the quiet reading turned a scope that reached every
