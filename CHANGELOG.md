@@ -33,6 +33,15 @@ a patch fixes behaviour without asking anything of a repository that upgrades.
   beyond, and over this repository, its fixtures and the rest of the family
   every `check` format and every graph export is byte for byte what 0.9.8
   wrote.
+- **A followed link to a directory is pruned as a directory is.** With the
+  API's `followSymlinks` on, the walk entered a link to a directory whatever
+  its name or path: a link called `node_modules`, which pnpm writes, one a
+  bare `--ignore` name names, and one a path `--ignore` such as `docs/p*`
+  matches. The default list, a bare name and the path ignores now take it
+  out as they take out a directory of that name and path, and the default
+  list gives way to a link a pattern names or starts inside, as it does to
+  a directory (ADR-0022). The command line never follows a link, so it sees
+  nothing change.
 
 ## 0.9.8
 

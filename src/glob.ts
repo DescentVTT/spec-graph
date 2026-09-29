@@ -392,6 +392,15 @@ export async function walkFiles(options: WalkOptions): Promise<WalkedFile[]> {
     const segments = base.split('/');
     return !segments.some((segment, i) => named.has(segment) || excluded(segments.slice(0, i + 1).join('/')));
   };
+  // Whether the walk leaves a directory it meets, asked of a followed link to
+  // one as well: a link called `node_modules`, which pnpm writes, or one an
+  // `--ignore` names, is the directory it leads to under that name and path,
+  // and was entered whatever they were. Pruning a whole subtree is an
+  // optimisation; a pattern that only matches the files inside it is still
+  // honoured when they are filtered. A bare `--ignore` name prunes a directory
+  // a pattern names as well: only the default list gives way.
+  const pruned = (name: string, path: string): boolean =>
+    named.has(name) || (skippedByDefault.has(name) && !literals.has(path)) || excluded(path);
   const out = new Map<string, WalkedFile>();
   // Where two walks overlap, whichever reaches a directory first reads it and
   // the other stops there. Reading it twice would find the same files under
@@ -415,12 +424,7 @@ export async function walkFiles(options: WalkOptions): Promise<WalkedFile[]> {
       const child = relative.length === 0 ? entry.name : `${relative}/${entry.name}`;
 
       if (entry.isDirectory()) {
-        // Pruning a whole subtree is an optimisation; a pattern that only
-        // matches the files inside it is still honoured when they are filtered.
-        // A bare `--ignore` name prunes a directory a pattern names as well:
-        // only the default list gives way.
-        if (named.has(entry.name) || (skippedByDefault.has(entry.name) && !literals.has(child)) || excluded(child)) continue;
-        await walk(child);
+        if (!pruned(entry.name, child)) await walk(child);
         continue;
       }
 
@@ -429,7 +433,7 @@ export async function walkFiles(options: WalkOptions): Promise<WalkedFile[]> {
         try {
           const info = await stat(`${root}/${child}`);
           if (info.isDirectory()) {
-            await walk(child);
+            if (!pruned(entry.name, child)) await walk(child);
             continue;
           }
           if (!patterns.match(child) || excluded(child) || info.size > maxSize) continue;
