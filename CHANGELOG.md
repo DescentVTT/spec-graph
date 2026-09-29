@@ -1,7 +1,48 @@
 # Changelog
 
-Notable changes, newest first. Versions follow [semver](https://semver.org):
-a patch fixes behaviour without asking anything of a repository that upgrades.
+Notable changes, newest first. Before 1.0, anything that can turn a passing
+run red or change what a script reads - a new finding, a changed exit code,
+input refused that was accepted, a renamed flag or JSON field - comes in a
+minor release, 0.9 to 0.10, with new features; a patch only reports less,
+fixes a crash, runs faster or corrects the documentation, so `^0.10.0` takes
+no release that can fail a build that passed. A flag, key or field is
+deprecated with a warning for at least one minor release before it goes, as
+the family's
+[versioning policy](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0009-versions-before-1-0.md)
+records.
+
+## Unreleased
+
+Chinese statuses and status tables are read, and `check` writes GitHub
+annotations. Over this repository, its fixtures and the rest of the family,
+which write neither, every `check` format and every graph export is byte for
+byte what 0.9.10 wrote.
+
+### Added
+
+- **`--format github`.** `check` writes one GitHub Actions workflow command
+  per finding, `::error file=…,line=…,title=…::message`, and the job's log
+  turns each into an annotation on the diff with no upload step. An error is
+  `error`, a warning `warning` and a note `notice`, as spec-guard writes them,
+  and the message carries the hint.
+
+### Changed
+
+- **A status written in Chinese is read.** Traditional and Simplified, each
+  word as the English word it translates: `已接受` is accepted, `延後` retired
+  as `deferred` is, `封存` a record as `archived` is, `已被 ADR-0003 取代`
+  retired with ADR-0003 named as its successor, and `未接受` nothing. `## 狀態`
+  heads a status section and `**狀態：**` labels a register section's
+  (ADR-0002). A Chinese document that read as `unknown` now takes part in the
+  lifecycle rules; a front-matter key is still `status:`, as spec-core reads
+  keys in ASCII. Upgrading: run `check`; a finding on a Chinese document is a
+  rule reaching it for the first time - fix it, or accept it in a baseline
+  with `--record-baseline <file>`.
+- **A status in a two-column table at the top of a document is read.**
+  `| 狀態 | 已接受 |` or `| Status | Accepted |` above the first `##` gives the
+  document's status, after a `## Status` section and never over front
+  matter; a legend, a register or a wider table is never read (ADR-0002).
+  Upgrading: as for Chinese.
 
 ## 0.9.10
 
