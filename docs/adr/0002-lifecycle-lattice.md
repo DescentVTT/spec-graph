@@ -66,6 +66,37 @@ underscore at either end of a word is still emphasis. And `Superseded – ADR-00
 names its successor with an en dash as it already did with a hyphen or an em
 dash.
 
+*Amended 2026-09-30.* A status is read in Chinese as well, Traditional and
+Simplified, and each Chinese word is the English word it translates, in that
+word's row: `延後` is `deferred` and retired, `封存` is `archived` and a record,
+and `暫定` is `provisionally accepted`, ahead of the active row. That keeps the
+spec-* tools in step with no rule of their own for Chinese: each does with a
+Chinese word what it already does with the English one. The words are in the
+README's table, which the vocabulary test reads.
+
+Chinese puts no space between words, so a word in Han characters cannot be
+looked up whole: `已接受，後被ADR-0003取代` split on everything that is not a
+letter is `已接受`, `後被adr` and `0003取代`, and read as active. A Han term is
+found anywhere in the status instead, as a hyphenated term already was, except
+directly after a negation - `不`, `未`, `非`, `沒`, `没`, `無`, `无`, `勿`, and
+`不再`; `尚未` ends in `未` - so `未接受`, `尚未核准` and `不再生效` say nothing.
+A term that starts with one, `不採納`, is itself.
+
+Two superseded forms are rules rather than words, tried before the table. `被`
+followed within thirty characters, in the same sentence, by `取代`, `替代` or
+`取而代之` is superseded, and what stands between them names the successor:
+`已被 ADR-0003 取代` is retired and says ADR-0003 replaced it, so the other
+document's `supersedes:` is answered. `已取代` said alone is superseded;
+followed by a name, after spaces or a colon - `已取代 ADR-0002`, `已取代舊方案`
+- it usually says what this document replaced, and it is not read at all,
+since reading it either way would be a guess (ADR-0006). `取代` with no `被`,
+`已接受（取代 ADR-0002）`, retires nothing.
+
+`## 狀態` and `## 状态` head a status section, with an ASCII or a full-width
+colon, and `**狀態：**` labels a register section's status. A front-matter key
+is read in ASCII letters only, by spec-core's reader, so `狀態:` in front matter
+is not read: that waits on spec-core, and `status: 已接受` is read today.
+
 ## Open Questions
 
 - [ ] Should `frozen` and `retired` be distinguishable in the `receptivity`

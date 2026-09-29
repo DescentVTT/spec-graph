@@ -55,7 +55,9 @@ files ─▶ markdown.ts ─▶ extract.ts ─▶ resolve.ts ─▶ graph.ts ─
 **Supporting a new status word, relation phrase or marker** is a table entry, not
 a code change. That is the whole point of the design:
 
-- a status word → `VOCABULARY` in `lifecycle.ts`
+- a status word → `VOCABULARY` in `lifecycle.ts`, in English or Chinese; a
+  word that cancels a Chinese one after it → `HAN_NEGATIONS`
+- a heading a status is read under → `STATUS_HEADINGS` in `lifecycle.ts`
 - a relation phrase (`"deferred to"`) → `VERB_RULES` in `extract.ts`
 - a front-matter relation key → `RELATION_KEYS` in `extract.ts`
 - a resolution marker (`"**Moot**"`) → `MARKERS` in `state.ts`
