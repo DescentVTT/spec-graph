@@ -293,6 +293,15 @@ export function findTableRegions(scanned: ScannedDocument): SpecificationRegion[
   return out;
 }
 
+/**
+ * Whether spec-graph reads a table as a register: an identifier column, and a
+ * status column or a relation column beside it. Such a table's status column
+ * describes its rows, never the document holding it.
+ */
+export function isRegisterTable(table: Table): boolean {
+  return readSchema(table) !== null;
+}
+
 interface TableSchema {
   readonly id: number;
   readonly status: number | null;

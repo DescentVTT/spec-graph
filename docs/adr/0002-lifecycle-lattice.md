@@ -97,6 +97,15 @@ colon, and `**狀態：**` labels a register section's status. A front-matter ke
 is read in ASCII letters only, by spec-core's reader, so `狀態:` in front matter
 is not read: that waits on spec-core, and `status: 已接受` is read today.
 
+A status is also read from a key-value table at the top of a document,
+`| 狀態 | 已接受 |` or `| Status | Accepted |`: a table of exactly two columns,
+above the first heading below the title, whose left cell, emphasis stripped,
+is `Status`, `State`, `狀態` or `状态` in any case, the header row included. The
+first such row gives the right cell as the status. It ranks with a `## Status`
+section, after one, and front matter still wins. A table with more columns,
+one under a heading, and one spec-graph reads as a register are never read for
+it: a legend or a register describes other things.
+
 ## Open Questions
 
 - [ ] Should `frozen` and `retired` be distinguishable in the `receptivity`

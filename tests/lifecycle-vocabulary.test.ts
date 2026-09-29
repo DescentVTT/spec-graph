@@ -19,6 +19,7 @@ interface Vocabulary {
   readonly words: readonly (readonly [Phase, string])[];
   readonly keys: readonly string[];
   readonly headings: readonly string[];
+  readonly tableKeys: readonly string[];
   readonly directories: readonly string[];
 }
 
@@ -42,6 +43,7 @@ function documented(): Vocabulary {
     words,
     keys: row('Front matter'),
     headings: row('A section'),
+    tableKeys: row('A two-column table'),
     directories: row('A directory'),
   };
 }
@@ -187,6 +189,19 @@ describe('where a status is looked for', () => {
     expect(written.map((heading, index) => [heading, graph.document(`ADR-${number(index)}`)?.phase])).toEqual(
       written.map((heading) => [heading, 'active']),
     );
+  });
+
+  it('reads a table at the top by each documented key, in the header row or a row below it', () => {
+    const { tableKeys } = documented();
+    const files: Record<string, string> = {};
+    tableKeys.forEach((key, index) => {
+      files[`docs/adr/${number(index * 2)}-header.md`] = `# Header\n\n| ${key} | Accepted |\n| --- | --- |\n| Owner | Platform |\n`;
+      files[`docs/adr/${number(index * 2 + 1)}-row.md`] = `# Row\n\n| Field | Value |\n| --- | --- |\n| ${key.toUpperCase()} | Draft |\n`;
+    });
+    const { graph } = analyseSources(corpus(files));
+    expect(
+      tableKeys.map((key, index) => [key, graph.document(`ADR-${number(index * 2)}`)?.phase, graph.document(`ADR-${number(index * 2 + 1)}`)?.phase]),
+    ).toEqual(tableKeys.map((key) => [key, 'active', 'draft']));
   });
 
   it('retires a document beneath each documented directory, and nothing beside one', () => {

@@ -38,8 +38,15 @@ import {
   type Link,
   type ListItem,
   type ScannedDocument,
+  type TableCell,
 } from './markdown.js';
-import { findSpecificationRegions, opensHeading, regionAt, type SpecificationRegion } from './sections.js';
+import {
+  findSpecificationRegions,
+  isRegisterTable,
+  opensHeading,
+  regionAt,
+  type SpecificationRegion,
+} from './sections.js';
 import { resolveItemState } from './state.js';
 import { refOf, type LineIndex } from './source.js';
 import type {
@@ -957,10 +964,11 @@ interface StatusReading {
 /**
  * Finds the document status.
  *
- * Looks in the three places teams actually put it, in descending order of how
+ * Looks in the places teams actually put it, in descending order of how
  * deliberate each is: a directive, a front-matter field, then the body of a
- * `## Status` section. A repository using none of them still gets a phase from
- * its directory layout, which is handled by the caller.
+ * `## Status` section or a key-value table above the first section. A
+ * repository using none of them still gets a phase from its directory layout,
+ * which is handled by the caller.
  *
  * A status section inside a register's region is that region's, not the
  * file's. Read as the file's, a register whose first decision said
@@ -1010,7 +1018,49 @@ function readStatus(
     }
   }
 
+  const cell = statusTableCell(scanned);
+  if (cell) {
+    return {
+      raw: cell.text,
+      at: refOf(file, index, cell.start, cell.end),
+      phase: phaseOf(cell.text),
+    };
+  }
+
   return { raw: null, at: null, phase: 'unknown' };
+}
+
+/** The left cells that make a two-column table's row the document's status. */
+const STATUS_TABLE_KEYS: ReadonlySet<string> = new Set(['status', 'state', '狀態', '状态']);
+
+/**
+ * The status a key-value table at the top of a document gives:
+ * `| 狀態 | 已接受 |`, or `| Status | Accepted |`, as the right cell of the first
+ * row whose left cell is a status key, the header row included.
+ *
+ * Read only where a document describes itself. A table under a heading below
+ * the title is a legend or a register, and one with more than two columns is
+ * not a list of the document's fields; neither is its status. A table
+ * spec-graph reads as a register is left to its rows. Ranked with a `## Status`
+ * section, after one: a document that has both is read from the section.
+ */
+function statusTableCell(scanned: ScannedDocument): TableCell | null {
+  const body = scanned.headings.find((h) => h.level >= 2)?.start ?? scanned.text.length;
+  for (const table of scanned.tables) {
+    // Tables come in order, and none starts on a heading's line, so `>` would
+    // stop at the same table.
+    if (table.start >= body) break;
+    if (table.headers.length !== 2 || isRegisterTable(table)) continue;
+    for (const cells of [table.headers, ...table.rows.map((row) => row.cells)]) {
+      // A row always has a first cell: a line with no cell ends the table.
+      const key = cells[0] as TableCell;
+      const value = cells[1];
+      // A row written short, or with nothing on the right, declares nothing.
+      if (value === undefined || value.text.length === 0) continue;
+      if (STATUS_TABLE_KEYS.has(key.text.replace(/[*_]/g, '').toLowerCase())) return value;
+    }
+  }
+  return null;
 }
 
 /** The first non-blank line under a `## Status` heading. */
