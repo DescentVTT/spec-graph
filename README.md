@@ -865,6 +865,7 @@ recorded on a Windows checkout holds in Linux CI:
 | `docs/` | everything under `docs`, and not `docs` itself |
 | `{docs,specs}` | two literals, so both directories and what they hold |
 | `{docs/,specs}` | everything under `docs`, and `specs` as the literal it is: a `/` ends an alternative as it ends a pattern |
+| `/docs`, `{/docs,specs}` | nothing under the root for `/docs`, which is rooted at the filesystem's root, and `specs` alone for the braces: a `/` starts an alternative as it starts a pattern |
 | `adr/[0-9]*.md`, `adr/[!0-9]*.md` | a class, and a negated one; `[^0-9]` negates too |
 | `!docs/drafts/**` | takes back what an earlier pattern matched; the last to match wins |
 | `docs\adr\*.md` | the same as `docs/adr/*.md`: a `\` is a separator |
@@ -911,7 +912,9 @@ as it says nothing of a link it does not follow.
 pattern names one target exactly, case is ignored on every host, a `\` escapes
 the next character, and `.` and `..` are the text of the link, in a brace
 alternative as anywhere else: `docs/{.,x}` names `docs/.` and `docs/x`, and
-`{./,docs}` the targets under `./`, and `docs`. See
+`{./,docs}` the targets under `./`, and `docs`. A leading `/` is the text of
+the link too: `{/docs/a.md,x}` names the target `/docs/a.md`, as `/docs/a.md`
+does, and not `docs/a.md`. See
 [ADR-0022](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0022-globs-are-the-family-path-dialect.md).
 
 ### Family rules

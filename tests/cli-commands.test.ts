@@ -270,6 +270,75 @@ describe('paths typed below the root', () => {
   });
 });
 
+describe('a brace alternative with a leading slash', () => {
+  // spec-core 7e41240 reads the slash as the same text written alone reads it:
+  // rooted at the filesystem's root, which no path under the root is, and for
+  // `--ignore-ref` part of the text a link wrote. It was dropped, so `{/docs,x}`
+  // read `docs`: the patterns to check read `docs`, `--ignore` took it out, and
+  // `--ignore-ref` passed over the target `docs/a.md` and not `/docs/a.md`.
+  const REPO = {
+    '.spec-graph.json': '{}\n',
+    'docs/0001-alpha.md': '---\nstatus: accepted\n---\n# ADR-0001: Alpha\n\nSee [rooted](/docs/a.md) and [relative](docs/a.md).\n',
+    'x/0002-beta.md': '---\nstatus: accepted\n---\n# ADR-0002: Beta\n\nText.\n',
+  };
+
+  /** What a run read and reported, without the time it took. */
+  const report = async (root: string, ...argv: string[]) => {
+    const result = await run('check', '--root', root, '--format', 'json', ...argv);
+    if (result.out === '') return { code: result.code, err: result.err };
+    const json = JSON.parse(result.out) as {
+      summary: { durationMs?: number };
+      files: string[];
+      diagnostics: { target?: string }[];
+      suppressed: { target: string }[];
+    };
+    delete json.summary.durationMs;
+    return {
+      code: result.code,
+      err: result.err,
+      files: json.files,
+      reported: json.diagnostics.map((diagnostic) => diagnostic.target),
+      passedOver: json.suppressed.map((suppressed) => suppressed.target),
+      json,
+    };
+  };
+
+  it('reads as the same text written alone, in the patterns to check, --ignore and --ignore-ref', async () => {
+    await withRepo('cli-rooted-alternative', REPO, async (root) => {
+      const checked = await report(root, '{/docs/*.md,x/*.md}');
+      expect(checked).toMatchObject({ code: EXIT_OK, files: ['x/0002-beta.md'] });
+      expect(checked).toEqual(await report(root, '/docs/*.md', 'x/*.md'));
+
+      const ignored = await report(root, '**/*.md', '--ignore', '{/docs,x}');
+      expect(ignored).toMatchObject({ code: EXIT_FAILED, files: ['docs/0001-alpha.md'] });
+      expect(ignored).toEqual(await report(root, '**/*.md', '--ignore', '/docs', '--ignore', 'x'));
+
+      const passed = await report(root, '**/*.md', '--ignore-ref', '{/docs/a.md,x}');
+      expect(passed).toMatchObject({ code: EXIT_FAILED, reported: ['docs/a.md'], passedOver: ['/docs/a.md'] });
+      expect(passed).toEqual(await report(root, '**/*.md', '--ignore-ref', '/docs/a.md', '--ignore-ref', 'x'));
+    });
+  });
+
+  it('reads as the same text written alone in the configuration', async () => {
+    const { writeFile } = await import('node:fs/promises');
+    await withRepo('cli-rooted-alternative-config', REPO, async (root) => {
+      const configured = async (config: object, ...argv: string[]) => {
+        await writeFile(`${root}/.spec-graph.json`, JSON.stringify(config));
+        return report(root, ...argv);
+      };
+      const checked = await configured({ patterns: ['{/docs/*.md,x/*.md}'] });
+      expect(checked).toMatchObject({ files: ['x/0002-beta.md'] });
+      expect(checked).toEqual(await configured({ patterns: ['/docs/*.md', 'x/*.md'] }));
+      const ignored = await configured({ ignore: ['{/docs,x}'] }, '**/*.md');
+      expect(ignored).toMatchObject({ files: ['docs/0001-alpha.md'] });
+      expect(ignored).toEqual(await configured({ ignore: ['/docs', 'x'] }, '**/*.md'));
+      const passed = await configured({ ignoreReferences: ['{/docs/a.md,x}'] }, '**/*.md');
+      expect(passed).toMatchObject({ reported: ['docs/a.md'], passedOver: ['/docs/a.md'] });
+      expect(passed).toEqual(await configured({ ignoreReferences: ['/docs/a.md', 'x'] }, '**/*.md'));
+    });
+  });
+});
+
 describe('the rules command', () => {
   const ROW = /^(\S+)( +)(error|warn|info|off)( +)(.+)$/;
 

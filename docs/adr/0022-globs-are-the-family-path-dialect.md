@@ -161,6 +161,31 @@ a dot in a name is, and the two readings agree on 43,069 generated patterns,
 on what each matches and on every refusal. What a pattern matches, and which
 patterns are refused, is as it was.
 
+*Amended 2026-09-29.* **A leading `/` on a brace alternative means what it
+means on the pattern written alone**, from spec-core 7e41240: braces expand
+before a leading slash is read. The pattern's own slash was read before the
+braces expanded and an alternative's after, as an empty segment, which names
+nothing, so `{/docs,x}` read `docs`. As a pattern to check it read `docs`,
+and a directory the walk skips when the alternative named it, since the walk
+was told of the literal: `{/dist,docs}` read `dist`. As an `--ignore` or a
+`--history` pattern it took out, or made records of, what is in `docs`. And
+`--ignore-ref "{/docs/a.md,x}"` passed over the target `docs/a.md` and not
+`/docs/a.md`. An alternative with a leading slash is now rooted at the
+filesystem's root, as `/docs` is, so as a path pattern it names nothing the
+walk finds: its starting point is not walked, and the walk is told of
+`/dist`, which is no directory it meets. As an `--ignore-ref` it names the
+target `/docs/a.md`, the text a link wrote, as `/docs/a.md` does.
+`globBase("{/docs/*.md}")` is `/docs`, as `globBase("/docs/*.md")` is. A `/`
+before the braces roots every alternative, as it did; one after a segment
+starts no text the braces give, `docs/{/adr,x}` being `docs//adr`, which is
+`docs/adr`; and `{/,docs}` is refused as it was.
+
+Typed in a directory below the root, a pattern is still re-anchored whole
+([ADR-0018](0018-the-configuration-file-is-the-root.md)), and re-anchoring
+does not read braces: `{/docs,x}` typed in `sub` is `sub/{/docs,x}`, which
+reads `sub/docs` or `sub/x`, as it did, where `/docs` typed there is an
+absolute path and left alone.
+
 Two refusals are narrower than they could be, on purpose. `**` inside a name
 is refused rather than read as `*`: the tools the dialect replaced read
 `docs/**.md` three ways, and the quiet reading turned a scope that reached every
