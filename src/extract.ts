@@ -27,7 +27,14 @@ import {
   type DocumentIdentity,
   ID_KEYS,
 } from './identity.js';
-import { isStatusHeading, phaseFromPath, phaseOf, STATUS_KEYS, supersessionTargetsIn } from './lifecycle.js';
+import {
+  isStatusHeading,
+  negatedAt,
+  phaseFromPath,
+  phaseOf,
+  STATUS_KEYS,
+  supersessionTargetsIn,
+} from './lifecycle.js';
 import {
   anchorsOf,
   isMarkdownLine,
@@ -375,6 +382,22 @@ const VERB_RULES: readonly { kind: EdgeKind; inverted: boolean; phrases: readonl
       'to be resolved in',
       'to be handled in',
       'to be answered in',
+      // Chinese, Traditional and Simplified, each standing before the
+      // reference as its English counterpart does: deferred to, handed to,
+      // left to. `併入`, merged into, hands a question on whole; read as
+      // `rolled into`, a supersession, a constraint merged into another
+      // decision's design would retire the document that states it. Nothing
+      // that wraps the reference, `由 X 決定`: a phrase here only precedes one.
+      '延後至',
+      '延后至',
+      '延至',
+      '移交至',
+      '移交給',
+      '移交给',
+      '留待',
+      '交由',
+      '併入',
+      '并入',
     ],
   },
   {
@@ -463,6 +486,11 @@ const VERB_WINDOW = 40;
  * Neither the sort nor the escaping decides anything today, and no test can
  * pin them: no phrase in the table is another one followed by more words, and
  * none holds a character a pattern would read. Both are for the next phrase.
+ *
+ * An English phrase stands between word boundaries, and a Han character is
+ * not part of an English word: `此問題deferred to ADR-0002` holds the whole
+ * phrase, which the boundary read as a letter used to refuse. A Chinese phrase
+ * has no boundary at all, since Chinese puts no space between words.
  */
 const VERB_LOOKUP: ReadonlyMap<string, Classification> = new Map(
   VERB_RULES.flatMap((rule) =>
@@ -470,11 +498,20 @@ const VERB_LOOKUP: ReadonlyMap<string, Classification> = new Map(
   ),
 );
 
-const VERB_PATTERN = new RegExp(
-  `(?<![\\p{L}\\p{N}])(?:${[...VERB_LOOKUP.keys()]
+const HAN = /\p{Script=Han}/u;
+
+/** A letter or digit an English phrase may not touch: any but a Han character. */
+const WORD_CHARACTER = String.raw`(?!\p{Script=Han})[\p{L}\p{N}]`;
+
+const alternation = (phrases: readonly string[]): string =>
+  [...phrases]
     .sort((a, b) => b.length - a.length)
     .map((phrase) => phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
-    .join('|')})(?![\\p{L}\\p{N}])`,
+    .join('|');
+
+const VERB_PATTERN = new RegExp(
+  `(?<!${WORD_CHARACTER})(?:${alternation([...VERB_LOOKUP.keys()].filter((phrase) => !HAN.test(phrase)))})(?!${WORD_CHARACTER})` +
+    `|(?:${alternation([...VERB_LOOKUP.keys()].filter((phrase) => HAN.test(phrase)))})`,
   'gu',
 );
 
@@ -500,6 +537,16 @@ const WEAK_SECTIONS: ReadonlySet<string> = new Set([
   'more information',
   'resources',
   'index',
+  '參考資料',
+  '参考资料',
+  '相關文件',
+  '相关文件',
+  '延伸閱讀',
+  '延伸阅读',
+  '附錄',
+  '附录',
+  '修訂紀錄',
+  '修订记录',
 ]);
 
 /** Headings whose bullets are obligations even without a checkbox. */
@@ -534,6 +581,14 @@ const OBLIGATION_SECTIONS: ReadonlySet<string> = new Set([
   'parking lot',
   'future work',
   'deferred',
+  '待決事項',
+  '待决事项',
+  '未決問題',
+  '未决问题',
+  '待辦事項',
+  '待办事项',
+  '後續工作',
+  '后续工作',
 ]);
 
 /**
@@ -1504,6 +1559,8 @@ export function classifyReference(
     // What sits between the phrase and the reference has to be connective. A
     // negation in there reverses the claim the phrase would otherwise make.
     if (NEGATION.test(before.slice(end))) continue;
+    // Chinese negates the phrase itself, directly before it: `未移交給`.
+    if (negatedAt(before, m.index)) continue;
     // Always found: the pattern was compiled from this table's own keys, and a
     // lower-cased search matches them only as written. The check is for types.
     const rule = VERB_LOOKUP.get(phrase);
@@ -1543,8 +1600,12 @@ export function classifyReference(
  * last column ended "...before assuming the drift was fixed" turned every
  * following row's link into an `assumes` edge, and so turned every archived
  * document it listed into a stale premise.
+ *
+ * A Chinese sentence ends at `。？！；`, with a space after it or none, since
+ * Chinese writes none. Without it `上次延後至別處。另見 ADR-0002` handed the
+ * question to ADR-0002 from the sentence before.
  */
-const STATEMENT_BREAK = /[.?!;]\s|\n\s*\n|\n\s*[-*+>#]|\|/g;
+const STATEMENT_BREAK = /[.?!;]\s|[。？！；]|\n\s*\n|\n\s*[-*+>#]|\|/g;
 
 /**
  * Lower-cased, whitespace-collapsed text back to the start of the statement.
@@ -1567,9 +1628,18 @@ function sentenceBefore(text: string, start: number): string {
     .replace(/\s+/g, ' ');
 }
 
+/**
+ * The statement after a reference, to the first stop, Chinese ones included.
+ *
+ * Only its start is read. A line break matters as a stop, since the trim
+ * below would otherwise bring the next line's phrase to the start. A Chinese
+ * stop is never trimmed, so a phrase after one cannot start the text either
+ * way, and the mutants that drop one are equivalent: it is here so the
+ * statement is the one `sentenceBefore` reads.
+ */
 function sentenceAfter(text: string, end: number): string {
   const window = text.slice(end, Math.min(text.length, end + 80));
-  const stop = /[.?!;\n|]/.exec(window);
+  const stop = /[.?!;\n|。？！；]/.exec(window);
   const cut = stop ? window.slice(0, stop.index) : window;
   return cut.toLowerCase().replace(/[`*_~"'()\[\],]/g, ' ').replace(/\s+/g, ' ').trim();
 }
@@ -1684,4 +1754,4 @@ function renderLink(link: Link): string {
 }
 
 /** Exposed for tests and for callers that classify their own sections. */
-export { OBLIGATION_SECTIONS, sectionPathAt, WEAK_SECTIONS };
+export { OBLIGATION_SECTIONS, sectionPathAt, VERB_RULES, WEAK_SECTIONS };

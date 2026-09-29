@@ -118,6 +118,29 @@ Three more, raised in review of the two above:
   to widen patterns that could never reach it. The disk now says whether the
   path is a directory, and a directory is not a reference either way.
 
+*Amended 2026-09-30.* A governing phrase is read in Chinese, and the two
+limits above carry over to it. Ten phrases hand work on as `deferred to` and
+`handed to` do - `延後至`, `延至`, `移交至`, `移交給`, `留待`, `交由`, `併入` and
+their Simplified forms - each standing before the reference. Chinese puts no
+space between words, and a Han character is a letter, so the word boundary an
+English phrase needs would never match inside Chinese; a Chinese phrase has
+none, and an English phrase no longer counts a Han character as part of its
+word, so `此問題deferred to ADR-0002` is a delegation as it is with a space.
+The negation that inverts a Chinese phrase stands directly before it,
+`未移交給 ADR-0002`, and cancels it. And a statement ends at `。`, `？`, `！`
+and `；`, with or without a space after: without that,
+`上次延後至別處。另見 ADR-0002` handed a question to ADR-0002 from the sentence
+before, the table-cell bug again in another script.
+
+Two things are left out on purpose. `根據`, `依據` and `基於` would be `assumes`,
+and Chinese uses them for any citation: read as premises, they would make a
+stale premise of every document that mentions a retired one. And a verb
+written around the reference, `由 ADR-0002 決定` or `在 ADR-0002 中追蹤`, is not
+something a phrase before the reference can express; those are missed, which
+is the direction this ADR prefers. `併入`, merged into, is a hand-off rather
+than the supersession `rolled into` is: read as a supersession, a constraint
+merged into another decision's design would retire the document stating it.
+
 ## Open Questions
 
 - [ ] Should the default include patterns be widened, or is naming the fix in

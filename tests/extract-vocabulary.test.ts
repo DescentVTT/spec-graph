@@ -6,6 +6,7 @@ import {
   extractDocument,
   OBLIGATION_SECTIONS,
   RELATION_KEYS,
+  VERB_RULES,
   WEAK_SECTIONS,
   type ExtractedDocument,
 } from '../src/extract.js';
@@ -112,6 +113,25 @@ describe('prose reads both directions', () => {
 
   it.each(PAIRS)('reads "%s" as %s, inverted: %s', (sentence, kind, inverted) => {
     expect(prose(sentence)).toEqual({ kind, inverted });
+  });
+});
+
+describe('the README Chinese hand-off phrases', () => {
+  const PHRASES = documented('Chinese hand-off phrases');
+  const HAN = /\p{Script=Han}/u;
+
+  it('lists every Chinese phrase the code knows', () => {
+    const known = VERB_RULES.flatMap((rule) => rule.phrases).filter((phrase) => HAN.test(phrase));
+    expect([...PHRASES].sort()).toEqual([...known].sort());
+    expect(PHRASES.length).toBeGreaterThan(5);
+  });
+
+  it.each(PHRASES)('reads "%s" before a link, with no space, as a delegation', (phrase) => {
+    expect(prose(`此問題${phrase}[ADR-0002](0002-cited.md)。`)).toEqual({ kind: 'delegates-to', inverted: false });
+  });
+
+  it.each(PHRASES)('reads "%s" directly after a negation as nothing', (phrase) => {
+    expect(prose(`此問題未${phrase}[ADR-0002](0002-cited.md)。`)).toEqual({ kind: 'references', inverted: false });
   });
 });
 

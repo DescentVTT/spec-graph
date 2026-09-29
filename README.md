@@ -249,20 +249,23 @@ code. *"We resolved to keep the queue"* does not close anything.
 | Disposition | Checkboxes | Markers | `state=` |
 | --- | --- | --- | --- |
 | `unresolved` | `[ ]` `[?]` `[!]` `[*]` | `unresolved`, `still open`, `open question`, `tbd`, `undecided`, `reopened` | `open`, `unresolved`, `todo` |
-| `narrowed` | `[~]` `[/]` | `partially resolved`, `partially answered`, `partially done`, `partly resolved`, `narrowed`, `narrowed to`, `scoped down`, `reduced scope`, `reduced to`, `partial`, `in progress`, `in_progress`, `remaining`, `split` | `narrowed`, `partial` |
-| `delegated` | | `delegated`, `delegated to`, `moved to`, `tracked in`, `tracked by`, `handed off`, `handed off to`, `handed to`, `deferred to`, `follow up in`, `follow-up in`, `followup in`, `continued in`, `owned by` | `delegated` |
-| `satisfied` | `[x]` `[X]` `[+]` | `resolved`, `answered`, `decided`, `settled`, `done`, `complete`, `completed`, `closed`, `fixed`, `shipped`, `addressed`, `implemented`, `solved`, `confirmed` | `satisfied`, `resolved`, `done`, `closed` |
-| `accepted-debt` | | `accepted debt`, `accepted as debt`, `accepted risk`, `known limitation`, `known issue`, `known gap`, `technical debt`, `tech debt`, `wontfix`, `won't fix`, `won’t fix`, `will not fix`, `by design`, `tolerated`, `living with it` | `accepted-debt`, `debt`, `wontfix` |
+| `narrowed` | `[~]` `[/]` | `partially resolved`, `partially answered`, `partially done`, `partly resolved`, `narrowed`, `narrowed to`, `scoped down`, `reduced scope`, `reduced to`, `partial`, `in progress`, `in_progress`, `remaining`, `split`, `部分解決`, `部分解决` | `narrowed`, `partial` |
+| `delegated` | | `delegated`, `delegated to`, `moved to`, `tracked in`, `tracked by`, `handed off`, `handed off to`, `handed to`, `deferred to`, `follow up in`, `follow-up in`, `followup in`, `continued in`, `owned by`, `已移交` | `delegated` |
+| `satisfied` | `[x]` `[X]` `[+]` | `resolved`, `answered`, `decided`, `settled`, `done`, `complete`, `completed`, `closed`, `fixed`, `shipped`, `addressed`, `implemented`, `solved`, `confirmed`, `已解決`, `已解决`, `已決定`, `已决定`, `已定案` | `satisfied`, `resolved`, `done`, `closed` |
+| `accepted-debt` | | `accepted debt`, `accepted as debt`, `accepted risk`, `known limitation`, `known issue`, `known gap`, `technical debt`, `tech debt`, `wontfix`, `won't fix`, `won’t fix`, `will not fix`, `by design`, `tolerated`, `living with it`, `技術債`, `技术债`, `已知限制` | `accepted-debt`, `debt`, `wontfix` |
 | `rejected` | `[-]` | `rejected`, `declined`, `dropped`, `not doing`, `will not do`, `abandoned`, `cancelled`, `canceled`, `withdrawn` | `rejected`, `declined` |
 | `obviated` | | `no longer applicable`, `no longer relevant`, `no longer needed`, `overtaken by events`, `premise invalid`, `obviated`, `obsolete`, `not applicable`, `moot`, `void`, `n/a`, `obe` | `obviated`, `moot` |
 
 A marker counts where a statement starts: at the start of the item or of a line,
-after the end of a sentence, or after `(` or `[`. Punctuated means followed by
+after the end of a sentence - a Chinese one, `。`, `？`, `！` or `；`, with a
+space after it or none - or after `(` or `[`. Punctuated means followed by
 `:`, `：`, `-`, `–`, `—` or `.`, so `Done.` closes an item; emphasised means the
 emphasis closes on the marker, so `**Closed beta**` does not. A marker of more
 than one word may be spaced, hyphenated or joined by an underscore, whichever
 the table has: `**Tech-debt:**` and `TECH_DEBT:` are `tech debt`. An apostrophe
-may be straight or curly.
+may be straight or curly. A Chinese marker is the English one it translates,
+and has no case to shout in: `已決定：` and `**已決定**` close an item, and
+`我們已決定採用` does not.
 
 </details>
 
@@ -275,7 +278,8 @@ heading of its level. **Headings that hold obligations:** `Open Questions`,
 `Next Steps`, `Follow Ups`, `Follow-Ups`, `Followups`, `Follow Up`, `Follow-Up`,
 `Unresolved`, `Outstanding`, `Outstanding Questions`, `Tasks`, `Task List`,
 `Work Items`, `Remaining Work`, `Decisions Needed`, `Blockers`, `Parking Lot`,
-`Future Work`, `Deferred`. Every other bullet is the document's own prose.
+`Future Work`, `Deferred`, `待決事項`, `待决事项`, `未決問題`, `未决问题`, `待辦事項`,
+`待办事项`, `後續工作`, `后续工作`. Every other bullet is the document's own prose.
 
 ### References, resolved forgivingly and validated strictly
 
@@ -491,12 +495,27 @@ makes the reference its subject - `[ADR-0009](0009.md) supersedes this` - except
 a `depends-on` or `assumes` phrase: `[ADR-0002](0002.md) requires a migration`
 says nothing about this document.
 
+In Chinese a phrase before the reference hands the work on, as `deferred to`
+does. **Chinese hand-off phrases:** `延後至`, `延后至`, `延至`, `移交至`,
+`移交給`, `移交给`, `留待`, `交由`, `併入`, `并入`. Chinese puts no space
+between words, so one counts wherever it stands, `此問題延後至ADR-0002`, except
+directly after a negation - `不`, `未`, `非`, `沒`, `没`, `無`, `无`, `勿`,
+`尚未` or `不再` - so `未移交給 ADR-0002` hands nothing on. An English phrase
+counts beside Chinese as well, `此問題deferred to ADR-0002`: a Han character is
+not part of an English word. A statement also ends at `。`, `？`, `！` and `；`,
+with a space after it or none, so `上次延後至別處。另見 ADR-0002` hands nothing to
+ADR-0002. A phrase written around the reference, `由 ADR-0002 決定` or
+`在 ADR-0002 中追蹤`, is not read, and neither are `根據`, `依據` and `基於`:
+Chinese uses them for any citation, and an `assumes` read from one would make a
+stale premise of it.
+
 A link under a heading that files it as bookkeeping is `relates-to` unless a
 phrase beside it says more. **Bookkeeping headings:** `See also`, `References`,
 `Reference`, `Related`, `Related work`, `Related decisions`,
 `Related documents`, `Links`, `Further reading`, `Prior art`, `History`,
 `Changelog`, `Change log`, `Revision history`, `Bibliography`, `Sources`,
-`Appendix`, `More information`, `Resources`, `Index`.
+`Appendix`, `More information`, `Resources`, `Index`, `參考資料`, `参考资料`,
+`相關文件`, `相关文件`, `延伸閱讀`, `延伸阅读`, `附錄`, `附录`, `修訂紀錄`, `修订记录`.
 
 Two properties do the work. `loadBearing` relations (`assumes`, `depends-on`,
 `blocked-by`, `amends`) make the source's validity depend on the target — those
