@@ -216,6 +216,52 @@ export function createGlobMatcher(patterns: readonly string[]): GlobMatcher {
 }
 
 /**
+ * Each dot in a reference pattern that may begin a segment, which is escaped:
+ * a `.` or `..` segment then reads as the name it is, one or two dots, where
+ * the dialect would drop the one and refuse the other.
+ *
+ * Braces expand before segments are read, so a dot written beside a brace or a
+ * comma may begin a segment of an alternative: `docs/{.,x}` is `docs/.` or
+ * `docs/x`, `.{/gone.md,x}` is `./gone.md` or `.x`, and `{docs/,x/}.` ends in a
+ * segment `.` either way. An escaped dot is the same character as a dot in a
+ * name, so escaping one that begins `.x`, or the braces leave inside a name as
+ * in `a{.,b}`, reads the same, and nothing needs to tell those apart:
+ * escaping each whole `.` or `..` segment instead reads each of 43,069
+ * generated patterns the same, refusals included (ADR-0022).
+ */
+const SEGMENT_DOT = /(?<=^|[/{,}])\./g;
+
+/**
+ * How a reference target is matched. Every option is spelled out, though the
+ * dialect reads `{}` the same way today: its defaults are spec-core's to
+ * change, and this reading is spec-graph's to keep. A mutant that drops one,
+ * or all of them, is equivalent until then.
+ */
+const TARGET: FamilyGlobOptions = { dialect: 'path', caseSensitive: false, literal: 'file' };
+
+/**
+ * A refusal of a reference pattern in the words it was typed in.
+ *
+ * The dialect writes its advice for a `**` inside a name from the text it was
+ * given, and that text held a `\` before each dot {@link SEGMENT_DOT} escaped:
+ * `../notes/**.md` was told `\.\./notes/**\/*.md`. Given the pattern again with
+ * a character it does not hold in place of each of those dots, the dialect
+ * refuses it for the same reason, since both are one literal character and
+ * neither is a direction, and each stand-in is read back as the dot it was.
+ * Counting down from U+E000 would find a stand-in as well, among the
+ * surrogates, so that mutant is equivalent.
+ */
+function asTyped(typed: string, reason: string): string {
+  let point = 0xe000;
+  while (typed.includes(String.fromCodePoint(point))) point += 1;
+  const stand = String.fromCodePoint(point);
+  const again = parseGlob(typed.replace(SEGMENT_DOT, stand), TARGET);
+  // Stand-ins and escaped dots compile or fail alike, so `again` never
+  // compiles here, and a mutant that reads it as compiled is equivalent.
+  return again.ok ? reason : again.error.replaceAll(stand, '.');
+}
+
+/**
  * Builds a predicate over reference *targets*, not paths.
  *
  * Separate from {@link createGlobMatcher} on purpose. That one is
@@ -234,31 +280,17 @@ export function createGlobMatcher(patterns: readonly string[]): GlobMatcher {
  * separator to allow for. And a `.` or `..` segment is text, in a brace
  * alternative as anywhere else: in a path the dialect drops the one and
  * refuses the other as climbing out of the root, but `../../notes/gone.md` is
- * a link somebody wrote and may want left alone.
+ * a link somebody wrote and may want left alone. A pattern that is refused is
+ * named, and advised, as it was typed.
  */
 export function createReferenceFilter(patterns: readonly string[]): (target: string) => boolean {
   // A blank pattern reaches the dialect, which refuses it, as every pattern
   // spec-graph reads is refused when it names nothing. It used to be dropped,
   // so an unset variable in `--ignore-ref "$TAGS"` went unnoticed.
   const globs: Glob[] = patterns.map((pattern) => {
-    // Each `.` or `..` that may stand as a segment is escaped, and the dialect
-    // reads an escaped dot as text. Braces expand before segments are read, so
-    // one written beside a brace or a comma may be a segment of an
-    // alternative: `docs/{.,x}` is `docs/.` or `docs/x`, `.{/gone.md,x}` is
-    // `./gone.md` or `.x`, and `{docs/,x/}.` ends in a segment `.` either way.
-    // Escaping one the braces leave inside a name, as in `.x` or `a{.,b}`, or
-    // beside a `,` or `}` that is itself text outside braces, reads as the same
-    // character, so nothing needs to tell those apart. No other dot is
-    // escaped: the advice for a `**` inside a name is written from the
-    // pattern, and `.github/**.md` is told `.github/**/*.md`. A mutant that
-    // counts dots from none matches the empty run between two boundaries too,
-    // and writes nothing for it: equivalent.
-    const literalDots = pattern.trim().replace(/(?<=^|[/{,}])\.{1,2}(?=$|[/{,}])/g, (dots) => '\\.'.repeat(dots.length));
-    // Every option spelled out, though the dialect reads `{}` the same way
-    // today: its defaults are spec-core's to change, and this reading is
-    // spec-graph's to keep. A mutant that drops one is equivalent until then.
-    const parsed = parseGlob(literalDots, { dialect: 'path', caseSensitive: false, literal: 'file' });
-    if (!parsed.ok) throw new GlobError(pattern, parsed.error);
+    const typed = pattern.trim();
+    const parsed = parseGlob(typed.replace(SEGMENT_DOT, '\\.'), TARGET);
+    if (!parsed.ok) throw new GlobError(pattern, asTyped(typed, parsed.error));
     return parsed.glob;
   });
   return (target: string): boolean => {

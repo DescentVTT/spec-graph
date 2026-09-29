@@ -21,6 +21,16 @@ a patch fixes behaviour without asking anything of a repository that upgrades.
   fixtures or the rest of the family writes such an ignore, and over them
   every `check` format and every graph export is byte for byte what 0.9.9
   wrote.
+- **A refused `--ignore-ref` pattern is advised as it was typed.**
+  `--ignore-ref "../notes/**.md"` stopped the run with
+  `write "\.\./notes/**/*.md" for any depth, or "\.\./notes/*.md" for one level`:
+  the backslashes were the ones the filter adds to read a `.` or `..` as
+  text. It now says `write "../notes/**/*.md" for any depth, or
+  "../notes/*.md" for one level`, inside braces as outside. The exit `2`, the
+  pattern the message names, and what every pattern matches are as they were
+  (ADR-0022): over this repository, its fixtures and the rest of the family
+  every `check` format and every graph export is byte for byte what 0.9.9
+  wrote.
 
 ## 0.9.9
 

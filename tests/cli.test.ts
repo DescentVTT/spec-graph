@@ -500,6 +500,22 @@ describe('a configuration that did not load', () => {
     }
   });
 
+  it('advises a refused --ignore-ref pattern as it was typed, wherever it was written', async () => {
+    // The dots the filter escapes for the dialect were in the advice:
+    // `write "\.\./notes/**/*.md" for any depth`.
+    const refusal =
+      'spec-graph: invalid glob "../notes/**.md": "**" means any number of directories only as a whole segment: ' +
+      'write "../notes/**/*.md" for any depth, or "../notes/*.md" for one level\n';
+    const typed = await run('check', '--ignore-ref', '../notes/**.md', '--root', 'tests/fixtures/project', '--no-config');
+    expect(typed.code).toBe(EXIT_ERROR);
+    expect(typed.err).toBe(refusal);
+    await withConfig('cli-ref-advice', '{ "ignoreReferences": ["../notes/**.md"] }\n', async (root) => {
+      const configured = await run('check', '--root', root);
+      expect(configured.code).toBe(EXIT_ERROR);
+      expect(configured.err).toBe(refusal);
+    });
+  });
+
   it('is what --no-config turns off, over the same broken file', async () => {
     await withConfig('cli-no-config', '{ "ignoreReference": ["trap *"], "nope": 1 }\n', async (root) => {
       const result = await run('check', 'docs/**/*.md', '--root', root, '--no-config');
