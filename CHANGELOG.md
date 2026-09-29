@@ -66,6 +66,16 @@ wrote.
   governs a reference in the next Chinese sentence, as `上次延後至別處。另見
   ADR-0002` did, and a marker counts after one.
 
+### Documentation
+
+- **The README is reorganised, with nothing left out.** Directives and
+  journals follow how a document is read, registers follow relations, a
+  deliberate gap in the references is its own section, and the two CI sections
+  are one; the glob rules, the walk, the Chinese rules and the GitLab report
+  are lists where they were paragraphs of up to 230 words. It links the
+  family's glossary and tutorial, and `SECURITY.md` says how to report a
+  vulnerability privately.
+
 ## 0.9.10
 
 A `!` before a bare `--ignore` name gives the name back, as `.gitignore`
