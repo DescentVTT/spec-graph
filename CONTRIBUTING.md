@@ -3,6 +3,9 @@
 Thanks for looking. This file is short because the code is meant to explain
 itself; what follows is the map that is hard to recover by reading.
 
+A vulnerability is reported privately, never in an issue or a pull request:
+see [SECURITY.md](SECURITY.md).
+
 ## Getting started
 
 ```bash

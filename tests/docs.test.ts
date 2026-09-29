@@ -42,6 +42,7 @@ describe('the source tree', () => {
     'stryker.shard.config.mjs',
     'README.md',
     'CONTRIBUTING.md',
+    'SECURITY.md',
   ];
 
   it('contains no NUL bytes', () => {
