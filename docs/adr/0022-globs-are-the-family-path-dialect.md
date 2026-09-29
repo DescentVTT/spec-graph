@@ -126,6 +126,25 @@ pattern is refused as the list is compiled, before the walk compiles each
 positive pattern again to be told the literals it names, and before any
 directory is read.
 
+*Amended 2026-09-29.* **`--ignore-ref` reads a `.` or `..` in a brace
+alternative as text, as it reads one anywhere else.** It escaped them
+segment by segment before the dialect expanded the braces, so a dot inside
+braces was never a segment it saw: `docs/{.,x}` passed over the target
+`docs` where `docs/.` passes over `docs/.`, `{./docs,x}` over `docs` where
+`./docs` passes over `./docs`, and `docs/{x,..}`, `{../notes/*.md,x}`,
+`{.,docs}`, `{./,docs}` and `.{/,docs}` were refused, as climbing out of the
+root or naming no path, where each alternative written alone is text. A dot
+is now escaped wherever an alternative may make it a segment - beside a
+brace or a comma as well as between separators - so each alternative reads
+as it does written alone: `docs/{.,x}` passes over `docs/.` and `docs/x`,
+and `{./,docs}` over the targets under `./` and the target `docs`, as `./`
+and `docs` do; never every target, as it did before 56c7e54 refused it. A
+dot the braces leave inside a name, as in `.{/,docs}`'s `.docs`, is the
+same character escaped or not, and a dot that cannot be a segment is not
+escaped, so the advice for a `**` inside a name still reads as typed. A `\`
+escapes inside braces as outside, as it did. The path patterns are
+unchanged: `{./,docs}` is refused there.
+
 Two refusals are narrower than they could be, on purpose. `**` inside a name
 is refused rather than read as `*`: the tools the dialect replaced read
 `docs/**.md` three ways, and the quiet reading turned a scope that reached every

@@ -231,20 +231,29 @@ export function createGlobMatcher(patterns: readonly string[]): GlobMatcher {
  *
  * A target is text a document holds rather than a path on this host, and two
  * things follow. A `\` escapes the character after it: there is no Windows
- * separator to allow for. And a `.` or `..` segment is text: in a path the
- * dialect drops the one and refuses the other as climbing out of the root, but
- * `../../notes/gone.md` is a link somebody wrote and may want left alone.
+ * separator to allow for. And a `.` or `..` segment is text, in a brace
+ * alternative as anywhere else: in a path the dialect drops the one and
+ * refuses the other as climbing out of the root, but `../../notes/gone.md` is
+ * a link somebody wrote and may want left alone.
  */
 export function createReferenceFilter(patterns: readonly string[]): (target: string) => boolean {
   // A blank pattern reaches the dialect, which refuses it, as every pattern
   // spec-graph reads is refused when it names nothing. It used to be dropped,
   // so an unset variable in `--ignore-ref "$TAGS"` went unnoticed.
   const globs: Glob[] = patterns.map((pattern) => {
-    const literalDots = pattern
-      .trim()
-      .split('/')
-      .map((segment) => (segment === '.' ? '\\.' : segment === '..' ? '\\.\\.' : segment))
-      .join('/');
+    // Each `.` or `..` that may stand as a segment is escaped, and the dialect
+    // reads an escaped dot as text. Braces expand before segments are read, so
+    // one written beside a brace or a comma may be a segment of an
+    // alternative: `docs/{.,x}` is `docs/.` or `docs/x`, `.{/gone.md,x}` is
+    // `./gone.md` or `.x`, and `{docs/,x/}.` ends in a segment `.` either way.
+    // Escaping one the braces leave inside a name, as in `.x` or `a{.,b}`, or
+    // beside a `,` or `}` that is itself text outside braces, reads as the same
+    // character, so nothing needs to tell those apart. No other dot is
+    // escaped: the advice for a `**` inside a name is written from the
+    // pattern, and `.github/**.md` is told `.github/**/*.md`. A mutant that
+    // counts dots from none matches the empty run between two boundaries too,
+    // and writes nothing for it: equivalent.
+    const literalDots = pattern.trim().replace(/(?<=^|[/{,}])\.{1,2}(?=$|[/{,}])/g, (dots) => '\\.'.repeat(dots.length));
     // Every option spelled out, though the dialect reads `{}` the same way
     // today: its defaults are spec-core's to change, and this reading is
     // spec-graph's to keep. A mutant that drops one is equivalent until then.

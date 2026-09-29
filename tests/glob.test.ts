@@ -237,14 +237,13 @@ describe('the dialect every spec-* tool reads', () => {
 
   it('refuses a brace alternative that names no path, which read as every path', () => {
     // `./` alone is refused, but inside braces its slash was read first, as
-    // the contents of `.`: `{./,docs}` matched every path, and in a reference
-    // filter every target (spec-core 56c7e54).
+    // the contents of `.`: `{./,docs}` matched every path (spec-core 56c7e54).
+    // A reference filter reads that `.` as text, and is held to it below.
     const refusal = 'invalid glob "{./,docs}": the braces expand to "./", which names no path';
     expect(() => createGlobMatcher(['{./,docs}'])).toThrow(refusal);
     expect(() => createGlobMatcher(['docs/adr/*.md', '!{./,docs}'])).toThrow('invalid glob "!{./,docs}": the braces expand to "./"');
     expect(() => compileGlob('{./,docs}')).toThrow(refusal);
     expect(() => globBase('{./,docs}')).toThrow(refusal);
-    expect(() => createReferenceFilter(['{./,docs}'])).toThrow(refusal);
     // Named as the braces gave it, wherever it stands in them.
     expect(() => createGlobMatcher(['{docs,./}'])).toThrow('invalid glob "{docs,./}": the braces expand to "./", which names no path');
     expect(() => createGlobMatcher(['{.//,docs}'])).toThrow('invalid glob "{.//,docs}": the braces expand to ".//", which names no path');
@@ -518,6 +517,54 @@ describe('reference filter', () => {
     expect(createReferenceFilter(['./scratch/*'])('scratch/a.md')).toBe(false);
     expect(createReferenceFilter(['a/../b'])('a/../b')).toBe(true);
     expect(createReferenceFilter(['  ../notes/*'])('../notes/gone.md')).toBe(true);
+    expect(createReferenceFilter(['docs/.'])('docs/.')).toBe(true);
+    expect(createReferenceFilter(['docs/.'])('docs')).toBe(false);
+  });
+
+  it('reads . and .. in a brace alternative as the text they are written alone', () => {
+    // The dots were escaped segment by segment before the braces expanded, so
+    // an alternative's `.` was a direction: `docs/{.,x}` passed over `docs`
+    // and `{./docs,x}` over `docs`, and `docs/{x,..}` was refused as climbing
+    // out of the root.
+    const dot = createReferenceFilter(['docs/{.,x}']);
+    expect([dot('docs/.'), dot('docs/x'), dot('docs')]).toEqual([true, true, false]);
+    const up = createReferenceFilter(['docs/{x,..}']);
+    expect([up('docs/..'), up('docs/x'), up('docs')]).toEqual([true, true, false]);
+    expect(createReferenceFilter(['{../notes/*.md,x}'])('../notes/gone.md')).toBe(true);
+    const leading = createReferenceFilter(['{./docs,x}']);
+    expect([leading('./docs'), leading('docs')]).toEqual([true, false]);
+    // A dot beside a brace on its other side is a segment of every alternative
+    // that puts a separator there, and part of a name in the rest.
+    const before = createReferenceFilter(['.{/gone.md,x}']);
+    expect([before('./gone.md'), before('.x'), before('gone.md')]).toEqual([true, true, false]);
+    const after = createReferenceFilter(['{docs/,notes/}.']);
+    expect([after('notes/.'), after('notes')]).toEqual([true, false]);
+    const joined = createReferenceFilter(['{.,x}.']);
+    expect([joined('..'), joined('x.')]).toEqual([true, true]);
+  });
+
+  it('passes over what {./,docs} names, as ./ and docs do alone, and not every target', () => {
+    // As a path pattern `{./,docs}` is refused (spec-core 56c7e54); until then
+    // it matched every path, and in this filter every target. Here `./` is the
+    // text of a link, the contents of a directory written `.`.
+    const filter = createReferenceFilter(['{./,docs}']);
+    expect([filter('./gone.md'), filter('docs'), filter('gone.md'), filter('docs/gone.md')]).toEqual([true, true, false, false]);
+    expect(createReferenceFilter(['{.,docs}'])('.')).toBe(true);
+    expect(createReferenceFilter(['{.,docs}'])('gone.md')).toBe(false);
+  });
+
+  it('leaves a dot inside a name as it is, and escapes with a backslash inside braces as outside', () => {
+    expect(createReferenceFilter(['{*.md,x}'])('gone.md')).toBe(true);
+    expect(createReferenceFilter(['docs/{...,x}'])('docs/...')).toBe(true);
+    // Only a `.` or `..` that may be a segment is escaped, so the advice for
+    // a `**` inside a name, written from the pattern, reads as it was typed
+    // wherever no such dot is in it.
+    const advice = (pattern: string) => () => createReferenceFilter([pattern]);
+    expect(advice('.github/**.md')).toThrow('write ".github/**/*.md" for any depth, or ".github/*.md" for one level');
+    expect(advice('docs/**.{md,txt}')).toThrow('write "docs/**/*.{md,txt}" for any depth, or "docs/*.{md,txt}" for one level');
+    expect(advice('docs/.../**.md')).toThrow('write "docs/.../**/*.md" for any depth, or "docs/.../*.md" for one level');
+    const escaped = createReferenceFilter(['{trap \\*,a\\,b}']);
+    expect([escaped('trap *'), escaped('trap 55'), escaped('a,b')]).toEqual([true, false, true]);
   });
 
   it('escapes with a backslash, since a target is not a host path', () => {

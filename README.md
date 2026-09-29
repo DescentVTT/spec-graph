@@ -900,7 +900,9 @@ and an `--ignore` takes a link out.
 
 `--ignore-ref` is matched against reference targets rather than paths: a bare
 pattern names one target exactly, case is ignored on every host, a `\` escapes
-the next character, and `.` and `..` are the text of the link. See
+the next character, and `.` and `..` are the text of the link, in a brace
+alternative as anywhere else: `docs/{.,x}` names `docs/.` and `docs/x`, and
+`{./,docs}` the targets under `./`, and `docs`. See
 [ADR-0022](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0022-globs-are-the-family-path-dialect.md).
 
 ### Family rules

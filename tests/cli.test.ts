@@ -244,6 +244,16 @@ describe('--ignore-ref', () => {
     expect(result.out).toContain('the specification graph is consistent');
   });
 
+  it('reads a . in braces as the text of a link, so {./,docs} passes over what it names and no more', async () => {
+    // It was refused as naming no path, the way a path pattern is, and before
+    // spec-core 56c7e54 it passed over every target: `--ignore-ref` read a `.`
+    // as text only outside braces.
+    const result = await run('check', '--root', CONCEPTS, '--ignore-ref', '{./,docs}');
+    expect(result.code).toBe(EXIT_FAILED);
+    expect(result.err).toBe('');
+    expect(result.out).toContain('does not resolve to any document');
+  });
+
   it('leaves the graph itself untouched', async () => {
     // The filter suppresses findings, never edges. Exporting the graph with a
     // pattern that matches everything must still show every relation.
@@ -448,14 +458,14 @@ describe('a configuration that did not load', () => {
     });
   });
 
-  it('refuses a brace alternative that names no path, wherever a pattern is read', async () => {
+  it('refuses a brace alternative that names no path, wherever a path pattern is read', async () => {
     // `./` alone was refused, and `{./,docs}` read every path: the patterns
     // checked every Markdown file in the repository, `--ignore` took every one
-    // out, `--history` made every document a record, and `--ignore-ref`
-    // passed over every reference target (spec-core 56c7e54).
+    // out, and `--history` made every document a record (spec-core 56c7e54).
+    // `--ignore-ref` reads the `.` as text; see its own tests.
     const refusal = 'spec-graph: invalid glob "{./,docs}": the braces expand to "./", which names no path\n';
     const project = ['--root', 'tests/fixtures/project', '--no-config'];
-    for (const argv of [['{./,docs}'], ['--ignore', '{./,docs}'], ['--history', '{./,docs}'], ['--ignore-ref', '{./,docs}']]) {
+    for (const argv of [['{./,docs}'], ['--ignore', '{./,docs}'], ['--history', '{./,docs}']]) {
       const result = await run('check', ...argv, ...project);
       expect(result.code, argv[0]).toBe(EXIT_ERROR);
       expect(result.err).toBe(refusal);
