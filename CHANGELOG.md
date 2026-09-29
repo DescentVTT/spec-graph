@@ -31,6 +31,16 @@ a patch fixes behaviour without asking anything of a repository that upgrades.
   (ADR-0022): over this repository, its fixtures and the rest of the family
   every `check` format and every graph export is byte for byte what 0.9.9
   wrote.
+- **With `followSymlinks` on, a link back into a directory the walk is
+  inside is not followed.** A link to a directory above it, such as
+  `docs/sub/up` to `docs`, was walked round and round, reading the same
+  files under a longer path each time until the host refused the path: on
+  Windows, 64 copies of each file, and with two such links, minutes of
+  walking. Such a link is now passed over as silently as every link is when
+  links are not followed, so each file is read once, and a pattern that
+  starts beyond one finds nothing. A link to a sibling or to a directory
+  outside the tree is followed as before (ADR-0022). The command line never
+  follows a link, so it sees nothing change.
 
 ## 0.9.9
 
