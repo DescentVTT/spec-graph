@@ -7,6 +7,24 @@ a patch fixes behaviour without asking anything of a repository that upgrades.
 
 ### Fixed
 
+- **spec-core 7e41240: a leading `/` on a brace alternative means what it
+  means on the pattern written alone.** It was dropped, so `{/docs,x}` read
+  `docs`. As a pattern to check, `{/docs/*.md,x/*.md}` read every file in
+  `docs` where `/docs/*.md` reads none, and `{/dist,docs}` read the `dist`
+  the walk skips; as an `--ignore` or a `--history` pattern, `{/docs,x}` took
+  out, or made records of, what is in `docs` where `/docs` takes out
+  nothing; and `--ignore-ref "{/docs/a.md,x}"` passed over the target
+  `docs/a.md` and not `/docs/a.md`. Each such alternative now reads as the
+  text alone does, from the configuration as from the command line: rooted
+  at the filesystem's root, which nothing under the root is, and for
+  `--ignore-ref` the target `/docs/a.md`. `globBase("{/docs/*.md}")` is
+  `/docs`, as `globBase("/docs/*.md")` is. A `/` before the braces,
+  `/{docs,x}`, and one after a segment, `docs/{/adr,x}`, read as they did.
+  Typed in a directory below the root, the pattern is re-anchored whole, as
+  before, so `{/docs,x}` typed in `sub` still reads `sub/docs` (ADR-0022).
+  No configuration in this repository, its fixtures or the rest of the
+  family writes such a pattern, and over them every `check` format and every
+  graph export is byte for byte what 0.9.9 wrote.
 - **A `!` before a bare `--ignore` name gives the name back.**
   `--ignore docs --ignore "!docs"` pruned every `docs` and said nothing, and
   `--ignore "!vendor"` read no `vendor`: a name without a slash was read as a

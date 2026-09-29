@@ -260,6 +260,41 @@ describe('the dialect every spec-* tool reads', () => {
     expect(createGlobMatcher(['{./docs,specs}'])('docs/a.md')).toBe(true);
   });
 
+  it('reads a leading / on a brace alternative as it reads one on the whole pattern', () => {
+    // Braces expand before a leading slash is read, so `{/docs,x}` is `/docs`
+    // or `x`, rooted at the filesystem's root as `/docs` is, which no
+    // repository-relative path is under. The slash was dropped as an empty
+    // segment, and `{/docs,x}` read `docs` (spec-core 7e41240).
+    const paths = ['docs', 'docs/a.md', '/docs', '/docs/a.md', 'x', 'x/a.md'];
+    // A run of slashes roots it as one does, and a leading `./` is dropped
+    // first, as from a whole pattern: `.//docs` is `/docs`.
+    for (const alone of ['/docs', '//docs', './/docs', '././/docs']) {
+      const braced = createGlobMatcher([`{${alone},x}`]);
+      expect(paths.filter(braced), alone).toEqual(paths.filter(createGlobMatcher([alone, 'x'])));
+      expect(braced('docs/a.md'), alone).toBe(false);
+      expect(braced('x/a.md'), alone).toBe(true);
+    }
+    expect(createGlobMatcher(['{{/docs,y},x}'])('docs/a.md')).toBe(false);
+    expect(compileGlob('{/docs/*.md,x/*.md}').test('docs/a.md')).toBe(false);
+    expect(compileGlob('{/docs/*.md,x/*.md}').test('x/a.md')).toBe(true);
+    expect(globBase('{/docs/*.md}')).toBe('/docs');
+    expect(globBase('/docs/*.md')).toBe('/docs');
+    // A reference target is the text a link wrote, so the rooted alternative
+    // names the target `/docs/a.md`, as `/docs/a.md` alone does.
+    const filter = createReferenceFilter(['{/docs/a.md,x}']);
+    expect(filter('/docs/a.md')).toBe(true);
+    expect(filter('docs/a.md')).toBe(false);
+    // A slash after a segment starts no text the braces give: `docs/{/adr,x}`
+    // is `docs//adr`, which is `docs/adr`, as it was.
+    expect(createGlobMatcher(['docs/{/adr,x}'])('docs/adr/a.md')).toBe(true);
+    // The pattern's own slashes are taken off before the braces expand, so the
+    // root itself, and an alternative after them, are refused in the words
+    // they always were.
+    expect(() => createGlobMatcher(['/'])).toThrow('invalid glob "/": the pattern names the root itself, not a path under it');
+    expect(() => createGlobMatcher(['//'])).toThrow('invalid glob "//": the pattern names the root itself, not a path under it');
+    expect(() => createGlobMatcher(['/{./,docs}'])).toThrow('invalid glob "/{./,docs}": the braces expand to "./", which names no path');
+  });
+
   it('never matches a separator with a class, negated or not', () => {
     // `[!b]` was `[^b]` to RegExp, which matches a `/`.
     expect(matches('a[!b]c', 'a/c')).toBe(false);
@@ -752,6 +787,15 @@ describe('walking', () => {
     // A leading slash names the filesystem's root. The walk read it as the
     // repository's and reported `/docs/...`, a path no node can have.
     expect(await paths(['/docs/**/*.md'])).toEqual([]);
+    // So is a brace alternative with a leading slash, and the walk is asked
+    // about `/dist`, which is no directory it meets: `{/dist,docs/adr/*.md}`
+    // read `dist`, which the default list gives way to when a pattern names
+    // it, as `{dist,docs/adr/*.md}` still does (spec-core 7e41240).
+    expect(await paths(['{/docs/**/*.md,specs/**/*.md}'])).toEqual(['specs/rfcs/0004.md']);
+    expect(await paths(['{/dist,docs/adr/*.md}'])).toEqual(['docs/adr/0001.md', 'docs/adr/0002.md']);
+    expect(await paths(['{dist,docs/adr/*.md}'])).toEqual(['dist/built.md', 'docs/adr/0001.md', 'docs/adr/0002.md']);
+    // In an ignore, the rooted alternative takes out nothing, as `/docs` does.
+    expect(await paths(['**/*.md'], ['{/docs,specs}'])).toEqual(['README.md', 'docs/adr/0001.md', 'docs/adr/0002.md', 'docs/drafts/0003.md']);
   });
 
   it('skips files larger than the limit', async () => {
