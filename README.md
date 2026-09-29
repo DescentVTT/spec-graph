@@ -879,7 +879,10 @@ automaton states. A parenthesis with no `|` in its group
 is itself, so `C++(notes).md` names that file. A `..` typed below the root,
 `spec-graph "../*.md"` from `docs/deep`, is resolved against where you typed
 it. A bare `--ignore` name, `--ignore drafts`, still prunes that directory at
-any depth, even where a pattern starts inside it or names it. A path,
+any depth, even where a pattern starts inside it or names it. A `!` before one
+gives the name back, as a `.gitignore` line does:
+`--ignore drafts --ignore '!drafts'` reads every `drafts`, and the last bare
+name to name a directory decides. A path,
 `--ignore "docs/*"`, takes out what it matches wherever a pattern starts:
 `docs/drafts/**/*.md` finds nothing under it, as `docs/**/*.md` finds nothing
 in `docs/drafts`.
@@ -891,7 +894,11 @@ patterns name. Unlike an `--ignore`, these yield to a pattern that starts inside
 one: `vendor/specs/*.md` is read from there, whatever the other patterns reach.
 They yield to a plain name for one as well: `vendor` and `docs/vendor` read
 those directories as `vendor/` and `docs/vendor/` do, or the file, where one
-of them is a file. Nor does the walk follow a link, a pattern that starts
+of them is a file. And they yield to a `!` before their name:
+`--ignore '!vendor'` reads every `vendor`, the rest of the list still skipped
+inside it. A `!` before a path takes back only what a path `--ignore` took
+out, so `!docs/vendor` gives back nothing the walk skips: name it among the
+patterns. Nor does the walk follow a link, a pattern that starts
 beyond one included: `docs/linked/*.md` reads nothing through the link
 `docs/linked`, as `docs/**/*.md` reads nothing there. `followSymlinks` in the
 [API](#programmatic-api) follows links, and prunes a link to a directory as it

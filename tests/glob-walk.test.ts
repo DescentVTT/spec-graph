@@ -231,6 +231,64 @@ describe('a bare --ignore name', () => {
   });
 });
 
+describe('a ! before a bare --ignore name', () => {
+  const root = `${ROOT}/negated`;
+  const drafts = ['docs/adr/drafts/n.md', 'docs/drafts/d.md', 'docs/drafts/keep/k.md'];
+  const vendored = ['docs/vendor/v.md', 'vendor/r.md'];
+
+  beforeAll(async () => {
+    await write(`${root}/docs/a.md`, '# A\n');
+    await write(`${root}/docs/drafts/d.md`, '# D\n');
+    await write(`${root}/docs/drafts/keep/k.md`, '# K\n');
+    await write(`${root}/docs/adr/drafts/n.md`, '# N\n');
+    await write(`${root}/docs/vendor/v.md`, '# V\n');
+    await write(`${root}/docs/vendor/dist/x.md`, '# X\n');
+    await write(`${root}/vendor/r.md`, '# R\n');
+    await write(`${ROOT}/bang/!drafts/b.md`, '# B\n');
+    await write(`${ROOT}/bang/drafts/d.md`, '# D\n');
+  });
+
+  it('gives back a directory an earlier bare name prunes, at any depth, and the last to name it decides', async () => {
+    // It was read as a directory called `!drafts`, so the name stayed pruned.
+    expect(await paths(root, ['**/*.md'], ['drafts'])).toEqual(['docs/a.md']);
+    expect(await paths(root, ['**/*.md'], ['drafts', '!drafts'])).toEqual(['docs/a.md', ...drafts]);
+    expect(await paths(root, ['**/*.md'], ['!drafts', 'drafts'])).toEqual(['docs/a.md']);
+    expect(await paths(root, ['**/*.md'], ['drafts', 'keep', '!drafts'])).toEqual(['docs/a.md', 'docs/adr/drafts/n.md', 'docs/drafts/d.md']);
+  });
+
+  it('gives back a starting point inside the name as it gives back the walk passing through', async () => {
+    expect(await paths(root, ['docs/drafts/keep/*.md'], ['drafts', '!drafts'])).toEqual(['docs/drafts/keep/k.md']);
+    expect(await paths(root, ['docs/drafts/keep/*.md'], ['!drafts', 'drafts'])).toEqual([]);
+    expect(await paths(root, ['docs/adr/**/*.md'], ['drafts', '!drafts'])).toEqual(['docs/adr/drafts/n.md']);
+  });
+
+  it('gives back a directory the default list skips, whose own list still holds inside it', async () => {
+    const everything = ['docs/a.md', ...drafts];
+    expect(await paths(root, ['**/*.md'], ['!vendor'])).toEqual([...everything, ...vendored].sort());
+    expect(await paths(root, ['**/*.md'], ['vendor', '!vendor'])).toEqual([...everything, ...vendored].sort());
+    expect(await paths(root, ['**/*.md'], ['!vendor', '!dist'])).toEqual([...everything, ...vendored, 'docs/vendor/dist/x.md'].sort());
+    // A later bare name is the user's word, which a pattern naming the
+    // directory does not overrule.
+    expect(await paths(root, ['**/*.md', 'docs/vendor'], ['!vendor', 'vendor'])).toEqual(everything);
+  });
+
+  it('leaves a path negation as it was: it takes back what a path took out, and nothing a name or the default list prunes', async () => {
+    expect(await paths(root, ['**/*.md'], ['docs/*', '!docs/drafts'])).toEqual(['docs/drafts/d.md', 'docs/drafts/keep/k.md']);
+    expect(await paths(root, ['**/*.md'], ['drafts', '!docs/drafts'])).toEqual(['docs/a.md']);
+    expect(await paths(root, ['**/*.md'], ['!docs/vendor'])).toEqual(['docs/a.md', ...drafts]);
+    // And a name gives back nothing a path took out.
+    expect(await paths(root, ['**/*.md'], ['docs/*', '!drafts'])).toEqual([]);
+  });
+
+  it('names no directory that begins with !, and a ! that names nothing is refused', async () => {
+    // `--ignore "!drafts"` pruned the directory called `!drafts`; braces name it.
+    expect(await paths(`${ROOT}/bang`, ['**/*.md'], ['!drafts'])).toEqual(['!drafts/b.md', 'drafts/d.md']);
+    expect(await paths(`${ROOT}/bang`, ['**/*.md'], ['**/{!drafts}'])).toEqual(['drafts/d.md']);
+    await expect(paths(root, ['**/*.md'], ['!'])).rejects.toThrow('invalid glob "!": the pattern is empty');
+    await expect(paths(root, ['**/*.md'], ['!!drafts'])).rejects.toThrow('invalid glob "!!drafts": a negated pattern is a list entry');
+  });
+});
+
 describe('a path --ignore', () => {
   const root = `${ROOT}/pathed`;
   const drafts = ['docs/drafts/d.md', 'docs/drafts/deep/e.md'];
@@ -312,6 +370,9 @@ describe('an ignore with glob syntax in it', () => {
     await write(`${root}/app/about/page.md`, '# About\n');
     expect(await paths(root, ['**/*.md'], ['[slug]'])).toEqual(['app/[slug]/page.md', 'app/about/page.md']);
     expect(await paths(root, ['**/*.md'], ['app/[[]slug]'])).toEqual(['app/about/page.md']);
+    // Syntax only at its start makes a pattern all the same, and not the name
+    // that follows it: `*pp` takes out `app`.
+    expect(await paths(root, ['**/*.md'], ['*pp'])).toEqual([]);
   });
 });
 

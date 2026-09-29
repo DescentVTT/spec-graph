@@ -346,8 +346,20 @@ export async function walkFiles(options: WalkOptions): Promise<WalkedFile[]> {
   // The empty pattern is no directory's name, so it goes to the dialect, which
   // refuses it as it refuses an empty include: a pattern that names nothing is
   // a typo or an unset variable, and was an ignore that ignored nothing.
-  const bare = (pattern: string): boolean => pattern.length > 0 && !isGlob(pattern) && !pattern.includes('/');
-  const named = new Set(ignores.filter(bare));
+  const plainName = (pattern: string): boolean =>
+    pattern.length > 0 && !isGlob(pattern) && !pattern.includes('/') && !pattern.startsWith('!');
+  // A `!` before a name gives the name back, as a `.gitignore` line does, and
+  // the last bare entry to name a directory decides whether it is pruned. It
+  // was read as a directory called `!docs`, so `--ignore docs --ignore "!docs"`
+  // pruned `docs` and said nothing. The default list is a list of names too,
+  // and gives way to one: `--ignore "!vendor"` reads every `vendor`. A `!` alone
+  // or before another is no name, and goes to the dialect, which refuses both.
+  const bare = (pattern: string): boolean => plainName(pattern) || (pattern.startsWith('!') && plainName(pattern.slice(1)));
+  const named = new Map<string, boolean>();
+  for (const pattern of ignores.filter(bare)) {
+    const negated = pattern.startsWith('!');
+    named.set(negated ? pattern.slice(1) : pattern, !negated);
+  }
   const skippedByDefault = new Set(DEFAULT_IGNORED_DIRECTORIES);
   const ignoreList = pathList(ignores.filter((pattern) => !bare(pattern)));
   const excluded = (path: string): boolean => ignoreList.match(path);
@@ -399,7 +411,7 @@ export async function walkFiles(options: WalkOptions): Promise<WalkedFile[]> {
   const startable = (base: string): boolean => {
     if (base.length === 0) return true;
     const segments = base.split('/');
-    return !segments.some((segment, i) => named.has(segment) || excluded(segments.slice(0, i + 1).join('/')));
+    return !segments.some((segment, i) => named.get(segment) === true || excluded(segments.slice(0, i + 1).join('/')));
   };
   // Whether the walk leaves a directory it meets, asked of a followed link to
   // one as well: a link called `node_modules`, which pnpm writes, or one an
@@ -407,9 +419,10 @@ export async function walkFiles(options: WalkOptions): Promise<WalkedFile[]> {
   // and was entered whatever they were. Pruning a whole subtree is an
   // optimisation; a pattern that only matches the files inside it is still
   // honoured when they are filtered. A bare `--ignore` name prunes a directory
-  // a pattern names as well: only the default list gives way.
+  // a pattern names as well: only the default list gives way, to a pattern and
+  // to a `!` before its name.
   const pruned = (name: string, path: string): boolean =>
-    named.has(name) || (skippedByDefault.has(name) && !literals.has(path)) || excluded(path);
+    (named.get(name) ?? (skippedByDefault.has(name) && !literals.has(path))) || excluded(path);
   const out = new Map<string, WalkedFile>();
   // Where two walks overlap, whichever reaches a directory first reads it and
   // the other stops there. Reading it twice would find the same files under
