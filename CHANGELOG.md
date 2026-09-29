@@ -3,7 +3,13 @@
 Notable changes, newest first. Versions follow [semver](https://semver.org):
 a patch fixes behaviour without asking anything of a repository that upgrades.
 
-## Unreleased
+## 0.9.9
+
+Where a walk starts is judged as every directory it passes through: a path
+`--ignore` takes out a pattern's starting point, no walk starts behind a link
+the walk does not follow, and a followed link is pruned as a directory is.
+`--ignore-ref` reads a `.` or `..` in a brace alternative as text. A
+repository with no directory link and no such pattern sees nothing change.
 
 ### Fixed
 
