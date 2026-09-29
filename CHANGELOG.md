@@ -3,7 +3,14 @@
 Notable changes, newest first. Versions follow [semver](https://semver.org):
 a patch fixes behaviour without asking anything of a repository that upgrades.
 
-## Unreleased
+## 0.9.10
+
+A `!` before a bare `--ignore` name gives the name back, as `.gitignore`
+does, where it did nothing; a refused `--ignore-ref` pattern is advised as it
+was typed; a followed link back into a directory the walk is inside is not
+walked again; and spec-core is at 7e41240, so a leading `/` on a brace
+alternative roots it as it roots a pattern alone. A repository with none of
+these sees nothing change.
 
 ### Fixed
 
