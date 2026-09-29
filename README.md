@@ -793,6 +793,24 @@ without drifting, because the `partialFingerprints` spec-graph writes are the
 same identity a baseline is keyed on — the rule, the specification, and the
 citation, with no line number in it (ADR-0012).
 
+Without code scanning, `--format github` writes one GitHub Actions workflow
+command per finding, and the job's log turns each into an annotation on the
+diff, with no upload step:
+
+```yaml
+- run: npx spec-graph --format github
+```
+
+```text
+::error file=docs/adr/0003-event-log.md,line=13,title=ghost-handover::open obligation delegates to ADR-0002, which is retired. nothing will be read from ADR-0002 again - re-home this in a live document, or close it here
+```
+
+An `error` finding is an `error`, a `warn` a `warning` and an `info` a
+`notice`, as spec-guard writes them, and one only `--strict` made an error is
+titled `ghost-handover (strict)`. The message carries the hint. `%` and line
+breaks are escaped everywhere, and `:` and `,` in the file and the title, as
+GitHub reads them. A clean run writes nothing.
+
 On GitLab, `--format gitlab` writes the Code Quality report a merge request
 reads, and the merge request shows which findings it introduced and which it
 resolved:
@@ -1012,8 +1030,8 @@ spec-graph diff <before> <after>     Compare two JSON graph exports.
 --record-baseline <f>   Write today's findings as accepted debt, exit 0
 --ratchet               Also fail when a baseline entry no longer occurs
 --no-config             Ignore .spec-graph.json and the package.json key
---format <fmt>          human | json | sarif (check) | gitlab (check)
-                        | markdown (check, diff)
+--format <fmt>          human | json | sarif (check) | github (check)
+                        | gitlab (check) | markdown (check, diff)
 --graph-format <fmt>    dot | mermaid | json
 --documents-only        Hide items; their relations lift onto their documents
 --rule <id>=<severity>  error | warn | info | off (repeatable)
