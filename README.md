@@ -903,7 +903,9 @@ beyond one included: `docs/linked/*.md` reads nothing through the link
 `docs/linked`, as `docs/**/*.md` reads nothing there. `followSymlinks` in the
 [API](#programmatic-api) follows links, and prunes a link to a directory as it
 prunes a directory of that name and path: a linked `node_modules` is skipped,
-and an `--ignore` takes a link out.
+and an `--ignore` takes a link out. It never follows a link back into a
+directory the walk is inside, so a cycle is read once, and says nothing of it,
+as it says nothing of a link it does not follow.
 
 `--ignore-ref` is matched against reference targets rather than paths: a bare
 pattern names one target exactly, case is ignored on every host, a `\` escapes

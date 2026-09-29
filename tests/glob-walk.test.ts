@@ -500,6 +500,88 @@ describe('a followed link to a directory', () => {
   });
 });
 
+describe('a followed link back into a directory the walk is inside', () => {
+  // One cycle to a tree: two in one tree multiply, and the walk before this
+  // took minutes to go round them rather than failing on what it read.
+  const root = `${ROOT}/cycles/tree`;
+  const rooted = `${ROOT}/cycles/rooted`;
+  let linked = false;
+
+  beforeAll(async () => {
+    await write(`${root}/top.md`, '# Top\n');
+    await write(`${root}/docs/a.md`, '# A\n');
+    await write(`${root}/docs/sub/s.md`, '# S\n');
+    await write(`${root}/docs/other/o.md`, '# O\n');
+    await write(`${ROOT}/cycles/elsewhere/e.md`, '# E\n');
+    await write(`${rooted}/r.md`, '# R\n');
+    await write(`${rooted}/docs/d.md`, '# D\n');
+    // A link to the directory above it, one to a sibling inside the tree, two
+    // to one directory outside it, and in a tree of its own, one to the root.
+    linked = true;
+    for (const [target, path] of [
+      [`${root}/docs`, `${root}/docs/sub/up`],
+      [`${root}/docs/other`, `${root}/docs/sibling`],
+      [`${ROOT}/cycles/elsewhere`, `${root}/docs/one`],
+      [`${ROOT}/cycles/elsewhere`, `${root}/docs/two`],
+      [rooted, `${rooted}/docs/back`],
+    ] as const) {
+      linked &&= await linkDirectory(target, path);
+    }
+  });
+
+  const walk = (patterns: string[], followSymlinks = true, at = root) =>
+    walkFiles({ root: at, patterns, followSymlinks }).then((files) => files.map((file) => file.path));
+
+  it('is not followed, so each file is read once under its own path', async (context) => {
+    if (!linked) context.skip();
+    // Each time round the cycle read the same files again under a longer
+    // path, until the host refused one: on Windows, 64 copies of each.
+    expect(await walk(['**/*.md'])).toEqual([
+      'docs/a.md',
+      'docs/one/e.md',
+      'docs/other/o.md',
+      'docs/sibling/o.md',
+      'docs/sub/s.md',
+      'docs/two/e.md',
+      'top.md',
+    ]);
+    expect(await walk(['docs/sub/**/*.md'])).toEqual(['docs/sub/s.md']);
+    expect(await walk(['**/*.md'], true, rooted)).toEqual(['docs/d.md', 'r.md']);
+  });
+
+  it('is not walked through by a pattern that starts beyond it, as the walk from the root is not', async (context) => {
+    if (!linked) context.skip();
+    expect(await walk(['docs/sub/up/*.md'])).toEqual([]);
+    expect(await walk(['docs/sub/up/sub/*.md'])).toEqual([]);
+    // Beyond the cycle, where the starting point is itself no directory the
+    // walk is inside: `docs/other`, reached round it.
+    expect(await walk(['docs/sub/up/other/*.md'])).toEqual([]);
+    expect(await walk(['docs/back/'], true, rooted)).toEqual([]);
+    expect(await walk(['docs/back/docs/*.md'], true, rooted)).toEqual([]);
+  });
+
+  it('leaves a link to a directory the walk is not inside followed, a sibling and one read already included', async (context) => {
+    if (!linked) context.skip();
+    expect(await walk(['docs/sibling/*.md'])).toEqual(['docs/sibling/o.md']);
+    expect(await walk(['docs/other/*.md', 'docs/sibling/*.md'])).toEqual(['docs/other/o.md', 'docs/sibling/o.md']);
+    expect(await walk(['docs/*/e.md'])).toEqual(['docs/one/e.md', 'docs/two/e.md']);
+    expect(await walk(['docs/one/*.md', 'docs/two/*.md'])).toEqual(['docs/one/e.md', 'docs/two/e.md']);
+  });
+
+  it('is passed over as every link is when links are not followed', async (context) => {
+    if (!linked) context.skip();
+    expect(await walk(['**/*.md'], false)).toEqual(['docs/a.md', 'docs/other/o.md', 'docs/sub/s.md', 'top.md']);
+    expect(await walk(['**/*.md'], false, rooted)).toEqual(['docs/d.md', 'r.md']);
+  });
+
+  it('leaves the run standing where a real path cannot be had, as an unreadable directory does', async () => {
+    // A root that is not there has no real path, and reads nothing either way.
+    for (const followSymlinks of [false, true]) {
+      expect(await walk(['**/*.md'], followSymlinks, `${ROOT}/cycles/missing`)).toEqual([]);
+    }
+  });
+});
+
 describe('an entry that is neither a file nor a directory', () => {
   it('is never read, since reading a named pipe waits for a writer', async (context) => {
     if (process.platform === 'win32') context.skip();

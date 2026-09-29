@@ -278,6 +278,24 @@ refuses it, `the pattern is empty` and `a negated pattern is a list entry`,
 where it pruned a directory of that name. A directory whose name begins with
 `!` is named in braces: `**/{!drafts}`.
 
+*Amended 2026-09-29.* **A followed link back into a directory the walk is
+inside is not followed.** With `followSymlinks` on, a link to a directory
+above it, such as `docs/sub/up` to `docs`, was entered each time the walk
+met it, and each time round read the same files again under a longer path,
+`docs/sub/up/sub/up/a.md` and on, until the host refused the path: on
+Windows, 64 copies of each file, and with two such links in one tree, twice
+as many at every turn. The walk now keeps the real path of each directory
+from the root to the one it reads, and passes over a link whose real path
+is among them, as silently as it passes over every link when links are not
+followed: a cycle is a link the walk does not follow, not a fault in the
+repository. Each file is read once, under the path that does not go round.
+A starting point beyond such a link is not walked, as the walk from the
+root does not reach it: `docs/sub/up/*.md` finds nothing. Only a directory
+on the way to a link makes it a cycle. A link to a sibling, or to a
+directory another link or the walk has already read, is followed as
+before, and what it holds is read under its own path as well. With links
+not followed, the default, nothing changes and no real path is asked for.
+
 **A `..` typed below the root is resolved where it was typed.** A pattern may
 no longer climb out of its root, and `cd docs/deep && spec-graph "../*.md"` is
 not doing that: it names the root's `docs/*.md`, and re-anchoring it

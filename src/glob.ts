@@ -10,7 +10,7 @@
  */
 
 import type { Dirent } from 'node:fs';
-import { readdir, stat } from 'node:fs/promises';
+import { readdir, realpath, stat } from 'node:fs/promises';
 
 import { isAbsolutePath, joinPosix, toPosix } from './paths.js';
 import {
@@ -62,7 +62,10 @@ export interface WalkOptions {
   readonly patterns: readonly string[];
   readonly ignore?: readonly string[] | undefined;
   readonly maxFileSize?: number | undefined;
-  /** Follow directory symlinks. Off by default: cycles are real. */
+  /**
+   * Follow links. Off by default: a link can lead out of the repository. A
+   * link back into a directory the walk is inside is never followed.
+   */
   readonly followSymlinks?: boolean | undefined;
 }
 
@@ -335,25 +338,41 @@ export function globBase(pattern: string): string {
  * `docs/linked/*.md` was read through the link `docs/linked`, which the walk
  * from the root passes over. Asking each parent for the entry says which it
  * is, and a base beyond a link is left as silently as the walk leaves the link.
+ *
+ * Where links are followed, the answer is the real path of each directory
+ * above the base, the root included, for the walk to tell a cycle by; a base
+ * beyond a link back into one of them is one the walk from the root never
+ * reaches, and is left the same way. Where they are not, it is empty and never
+ * read, so a mutant that fills it anyway is equivalent. `null` is a base the
+ * walk does not start at.
  */
-async function reachable(root: string, base: string, followSymlinks: boolean | undefined): Promise<boolean> {
-  if (base.length === 0) return true;
+async function reachable(root: string, base: string, followSymlinks: boolean | undefined): Promise<Set<string> | null> {
+  const above = new Set<string>();
+  if (base.length === 0) return above;
   let directory = root;
   for (const segment of base.split('/')) {
     let entries: Dirent[];
     try {
       entries = await readdir(directory, { withFileTypes: true });
     } catch {
-      // Answering `true` here would change nothing a test can see: the walk
+      // Answering a set here would change nothing a test can see: the walk
       // would then read a directory beneath this one, fail the same way, and
       // find nothing.
-      return false;
+      return null;
     }
     const entry = entries.find((candidate) => candidate.name === segment);
-    if (entry === undefined || (entry.isSymbolicLink() && !followSymlinks)) return false;
+    if (entry === undefined || (entry.isSymbolicLink() && !followSymlinks)) return null;
+    if (followSymlinks) {
+      // The directory was just listed, so asking for its real path fails only
+      // where it went in between, and the walk would find nothing there: a
+      // mutant that answers otherwise is equivalent.
+      const real = await realpath(directory).catch(() => null);
+      if (real === null || above.has(real)) return null;
+      above.add(real);
+    }
     directory = `${directory}/${segment}`;
   }
-  return true;
+  return above;
 }
 
 /**
@@ -460,12 +479,34 @@ export async function walkFiles(options: WalkOptions): Promise<WalkedFile[]> {
   // the other stops there. Reading it twice would find the same files under
   // the same keys, so the two mutants that drop this are equivalent.
   const visited = new Set<string>();
+  // Where links are followed, the real path of each directory from the root to
+  // the one being read. A link whose real path is among them leads back into a
+  // directory the walk is inside, and following it read the same files again
+  // under a longer path each time round, until the host refused the path: on
+  // Windows, 64 copies of each. It is passed over as silently as a link is
+  // when links are not followed. A link to anywhere else is followed, one to a
+  // directory the walk has already read beside this one included, since only
+  // a directory on the way here can make a cycle. The walks run one at a time,
+  // so one set serves them all. Only a followed link can make a cycle, so with
+  // links not followed no real path is asked for, and a mutant that asks finds
+  // none: equivalent.
+  let inside = new Set<string>();
 
   const walk = async (relative: string): Promise<void> => {
     const absolute = relative.length === 0 ? root : `${root}/${relative}`;
     if (visited.has(absolute)) return;
     visited.add(absolute);
+    if (!options.followSymlinks) return read(relative, absolute);
+    // A directory with no real path is one that cannot be listed either, so
+    // a mutant that reads it rather than returning reads nothing more.
+    const real = await realpath(absolute).catch(() => null);
+    if (real === null || inside.has(real)) return;
+    inside.add(real);
+    await read(relative, absolute);
+    inside.delete(real);
+  };
 
+  const read = async (relative: string, absolute: string): Promise<void> => {
     let entries;
     try {
       entries = await readdir(absolute, { withFileTypes: true });
@@ -511,7 +552,12 @@ export async function walkFiles(options: WalkOptions): Promise<WalkedFile[]> {
     }
   };
 
-  for (const base of bases) if (startable(base) && (await reachable(root, base, options.followSymlinks))) await walk(base);
+  for (const base of bases) {
+    const above = startable(base) ? await reachable(root, base, options.followSymlinks) : null;
+    if (above === null) continue;
+    inside = above;
+    await walk(base);
+  }
 
   // No two paths are equal, since they are the keys of `out`, so the order
   // needs only `<`, and `<=` would read the same.
