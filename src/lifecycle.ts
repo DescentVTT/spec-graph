@@ -240,8 +240,10 @@ const HAN = /\p{Script=Han}/u;
 
 /**
  * What cancels a Han term written directly after it: `未接受`, `尚未核准` and
- * `不再生效` are not accepted, approved or in effect. `尚未` ends in `未`, so
- * it needs no entry of its own.
+ * `不再生效` are not accepted, approved or in effect, and `未移交給 ADR-0002`
+ * hands nothing on. One list for status words and relation phrases alike, so
+ * the two cannot come to disagree about what a negation is. `尚未` ends in
+ * `未`, so it needs no entry of its own.
  */
 const HAN_NEGATIONS: readonly string[] = ['不', '未', '非', '沒', '没', '無', '无', '勿', '不再'];
 
@@ -292,8 +294,8 @@ export function normaliseStatus(raw: string): string {
     .trim();
 }
 
-/** Whether a negation stands directly before the offset. */
-function negatedAt(text: string, offset: number): boolean {
+/** Whether a Chinese negation stands directly before the offset. */
+export function negatedAt(text: string, offset: number): boolean {
   const before = text.slice(0, offset);
   return HAN_NEGATIONS.some((negation) => before.endsWith(negation));
 }

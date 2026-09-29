@@ -27,7 +27,14 @@ import {
   type DocumentIdentity,
   ID_KEYS,
 } from './identity.js';
-import { isStatusHeading, phaseFromPath, phaseOf, STATUS_KEYS, supersessionTargetsIn } from './lifecycle.js';
+import {
+  isStatusHeading,
+  negatedAt,
+  phaseFromPath,
+  phaseOf,
+  STATUS_KEYS,
+  supersessionTargetsIn,
+} from './lifecycle.js';
 import {
   anchorsOf,
   isMarkdownLine,
@@ -462,18 +469,6 @@ const VERB_RULES: readonly { kind: EdgeKind; inverted: boolean; phrases: readonl
  * and a phrase only matches where no letter follows it.
  */
 const NEGATION = /(?:^|\s)(?:no|not|nobody|none|never|neither|nor|nothing|without)(?:\s|$)/;
-
-/**
- * What cancels a phrase written directly after it, in Chinese: `未移交給
- * ADR-0002` hands nothing on. The status words read the same negations
- * (ADR-0002); `尚未` ends in `未`, so it needs no entry of its own.
- */
-const HAN_NEGATIONS: readonly string[] = ['不', '未', '非', '沒', '没', '無', '无', '勿', '不再'];
-
-/** Whether a Chinese negation ends the text. */
-function endsInNegation(text: string): boolean {
-  return HAN_NEGATIONS.some((negation) => text.endsWith(negation));
-}
 
 /** How close a governing phrase must sit to the reference it governs. */
 const VERB_WINDOW = 40;
@@ -1565,7 +1560,7 @@ export function classifyReference(
     // negation in there reverses the claim the phrase would otherwise make.
     if (NEGATION.test(before.slice(end))) continue;
     // Chinese negates the phrase itself, directly before it: `未移交給`.
-    if (endsInNegation(before.slice(0, m.index))) continue;
+    if (negatedAt(before, m.index)) continue;
     // Always found: the pattern was compiled from this table's own keys, and a
     // lower-cased search matches them only as written. The check is for types.
     const rule = VERB_LOOKUP.get(phrase);
