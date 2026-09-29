@@ -778,14 +778,21 @@ The exit code is the contract: `0` clean, `1` findings, `2` the tool could not
 run. That is all most pipelines need.
 
 For annotations on the diff rather than a line in a log, emit SARIF and hand it
-to the uploader that already exists:
+to the uploader that already exists. The upload needs `security-events: write`,
+and a job that declares its permissions has only those, so it names
+`contents: read` for its checkout as well:
 
 ```yaml
-- run: npx spec-graph --format sarif > spec-graph.sarif
-  continue-on-error: true
-- uses: github/codeql-action/upload-sarif@v3
-  with:
-    sarif_file: spec-graph.sarif
+permissions:
+  contents: read
+  security-events: write
+steps:
+  # check out the repository and set up Node, then:
+  - run: npx spec-graph --format sarif > spec-graph.sarif
+    continue-on-error: true
+  - uses: github/codeql-action/upload-sarif@v4
+    with:
+      sarif_file: spec-graph.sarif
 ```
 
 Findings land as comments on the changed lines, and they persist across commits

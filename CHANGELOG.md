@@ -44,6 +44,14 @@ byte what 0.9.10 wrote.
   matter; a legend, a register or a wider table is never read (ADR-0002).
   Upgrading: as for Chinese.
 
+### Fixed
+
+- **The README's SARIF example uploads with
+  `github/codeql-action/upload-sarif@v4`**, the current major - v3 is
+  deprecated in December 2026 - and declares the `security-events: write`
+  permission the upload needs, beside the `contents: read` a job that
+  declares permissions must then name for its checkout.
+
 ## 0.9.10
 
 A `!` before a bare `--ignore` name gives the name back, as `.gitignore`
