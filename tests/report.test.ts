@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { buildGraph } from '../src/graph.js';
 import {
   createPainter,
+  formatGithub,
   formatGitlab,
   formatGraph,
   formatJson,
@@ -481,6 +482,73 @@ describe('gitlab code quality report', () => {
     const after = issues(formatGitlab(result(edited)));
     expect(after.map((issue) => issue.fingerprint)).toEqual(before.map((issue) => issue.fingerprint));
     expect(after[0]?.location.lines.begin).toBeGreaterThan(before[0]?.location.lines.begin as number);
+  });
+});
+
+describe('github workflow commands', () => {
+  /** A finding made by hand, so severity, place and wording are the test's to choose. */
+  const finding = (overrides: Partial<Diagnostic> = {}): Diagnostic => {
+    const point = { offset: 0, line: 7, column: 3 };
+    return {
+      rule: 'broken-reference',
+      severity: 'error',
+      message: '"x.md" does not resolve to any document',
+      hint: 'fix the identifier, or add the document it names',
+      at: { file: 'docs/adr/0001-a.md', span: { start: point, end: point } },
+      nodes: ['ADR-0001'],
+      related: [],
+      target: 'x.md',
+      ...overrides,
+    };
+  };
+  const reporting = (diagnostics: Diagnostic[]): AnalysisResult => ({ ...result(), diagnostics });
+
+  it('is one command per finding, on its file and line, titled by its rule, with the hint', () => {
+    const diagnostic = result().diagnostics[0] as Diagnostic;
+    expect(formatGithub(result())).toBe(
+      `::error file=docs/adr/0004-cache.md,line=${diagnostic.at.span.start.line},title=ghost-handover::${diagnostic.message}. ${diagnostic.hint}\n`,
+    );
+  });
+
+  it('is nothing at all for a clean run', () => {
+    expect(formatGithub(reporting([]))).toBe('');
+  });
+
+  it('puts each severity on the level GitHub shows it at, and marks what --strict raised', () => {
+    const levels = formatGithub(
+      reporting([
+        finding({ severity: 'error' }),
+        finding({ severity: 'error', rule: 'ambiguous-reference' }),
+        finding({ severity: 'warn', rule: 'reference-outside-corpus' }),
+        finding({ severity: 'info', rule: 'self-reference' }),
+      ]),
+      { escalated: new Set(['ambiguous-reference']) },
+    )
+      .split('\n')
+      .map((line) => /^::(\w+) [^:]*title=([^:]*)::/.exec(line)?.slice(1).join(' '));
+    expect(levels).toEqual([
+      'error broken-reference',
+      'error ambiguous-reference (strict)',
+      'warning reference-outside-corpus',
+      'notice self-reference',
+      undefined,
+    ]);
+  });
+
+  it('escapes what would end the command, the message, or a property', () => {
+    const [line] = formatGithub(
+      reporting([
+        finding({
+          rule: 'project:a,b' as Diagnostic['rule'],
+          message: '100% of\r\nthe links',
+          hint: 'fix: one, then two',
+          at: { file: 'docs/a,b:c%.md', span: { start: { offset: 0, line: 2, column: 1 }, end: { offset: 0, line: 2, column: 1 } } },
+        }),
+      ]),
+    ).split('\n');
+    // GitHub's rules: `%`, CR and LF everywhere, and `:` and `,` in a property,
+    // with `%` first so an escape is never escaped again.
+    expect(line).toBe('::error file=docs/a%2Cb%3Ac%25.md,line=2,title=project%3Aa%2Cb::100%25 of%0D%0Athe links. fix: one, then two');
   });
 });
 

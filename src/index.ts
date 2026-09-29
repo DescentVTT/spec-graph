@@ -96,6 +96,7 @@ export type { CompiledProjectRules, ProjectRule } from './project-rules.js';
 
 export {
   createPainter,
+  formatGithub,
   formatGitlab,
   formatGraph,
   formatJson,
