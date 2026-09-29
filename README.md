@@ -126,11 +126,11 @@ onto four phases, chosen so one question can be answered from the phase alone:
 | `retired` | `superseded`, `deprecated`, `rejected`, `withdrawn`, … | **no** |
 
 The status is found wherever your team writes it — front matter (`status:`,
-`state:`, `stage:`), a `## Status` section, `**Accepted** (2026-03-01) ✅`, or a
-`docs/adr/archive/` directory - and in English or in Chinese, `## 狀態` /
-`已接受`. `Accepted, later superseded by ADR-0009` is retired: retirement is
-terminal, so a retirement word anywhere wins. Front matter is read as YAML
-reads it, and a value YAML would not read -
+`state:`, `stage:`), a `## Status` section, a `| Status | Accepted |` table at
+the top, `**Accepted** (2026-03-01) ✅`, or a `docs/adr/archive/` directory -
+and in English or in Chinese, `## 狀態` / `已接受`. `Accepted, later superseded
+by ADR-0009` is retired: retirement is terminal, so a retirement word anywhere
+wins. Front matter is read as YAML reads it, and a value YAML would not read -
 `status: Superseded by ADR-9: see notes`, where a plain value cannot hold `: ` -
 is left out rather than guessed at. Every run says how many statuses, ids and
 relations it left out that way, and `--verbose` says where and why: quote the
@@ -180,10 +180,17 @@ characters and in the same sentence, by `取代`, `替代` or `取而代之`:
 | --- | --- |
 | Front matter, the first key present | `status`, `state`, `stage`, `lifecycle`, `phase`, `adr-status` |
 | A section, under the heading, with or without a colon, `:` or `：` | `Status`, `State`, `Stage`, `Lifecycle`, `Current status`, `狀態`, `状态` |
+| A two-column table above the first `##`, in the cell right of the first key in the left column, the header row included | `Status`, `State`, `狀態`, `状态` |
 | A directory, for a document that declares no status | `archive`, `archived`, `attic`, `deprecated`, `graveyard`, `historical`, `obsolete`, `rejected`, `retired`, `superseded`, `superceded`, `withdrawn` |
 
 A front-matter key is read in ASCII letters, so write `status: 已接受` rather
-than `狀態: 已接受`.
+than `狀態: 已接受`. The table is where many teams put a document's fields,
+`| 狀態 | 已接受 |` or `| Status | Accepted |`, and is read where a
+`## Status` section is, after one: a document with both is read from the
+section, and front matter still wins over either. A key is compared whole, in
+any case, emphasis stripped. A table with more columns, one under a heading
+below the title, and one spec-graph reads as a register are never read for the
+document's status: a legend or a register describes other things.
 
 </details>
 

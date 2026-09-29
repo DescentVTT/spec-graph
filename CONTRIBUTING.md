@@ -57,7 +57,8 @@ a code change. That is the whole point of the design:
 
 - a status word → `VOCABULARY` in `lifecycle.ts`, in English or Chinese; a
   word that cancels a Chinese one after it → `HAN_NEGATIONS`
-- a heading a status is read under → `STATUS_HEADINGS` in `lifecycle.ts`
+- a heading or a table key a status is read under → `STATUS_HEADINGS` in
+  `lifecycle.ts`, `STATUS_TABLE_KEYS` in `extract.ts`
 - a relation phrase (`"deferred to"`) → `VERB_RULES` in `extract.ts`
 - a front-matter relation key → `RELATION_KEYS` in `extract.ts`
 - a resolution marker (`"**Moot**"`) → `MARKERS` in `state.ts`
