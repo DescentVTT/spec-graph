@@ -879,7 +879,10 @@ automaton states. A parenthesis with no `|` in its group
 is itself, so `C++(notes).md` names that file. A `..` typed below the root,
 `spec-graph "../*.md"` from `docs/deep`, is resolved against where you typed
 it. A bare `--ignore` name, `--ignore drafts`, still prunes that directory at
-any depth, even where a pattern starts inside it or names it.
+any depth, even where a pattern starts inside it or names it. A path,
+`--ignore "docs/*"`, takes out what it matches wherever a pattern starts:
+`docs/drafts/**/*.md` finds nothing under it, as `docs/**/*.md` finds nothing
+in `docs/drafts`.
 
 The walk never enters `.git`, `.hg`, `.svn`, `.cache`, `.next`, `.nuxt`,
 `.turbo`, `.venv`, `node_modules`, `bower_components`, `vendor`, `dist`,
