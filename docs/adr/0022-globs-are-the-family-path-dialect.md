@@ -240,6 +240,28 @@ link a pattern names or starts inside, as it does to a directory -
 unless `--ignore node_modules` says otherwise. A link to a file is read as
 it was, matched and ignored by its own path.
 
+*Amended 2026-09-29.* **A `!` before a bare `--ignore` name gives the name
+back.** A bare name prunes a directory of that name at any depth, and a
+leading `!` takes a path back out of the list, but the two never met: `!docs`
+has no slash, so it was read as a bare name, a directory called `!docs`.
+`--ignore docs --ignore "!docs"` pruned every `docs` and said nothing, and
+`--ignore "!vendor"` read no `vendor`. The bare names are now a list of their
+own, read as a `.gitignore` reads one: in order, the last to name a directory
+deciding. `--ignore drafts --ignore "!drafts"` reads every `drafts`, on the
+walk's way down and where a pattern starts inside one, and
+`--ignore "!drafts" --ignore drafts` reads none. The default list is a list of
+names as well, and gives way to a `!` before one as it gives way to a pattern
+that names it: `--ignore "!vendor"` reads every `vendor`, the rest of the
+default list still pruned inside it, until a later `--ignore vendor` takes
+them out again. A `!` before a path is unchanged. It takes back what a path
+took out, and nothing a name or the default list prunes, since a path such as
+`!{docs,specs}` takes back everything beneath it, `docs/node_modules`
+included; a name, in turn, gives back nothing a path took out. A `!` alone,
+or before another `!`, names no directory, and is refused as the path list
+refuses it, `the pattern is empty` and `a negated pattern is a list entry`,
+where it pruned a directory of that name. A directory whose name begins with
+`!` is named in braces: `**/{!drafts}`.
+
 **A `..` typed below the root is resolved where it was typed.** A pattern may
 no longer climb out of its root, and `cd docs/deep && spec-graph "../*.md"` is
 not doing that: it names the root's `docs/*.md`, and re-anchoring it

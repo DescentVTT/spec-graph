@@ -250,6 +250,9 @@ describe('paths typed below the root', () => {
   it('prunes a bare --ignore name at any depth, and anchors a path or a glob where it was typed', async () => {
     // A bare name is a directory wherever it is, as a .gitignore line is.
     expect(await files(absolute(`${PROJECT}/docs/deep`), '--ignore', 'deep')).toEqual(['docs/0001.md', 'docs/0002.md']);
+    // So is one with a `!` before it, which gives the name back.
+    const all = ['docs/0001.md', 'docs/0002.md', 'docs/deep/0003.md'];
+    expect(await files(absolute(`${PROJECT}/docs/deep`), '--ignore', 'deep', '--ignore', '!deep')).toEqual(all);
     // A path, or a glob, means the one below the directory it was typed in.
     expect(await files(absolute(`${PROJECT}/docs`), '--ignore', 'deep/0003.md')).toEqual(['docs/0001.md', 'docs/0002.md']);
     expect(await files(absolute(`${PROJECT}/docs/deep`), '--ignore', '*.md')).toEqual(['docs/0001.md', 'docs/0002.md']);

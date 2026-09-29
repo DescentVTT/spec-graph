@@ -3,6 +3,25 @@
 Notable changes, newest first. Versions follow [semver](https://semver.org):
 a patch fixes behaviour without asking anything of a repository that upgrades.
 
+## Unreleased
+
+### Fixed
+
+- **A `!` before a bare `--ignore` name gives the name back.**
+  `--ignore docs --ignore "!docs"` pruned every `docs` and said nothing, and
+  `--ignore "!vendor"` read no `vendor`: a name without a slash was read as a
+  bare name, so `!docs` pruned a directory called `!docs`. The bare names are
+  now read in order, the last to name a directory deciding, and a `!` before
+  one gives back a directory an earlier bare name or the default list prunes,
+  at any depth and where a pattern starts inside it; the rest of the default
+  list is still pruned inside it. A `!` before a path is unchanged, and a `!`
+  alone or before another `!` is refused, where it pruned a directory of that
+  name. A directory whose name begins with `!` is named in braces,
+  `**/{!drafts}` (ADR-0022). No configuration in this repository, its
+  fixtures or the rest of the family writes such an ignore, and over them
+  every `check` format and every graph export is byte for byte what 0.9.9
+  wrote.
+
 ## 0.9.9
 
 Where a walk starts is judged as every directory it passes through: a path
