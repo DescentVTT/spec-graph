@@ -77,7 +77,7 @@ describe('argument parsing', () => {
 
   it('takes each format by name, the default included', () => {
     expect(parseArgs([], '/repo').format).toBe('human');
-    for (const format of ['human', 'json', 'sarif', 'markdown', 'gitlab'] as const) {
+    for (const format of ['human', 'json', 'sarif', 'markdown', 'gitlab', 'github'] as const) {
       expect(parseArgs(['check', '--format', format], '/repo').format).toBe(format);
     }
   });
@@ -1286,8 +1286,60 @@ describe('GitLab Code Quality', () => {
     const diff = await run('diff', 'a.json', 'b.json', '--format', 'gitlab');
     expect(diff.code).toBe(EXIT_ERROR);
     expect(() => parseArgs(['--format', 'codeclimate'], '/repo')).toThrow(
-      '--format must be human, json, sarif, markdown or gitlab, got "codeclimate"',
+      '--format must be human, json, sarif, markdown, gitlab or github, got "codeclimate"',
     );
+  });
+});
+
+describe('GitHub workflow commands', () => {
+  // Two warnings and nothing else: the fixture the strict-mode tests use.
+  const WARNINGS = ['docs/**/*.md', '--root', 'tests/fixtures/warnings'];
+
+  /** Each command as its level, file, line and title. */
+  const commands = (text: string): string[][] =>
+    text
+      .trimEnd()
+      .split(/\r?\n/)
+      .map((line) => {
+        const match = /^::(\w+) file=([^,]*),line=(\d+),title=([^:]*)::/.exec(line);
+        return match ? match.slice(1) : [line];
+      });
+
+  it('writes one annotation per finding, where the finding is, and fails as check does', async () => {
+    const github = await run('check', '--root', LEGACY, '--no-config', '--format', 'github');
+    expect(github.code).toBe(EXIT_FAILED);
+    const json = JSON.parse((await run('check', '--root', LEGACY, '--no-config', '--format', 'json')).out) as {
+      diagnostics: { rule: string; severity: string; file: string; line: number }[];
+    };
+    const level: Record<string, string> = { error: 'error', warn: 'warning', info: 'notice' };
+    expect(commands(github.out)).toEqual(
+      json.diagnostics.map((diagnostic) => [level[diagnostic.severity], diagnostic.file, String(diagnostic.line), diagnostic.rule]),
+    );
+    expect(json.diagnostics.length).toBeGreaterThan(1);
+  });
+
+  it('marks a finding only --strict made an error, and writes nothing for a clean run', async () => {
+    const lenient = commands((await run('check', ...WARNINGS, '--format', 'github')).out);
+    const strict = commands((await run('check', ...WARNINGS, '--strict', '--format', 'github')).out);
+    expect(lenient.map(([level, , , title]) => `${level} ${title}`)).toEqual([
+      'warning unreciprocated-supersession',
+      'warning reference-outside-corpus',
+    ]);
+    expect(strict.map(([level, , , title]) => `${level} ${title}`)).toEqual([
+      'error unreciprocated-supersession (strict)',
+      'error reference-outside-corpus (strict)',
+    ]);
+    const off = ['--rule', 'unreciprocated-supersession=off', '--rule', 'reference-outside-corpus=off'];
+    const clean = await run('check', ...WARNINGS, ...off, '--format', 'github');
+    expect(clean).toEqual({ code: EXIT_OK, out: '', err: '' });
+  });
+
+  it('belongs to check, and says so rather than falling back', async () => {
+    expect(() => parseArgs(['graph', '--format', 'github'], '/repo')).toThrow(
+      '--format github reports findings, so it belongs to check, not to graph',
+    );
+    const diff = await run('diff', 'a.json', 'b.json', '--format', 'github');
+    expect(diff.code).toBe(EXIT_ERROR);
   });
 });
 

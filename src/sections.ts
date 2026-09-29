@@ -127,8 +127,8 @@ const EMPTY_CELL = /^(?:-+|—|–|n\/?a|none|nil|tbd|\.|_+)$/i;
 /** `## ADR-0007: Sharding` - an identifier at the very start of a heading. */
 const HEADING_ID = /^\s*([A-Za-z]{1,15}[\s._-]?\d{1,6})\b/;
 
-/** `**Status:** Accepted`, `Status: Accepted`, `*Status* : Accepted`. */
-const INLINE_STATUS = /^[ \t>]*[*_]{0,2}\s*status\s*[*_]{0,2}\s*[:：]\s*(.+?)\s*$/im;
+/** `**Status:** Accepted`, `Status: Accepted`, `*Status* : Accepted`, `**狀態：** 已接受`. */
+const INLINE_STATUS = /^[ \t>]*[*_]{0,2}\s*(?:status|狀態|状态)\s*[*_]{0,2}\s*[:：]\s*(.+?)\s*$/im;
 
 /**
  * Finds every specification in a file.
@@ -291,6 +291,15 @@ export function findTableRegions(scanned: ScannedDocument): SpecificationRegion[
   }
 
   return out;
+}
+
+/**
+ * Whether spec-graph reads a table as a register: an identifier column, and a
+ * status column or a relation column beside it. Such a table's status column
+ * describes its rows, never the document holding it.
+ */
+export function isRegisterTable(table: Table): boolean {
+  return readSchema(table) !== null;
 }
 
 interface TableSchema {

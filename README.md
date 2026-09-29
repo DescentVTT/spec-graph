@@ -126,10 +126,11 @@ onto four phases, chosen so one question can be answered from the phase alone:
 | `retired` | `superseded`, `deprecated`, `rejected`, `withdrawn`, … | **no** |
 
 The status is found wherever your team writes it — front matter (`status:`,
-`state:`, `stage:`), a `## Status` section, `**Accepted** (2026-03-01) ✅`, or a
-`docs/adr/archive/` directory. `Accepted, later superseded by ADR-0009` is
-retired: retirement is terminal, so a retirement word anywhere wins. Front
-matter is read as YAML reads it, and a value YAML would not read -
+`state:`, `stage:`), a `## Status` section, a `| Status | Accepted |` table at
+the top, `**Accepted** (2026-03-01) ✅`, or a `docs/adr/archive/` directory -
+and in English or in Chinese, `## 狀態` / `已接受`. `Accepted, later superseded
+by ADR-0009` is retired: retirement is terminal, so a retirement word anywhere
+wins. Front matter is read as YAML reads it, and a value YAML would not read -
 `status: Superseded by ADR-9: see notes`, where a plain value cannot hold `: ` -
 is left out rather than guessed at. Every run says how many statuses, ids and
 relations it left out that way, and `--verbose` says where and why: quote the
@@ -152,11 +153,44 @@ that `provisionally accepted` is a draft.
 | `active` | `accepted`, `active`, `approved`, `adopted`, `agreed`, `implementable`, `implemented`, `implementing`, `current`, `effective`, `in-effect`, `enforced`, `stable`, `merged`, `released`, `shipped`, `live`, `done`, `complete`, `completed`, `signed-off`, `committed` |
 | `draft` | `draft`, `drafting`, `proposed`, `proposal`, `provisional`, `provisionally-accepted`, `prospective`, `wip`, `work-in-progress`, `in-progress`, `in_progress`, `review`, `in-review`, `under-review`, `reviewing`, `discussion`, `discussing`, `pending`, `idea`, `exploratory`, `candidate`, `open`, `new`, `unreviewed`, `rfc`, `experimental`, `alpha`, `beta`, `incubating` |
 
+Chinese is read in Traditional and Simplified characters, each word as the
+English word it translates, so it lands in that word's row: `延後` is
+`deferred` and retired, `封存` is `archived` and a record, and `暫定` is
+`provisionally accepted`, so `暫定接受` is a draft. Chinese puts no space
+between words, so a Chinese word counts wherever it stands in the status -
+`已接受，後被ADR-0003取代` holds `已接受` and a supersession - except directly
+after a negation: `不`, `未`, `非`, `沒`, `没`, `無`, `无`, `勿`, `尚未` or
+`不再`. `未接受`, `尚未核准` and `不再生效` say nothing; a word that starts with
+one, `不採納`, is itself. Superseded is also `被` followed, within 30
+characters and in the same sentence, by `取代`, `替代` or `取而代之`:
+`已被 ADR-0003 取代` is retired, and names ADR-0003 as what replaced it.
+`已取代` alone is retired; followed by a name, after spaces or a colon -
+`已取代 ADR-0002` - it says what this document replaced, and is not read.
+`取代` with no `被`, as in `已接受（取代 ADR-0002）`, retires nothing.
+
+| Phase | Chinese status words |
+| --- | --- |
+| `retired` | `已被取代`, `被取代`, `已取代`, `已棄用`, `棄用`, `已弃用`, `弃用`, `已廢棄`, `廢棄`, `已废弃`, `废弃`, `已停用`, `已過時`, `已过时`, `已否決`, `否決`, `已否决`, `否决`, `已拒絕`, `已拒绝`, `不採納`, `不采纳`, `已撤回`, `撤回`, `已作廢`, `作廢`, `已作废`, `作废`, `延後`, `延后`, `暫緩`, `暂缓`, `擱置`, `搁置` |
+| `record` | `封存`, `已封存`, `歸檔`, `已歸檔`, `归档`, `已归档` |
+| `frozen` | `已定案`, `定案`, `已凍結`, `已冻结` |
+| `active` | `已接受`, `接受`, `已採納`, `採納`, `已采纳`, `采纳`, `已核准`, `核准`, `已批准`, `批准`, `已生效`, `生效`, `已實施`, `已实施`, `已完成` |
+| `draft` | `暫定`, `暂定`, `草稿`, `草案`, `提議`, `提议`, `提案`, `審查中`, `审查中`, `審核中`, `审核中`, `討論中`, `讨论中`, `待審`, `待审`, `待審核`, `待审核` |
+
 | Where | Read from |
 | --- | --- |
 | Front matter, the first key present | `status`, `state`, `stage`, `lifecycle`, `phase`, `adr-status` |
-| A section, under the heading | `Status`, `State`, `Stage`, `Lifecycle`, `Current status` |
+| A section, under the heading, with or without a colon, `:` or `：` | `Status`, `State`, `Stage`, `Lifecycle`, `Current status`, `狀態`, `状态` |
+| A two-column table above the first `##`, in the cell right of the first key in the left column, the header row included | `Status`, `State`, `狀態`, `状态` |
 | A directory, for a document that declares no status | `archive`, `archived`, `attic`, `deprecated`, `graveyard`, `historical`, `obsolete`, `rejected`, `retired`, `superseded`, `superceded`, `withdrawn` |
+
+A front-matter key is read in ASCII letters, so write `status: 已接受` rather
+than `狀態: 已接受`. The table is where many teams put a document's fields,
+`| 狀態 | 已接受 |` or `| Status | Accepted |`, and is read where a
+`## Status` section is, after one: a document with both is read from the
+section, and front matter still wins over either. A key is compared whole, in
+any case, emphasis stripped. A table with more columns, one under a heading
+below the title, and one spec-graph reads as a register are never read for the
+document's status: a legend or a register describes other things.
 
 </details>
 
@@ -308,10 +342,12 @@ decisions. **A specification is a region of a file, not a file**, so both work:
 Shard by tenant id.
 ```
 
-Each section with an identifier *and* a status becomes a specification in its own
-right, with its own lifecycle, its own obligations and its own relations —
-resolvable from anywhere in the corpus as `ADR-0007`, whether it lives in a
-register or in its own file. Moving it out later breaks no citation.
+Each section with an identifier *and* a status - a `**Status:**` line,
+`**狀態：**` in Chinese, or a `### Status` section under its heading - becomes a
+specification in its own right, with its own lifecycle, its own obligations and
+its own relations — resolvable from anywhere in the corpus as `ADR-0007`,
+whether it lives in a register or in its own file. Moving it out later breaks
+no citation.
 
 A register kept as a table works the same way, with relations typed by the column
 header you wrote:
@@ -761,20 +797,45 @@ The exit code is the contract: `0` clean, `1` findings, `2` the tool could not
 run. That is all most pipelines need.
 
 For annotations on the diff rather than a line in a log, emit SARIF and hand it
-to the uploader that already exists:
+to the uploader that already exists. The upload needs `security-events: write`,
+and a job that declares its permissions has only those, so it names
+`contents: read` for its checkout as well:
 
 ```yaml
-- run: npx spec-graph --format sarif > spec-graph.sarif
-  continue-on-error: true
-- uses: github/codeql-action/upload-sarif@v3
-  with:
-    sarif_file: spec-graph.sarif
+permissions:
+  contents: read
+  security-events: write
+steps:
+  # check out the repository and set up Node, then:
+  - run: npx spec-graph --format sarif > spec-graph.sarif
+    continue-on-error: true
+  - uses: github/codeql-action/upload-sarif@v4
+    with:
+      sarif_file: spec-graph.sarif
 ```
 
 Findings land as comments on the changed lines, and they persist across commits
 without drifting, because the `partialFingerprints` spec-graph writes are the
 same identity a baseline is keyed on — the rule, the specification, and the
 citation, with no line number in it (ADR-0012).
+
+Without code scanning, `--format github` writes one GitHub Actions workflow
+command per finding, and the job's log turns each into an annotation on the
+diff, with no upload step:
+
+```yaml
+- run: npx spec-graph --format github
+```
+
+```text
+::error file=docs/adr/0003-event-log.md,line=13,title=ghost-handover::open obligation delegates to ADR-0002, which is retired. nothing will be read from ADR-0002 again - re-home this in a live document, or close it here
+```
+
+An `error` finding is an `error`, a `warn` a `warning` and an `info` a
+`notice`, as spec-guard writes them, and one only `--strict` made an error is
+titled `ghost-handover (strict)`. The message carries the hint. `%` and line
+breaks are escaped everywhere, and `:` and `,` in the file and the title, as
+GitHub reads them. A clean run writes nothing.
 
 On GitLab, `--format gitlab` writes the Code Quality report a merge request
 reads, and the merge request shows which findings it introduced and which it
@@ -995,8 +1056,8 @@ spec-graph diff <before> <after>     Compare two JSON graph exports.
 --record-baseline <f>   Write today's findings as accepted debt, exit 0
 --ratchet               Also fail when a baseline entry no longer occurs
 --no-config             Ignore .spec-graph.json and the package.json key
---format <fmt>          human | json | sarif (check) | gitlab (check)
-                        | markdown (check, diff)
+--format <fmt>          human | json | sarif (check) | github (check)
+                        | gitlab (check) | markdown (check, diff)
 --graph-format <fmt>    dot | mermaid | json
 --documents-only        Hide items; their relations lift onto their documents
 --rule <id>=<severity>  error | warn | info | off (repeatable)

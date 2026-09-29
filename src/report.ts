@@ -701,6 +701,58 @@ function gitlabSeverity(severity: Severity, escalated: boolean): GitlabSeverity 
   }
 }
 
+/* -------------------------------------------------------------------------- */
+/* GitHub workflow commands                                                   */
+/* -------------------------------------------------------------------------- */
+
+/** A workflow command's message: `%`, and the line breaks that would end the command. */
+function escapeData(text: string): string {
+  return text.replace(/%/g, '%25').replace(/\r/g, '%0D').replace(/\n/g, '%0A');
+}
+
+/** A workflow command's property: as a message, and the `:` and `,` that would end the property. */
+function escapeProperty(text: string): string {
+  return escapeData(text).replace(/:/g, '%3A').replace(/,/g, '%2C');
+}
+
+/**
+ * Findings as GitHub Actions workflow commands, one line each, which a job's
+ * log turns into annotations on the pull request's diff with no upload step -
+ * what SARIF does through code scanning, for a repository that has none.
+ *
+ * An error is `error`, a warning `warning` and a note `notice`, as spec-guard
+ * writes them. The rule is the title, marked `(strict)` where only `--strict`
+ * made it an error, as the Markdown report marks it; the message carries the
+ * hint, since a finding without its next action is the half a reader cannot
+ * act on. Nothing at all for a clean run.
+ */
+export function formatGithub(
+  result: AnalysisResult,
+  options: { escalated?: ReadonlySet<AnyRuleId> | undefined } = {},
+): string {
+  const escalated = options.escalated ?? EMPTY_RULES;
+  return result.diagnostics
+    .map((diagnostic) => {
+      const title = escalated.has(diagnostic.rule) ? `${diagnostic.rule} (strict)` : diagnostic.rule;
+      const place = `file=${escapeProperty(diagnostic.at.file)},line=${diagnostic.at.span.start.line}`;
+      return `::${githubLevel(diagnostic.severity)} ${place},title=${escapeProperty(title)}::${escapeData(
+        `${diagnostic.message}. ${diagnostic.hint}`,
+      )}\n`;
+    })
+    .join('');
+}
+
+function githubLevel(severity: Severity): 'error' | 'warning' | 'notice' {
+  switch (severity) {
+    case 'error':
+      return 'error';
+    case 'warn':
+      return 'warning';
+    default:
+      return 'notice';
+  }
+}
+
 export function formatJson(
   result: AnalysisResult,
   options: { escalated?: ReadonlySet<AnyRuleId>; baseline?: ReporterOptions['baseline'] } = {},
