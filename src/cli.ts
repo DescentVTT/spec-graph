@@ -28,7 +28,7 @@ import {
   parseGraphExport,
   type GraphExport,
 } from './diff.js';
-import { isGlob, underRoot } from './glob.js';
+import { isGlob, rebasePattern, underRoot } from './glob.js';
 import { analyse, DEFAULT_PATTERNS, withDiagnostics, type AnalyseOptions, type AnalysisResult } from './runner.js';
 import {
   formatGithub,
@@ -52,7 +52,7 @@ import {
   RULE_IDS,
   RULE_QUERIES,
 } from './rules.js';
-import { isAbsolutePath, toPosix } from './paths.js';
+import { isAbsolutePath, joinPosix, toPosix } from './paths.js';
 import { formatRef } from './source.js';
 import { execute, parseQuery, QueryError, renderMatch, type Match, type QuerySpec } from './select.js';
 import { isProjectRule, type AnyRuleId, type RuleId, type Severity, type SpecNode } from './types.js';
@@ -695,37 +695,6 @@ export async function main(io: CliIO = {}): Promise<number> {
     return EXIT_OK;
   }
 
-  const patterns =
-    options.patterns.length > 0 ? options.patterns.map((pattern) => anchor(here, pattern)) : (file.patterns ?? DEFAULT_PATTERNS);
-  const severityOverrides = { ...(file.severities ?? {}), ...options.severities };
-  const { severities, escalated } = resolveStrict(
-    severityOverrides,
-    options.strict || (file.strict ?? false),
-    projectRules,
-  );
-
-  const analyseOptions: AnalyseOptions = {
-    root,
-    patterns,
-    // A bare name prunes a directory of that name at any depth, the way a
-    // .gitignore line does, so it means the same thing wherever it was typed.
-    // A path or a glob is matched against the repository-relative path, and
-    // leaving that one alone would make it silently match nothing.
-    //
-    // A stray entry in one of the empty fallbacks below changes a run only if
-    // it matches a path, a target or a family some corpus has, so the mutants
-    // that plant one survive every corpus but one built for them - except in
-    // `families`, where any entry is an allowlist.
-    ignore: [...(file.ignore ?? []), ...options.ignore.map((pattern) => anchorPath(here, pattern))],
-    ignoreReferences: [...(file.ignoreReferences ?? []), ...options.ignoreReferences],
-    families: [...(file.families ?? []), ...options.families],
-    ignoreFamilies: [...(file.ignoreFamilies ?? []), ...options.ignoreFamilies],
-    historyPatterns: [...(file.historyPatterns ?? []), ...options.historyPatterns.map((pattern) => anchorPath(here, pattern))],
-    severities,
-    projectRules,
-    maxRelated: file.maxRelated,
-  };
-
   // Named the way the reader would have to type it, because a discovered
   // configuration is often not the one in front of them.
   //
@@ -737,6 +706,48 @@ export async function main(io: CliIO = {}): Promise<number> {
     const depth = here === '' ? 0 : here.split('/').length;
     err(`configuration: ${'../'.repeat(depth)}${loaded.source}\n`);
   }
+
+  // A bare name prunes a directory of that name at any depth, the way a
+  // .gitignore line does, so it means the same thing wherever it was typed.
+  // A path or a glob is matched against the repository-relative path, and
+  // leaving that one alone would make it silently match nothing. A pattern
+  // that cannot be rebased onto the root stops the run as one the dialect
+  // refuses does, named as it was typed.
+  let typed;
+  try {
+    typed = {
+      patterns: options.patterns.map((pattern) => anchor(here, pattern)),
+      ignore: options.ignore.map((pattern) => anchorPath(here, pattern)),
+      history: options.historyPatterns.map((pattern) => anchorPath(here, pattern)),
+    };
+  } catch (error) {
+    err(`spec-graph: ${(error as Error).message}\n`);
+    return EXIT_ERROR;
+  }
+  const patterns = typed.patterns.length > 0 ? typed.patterns : (file.patterns ?? DEFAULT_PATTERNS);
+  const severityOverrides = { ...(file.severities ?? {}), ...options.severities };
+  const { severities, escalated } = resolveStrict(
+    severityOverrides,
+    options.strict || (file.strict ?? false),
+    projectRules,
+  );
+
+  const analyseOptions: AnalyseOptions = {
+    root,
+    patterns,
+    // A stray entry in one of the empty fallbacks below changes a run only if
+    // it matches a path, a target or a family some corpus has, so the mutants
+    // that plant one survive every corpus but one built for them - except in
+    // `families`, where any entry is an allowlist.
+    ignore: [...(file.ignore ?? []), ...typed.ignore],
+    ignoreReferences: [...(file.ignoreReferences ?? []), ...options.ignoreReferences],
+    families: [...(file.families ?? []), ...options.families],
+    ignoreFamilies: [...(file.ignoreFamilies ?? []), ...options.ignoreFamilies],
+    historyPatterns: [...(file.historyPatterns ?? []), ...typed.history],
+    severities,
+    projectRules,
+    maxRelated: file.maxRelated,
+  };
 
   let result;
   try {
@@ -814,7 +825,7 @@ export async function main(io: CliIO = {}): Promise<number> {
           const { writeFile } = await import('node:fs/promises');
           // Node writes a string as UTF-8 when the encoding is empty too, so
           // emptying this literal writes the same bytes.
-          await writeFile(underRoot(root, anchor(here, options.recordBaseline)), text, 'utf8');
+          await writeFile(underRoot(root, anchorFile(here, options.recordBaseline)), text, 'utf8');
         } catch (error) {
           err(`spec-graph: cannot write ${options.recordBaseline}: ${(error as Error).message}\n`);
           return EXIT_ERROR;
@@ -826,7 +837,7 @@ export async function main(io: CliIO = {}): Promise<number> {
         return EXIT_OK;
       }
 
-      const source = options.baseline === null ? (file.baseline ?? null) : anchor(here, options.baseline);
+      const source = options.baseline === null ? (file.baseline ?? null) : anchorFile(here, options.baseline);
       const ratchet = options.ratchet || file.ratchet === true;
       let reported = result;
       let note:
@@ -922,32 +933,36 @@ function below(root: string, from: string): string {
 }
 
 /**
- * Re-anchors a path typed in `prefix` so it reads from the root.
+ * Re-anchors a pattern typed in `prefix` so it reads from the root, brace
+ * alternative by brace alternative, or throws naming it as typed.
+ *
+ * `../docs` typed one directory down is the root's `docs`. That is arithmetic
+ * on two relative paths, and this is the one place both are known; left in the
+ * pattern, it reads as a glob climbing out of the root, which is refused.
  *
  * An absolute path is left alone: it was not relative to anywhere, so moving
- * the root cannot change what it means.
+ * the root cannot change what it means. spec-core roots a leading `/` and
+ * knows no drive letter, so `C:/docs` is told apart here.
  */
-function anchor(prefix: string, value: string): string {
-  if (prefix === '' || isAbsolutePath(value)) return value;
-  const negated = value.startsWith('!');
-  const directories = prefix.split('/');
-  let rest = toPosix(negated ? value.slice(1) : value);
-  // `../docs` typed one directory down is the root's `docs`. That is arithmetic
-  // on two relative paths, and this is the one place both are known; left in
-  // the pattern, it reads as a glob climbing out of the root, which is refused.
-  // A bare `..` typed in `docs/deep` leaves `docs/`: the directory's contents,
-  // which is what it named.
-  while (directories.length > 0 && (rest === '..' || rest.startsWith('../'))) {
-    directories.pop();
-    rest = rest.slice(3);
-  }
-  const joined = [...directories, rest].join('/');
-  return negated ? `!${joined}` : joined;
+function anchor(prefix: string, pattern: string): string {
+  return isAbsolutePath(pattern) ? pattern : rebasePattern(pattern, prefix);
 }
 
 /** The same, for an ignore, where a bare name is a directory at any depth. */
 function anchorPath(prefix: string, pattern: string): string {
   return isGlob(pattern) || pattern.includes('/') ? anchor(prefix, pattern) : pattern;
+}
+
+/**
+ * Re-anchors a file typed in `prefix`, a baseline, so it reads from the root.
+ *
+ * A file name is not a pattern: a brace or a `!` in it is a character, which
+ * {@link anchor} would read as syntax, and a baseline outside the repository
+ * is as good as one inside, so a `..` past the root is a path like any other.
+ * At the root the file is named as it was typed.
+ */
+function anchorFile(prefix: string, file: string): string {
+  return prefix === '' || isAbsolutePath(file) ? file : joinPosix(prefix, toPosix(file));
 }
 
 function knownProjectRules(projectRules: readonly ProjectRule[]): string {

@@ -19,6 +19,7 @@ import {
   isGlobSyntax,
   parseGlob,
   parseGlobList,
+  rebaseGlob,
   type Glob,
   type GlobList,
   type GlobOptions as FamilyGlobOptions,
@@ -216,6 +217,22 @@ function pathList(patterns: readonly string[]): GlobList {
 export function createGlobMatcher(patterns: readonly string[]): GlobMatcher {
   const list = pathList(patterns);
   return (path: string): boolean => list.match(path);
+}
+
+/**
+ * A list entry typed in `directory`, below the root, rewritten to read from the
+ * root, or refused naming the entry as it was typed (ADR-0018).
+ *
+ * Each brace alternative is rebased as that text written alone would be, so
+ * `{/docs,x}` typed in `sub` is `{/docs,sub/x}`: a leading `/` roots it
+ * wherever it was typed. A leading `..` climbs out of `directory`, and one past
+ * the root is refused, as is a directory whose name a pattern would read as
+ * syntax.
+ */
+export function rebasePattern(entry: string, directory: string): string {
+  const rebased = rebaseGlob(entry, directory, PATH);
+  if (!rebased.ok) throw new GlobError(entry, rebased.error);
+  return rebased.pattern;
 }
 
 /**

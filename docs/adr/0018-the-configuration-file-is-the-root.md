@@ -90,6 +90,35 @@ pattern for the matcher to normalise away, and a glob may no longer climb out
 of its root ([ADR-0022](0022-globs-are-the-family-path-dialect.md)), so this
 is the one place left that knows both halves of the arithmetic.
 
+*Amended 2026-09-30.* A pattern is re-anchored brace alternative by brace
+alternative, each as it would be read written alone, by spec-core's
+`rebaseGlob` from 5666c96: `{/docs,x}` typed in `sub` is `{/docs,sub/x}`,
+`!/docs` stays `!/docs`, and `{../a,b}` typed in `sub/deep` is
+`{sub/a,sub/deep/b}`. It was joined to the directory whole, so a `/` leading
+an alternative or following a `!` was read under `sub`, and a `..` inside
+braces was refused. Four kinds of pattern now stop the run with exit `2`.
+Three are refused as they are rebased, and named as they were typed:
+
+- a `..` that climbs past the root, `invalid glob "../../x/*.md": a pattern
+  cannot climb out of its root with ".."`, where the refusal named the
+  half-anchored `../x/*.md`;
+- an empty pattern, `""` or `!`, refused at the root already; joined to `sub`,
+  it was everything in `sub`, so an unset variable checked the whole directory;
+- any pattern that has to name a directory whose name a pattern would read as
+  syntax - a `*`, `?`, `[`, `{` or `\` in it, or a `!` or a space it starts
+  with: `notes[1]/*.md` is a class, and read `notes1`.
+
+The fourth is `{/,x}`, which read everything in `sub` and becomes
+`{/,sub/x}`, refused as `{/,x}` is at the root: `the braces expand to "/",
+which names no path`. A pattern the dialect refuses is named as it was
+rebased, as it always was.
+
+`--baseline` and `--record-baseline` name files, not patterns, and are joined
+as paths: a brace or a `!` in a baseline's name is a character, where a
+leading `!` was moved in front of the directory, and a `..` past the root is a
+path outside the repository, as an absolute one may be. A bare `--ignore`
+name is left alone, as before.
+
 `--ignore-ref`, `--family` and `--ignore-family` are not paths and are left
 alone. So is an absolute path: it was never relative to anywhere, so moving the
 root cannot change what it means.
