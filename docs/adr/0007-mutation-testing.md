@@ -722,15 +722,15 @@ All 191 were replayed on the change: applied to the source, the whole suite
 run as Stryker runs a static mutant, stopping at the first failure, with the
 clock the tests read held at 0 and a limit of 120 seconds.
 
-- **Killed by an assertion, 184**: all 102 in `extract.ts` and 82 of the 84
-  in `state.ts`, in 5 to 17 seconds each for `extract.ts` and a median of 11
-  for `state.ts`, on a machine running three replays at once, most of it
-  starting vitest. The first test to fail was most often the README's markers
-  read one by one (61), the README's relation examples (36), a baseline naming
-  its citations (31) and ghost-handover as the README prints it (19). An emptied relation phrase matches wherever its lookarounds
-  allow, at the end of the text before a reference among them, so it takes
-  over the classification of nearly every reference; an emptied marker is
-  simply not read.
+- **Killed by an assertion, 184**: all 102 in `extract.ts` and 82 of the 84 in
+  `state.ts`, in 5 to 17 seconds each for `extract.ts` and a median of 11 for
+  `state.ts`, on a machine running three replays at once, most of it starting
+  vitest. The first test to fail was most often the README's markers read one
+  by one (61), the README's relation examples (36), a baseline naming its
+  citations (31) and ghost-handover as the README prints it (19). An emptied
+  relation phrase matches wherever its lookarounds allow, at the end of the
+  text before a reference among them, so it takes over the classification of
+  nearly every reference; an emptied marker is simply not read.
 - **Survived, 2, and killed now.** Emptying `follow up in` or `follow-up in`
   loses no phrase: the two respell to one alternative and fold to one key.
   What the empty entry adds is a marker read from punctuation alone, and a
@@ -750,11 +750,11 @@ The sweeps of the change, dispatched on its branch:
 Mutant by mutant against main's sweep, the static timeouts of `extract.ts` and
 `state.ts` are killed, and so are two of `state.ts`'s others, which moved the
 scan's resume back before its match; from c6c7d00 on the survivors are main's
-293, and no kill is lost. The lines the change rewrote hold 32 new mutants, all killed.
-What timing still decides is 69 mutants, and losing every one of them would
-take 96.31 to 95.49, where it took 96.32 to 93.23. `extract.ts`'s 447 static
-mutants took 3.9 to 4.3 minutes of its shard, where they had taken 15.5 to
-20.5, and the file 13.9 to 14.7; `state.ts` took 2.3 to 2.8.
+293, and no kill is lost. The lines the change rewrote hold 32 new mutants,
+all killed. What timing still decides is 69 mutants, and losing every one of
+them would take 96.31 to 95.49, where it took 96.32 to 93.23. `extract.ts`'s
+447 static mutants took 3.9 to 4.3 minutes of its shard, where they had taken
+15.5 to 20.5, and the file 13.9 to 14.7; `state.ts` took 2.3 to 2.8.
 
 ## Open Questions
 
