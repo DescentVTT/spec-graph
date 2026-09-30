@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 import { parseDirectives } from '../src/directives.js';
 import { scanMarkdown } from '../src/markdown.js';
-import { KNOWN_STATE_WORDS, resolveItemState, type ResolvedState } from '../src/state.js';
+import { execPast, KNOWN_STATE_WORDS, resolveItemState, type ResolvedState } from '../src/state.js';
 import { createLineIndex } from '../src/source.js';
 import type { Disposition, StateSignal } from '../src/types.js';
 
@@ -406,6 +406,54 @@ describe('what a signal carries', () => {
       'default',
       'unresolved',
       '',
+    ]);
+  });
+});
+
+/**
+ * The marker scan resumes inside its match, where `matchAll` cannot, so it
+ * steps past an empty match by hand. No marker is empty; one emptied by
+ * mistake would match empty at the start of every line, and the scan must then
+ * end, so the marker tests fail rather than hang. Each scan here stops at a
+ * hundred matches, so a step that does not move fails an assertion rather than
+ * hanging the run.
+ */
+describe('a marker scan that finds an empty match', () => {
+  const scan = (pattern: RegExp, text: string, resume?: (m: RegExpExecArray) => number): [number, string][] => {
+    const found: [number, string][] = [];
+    pattern.lastIndex = 0;
+    for (let m = pattern.exec(text); m !== null && found.length < 100; m = execPast(pattern, text, m.index)) {
+      found.push([m.index, m[0]]);
+      if (resume) pattern.lastIndex = resume(m);
+    }
+    return found;
+  };
+
+  it('steps past it, as matchAll does', () => {
+    expect(scan(/x*/g, 'axb')).toEqual([
+      [0, ''],
+      [1, 'x'],
+      [2, ''],
+      [3, ''],
+    ]);
+    expect(scan(/x*/g, 'axb')).toEqual([...'axb'.matchAll(/x*/g)].map((m) => [m.index, m[0]]));
+  });
+
+  it('ends when the resume after an empty marker is where its match began', () => {
+    // The marker alternation with a phrase emptied, resumed after the phrase as
+    // the marker scan resumes.
+    const afterPhrase = (m: RegExpExecArray): number => m.index + m[0].indexOf(m[1] as string) + (m[1] as string).length;
+    expect(scan(/(?:^|\n)(resolved|)/gim, 'Resolved\nnothing', afterPhrase)).toEqual([
+      [0, 'Resolved'],
+      [8, '\n'],
+      [9, ''],
+    ]);
+  });
+
+  it('resumes where a match ends and nowhere sooner, when the match is not empty', () => {
+    expect(scan(/a+/g, 'aa b aaa')).toEqual([
+      [0, 'aa'],
+      [5, 'aaa'],
     ]);
   });
 });

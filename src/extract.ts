@@ -1493,12 +1493,15 @@ export function classifyReference(
   const before = sentenceBefore(text, start);
 
   // Left to right, so the last match within the window is the nearest one - and
-  // the nearest governing phrase is the one that governs.
+  // the nearest governing phrase is the one that governs. `matchAll`, not a
+  // loop over `exec`: an empty match leaves `lastIndex` where it began, and
+  // `exec` finds it there again for ever, where `matchAll` steps past it. No
+  // phrase is empty, so the pattern never matches empty; a phrase emptied by
+  // mistake then fails the tests rather than hanging them.
   let best: Classification | null = null;
-  VERB_PATTERN.lastIndex = 0;
-  for (let m = VERB_PATTERN.exec(before); m !== null; m = VERB_PATTERN.exec(before)) {
-    const phrase = m[0] as string;
-    const end = (m.index ?? 0) + phrase.length;
+  for (const m of before.matchAll(VERB_PATTERN)) {
+    const phrase = m[0];
+    const end = m.index + phrase.length;
     const distance = before.length - end;
     if (distance > VERB_WINDOW) continue;
     // What sits between the phrase and the reference has to be connective. A
@@ -1562,10 +1565,7 @@ const STATEMENT_BREAK = /[.?!;]\s|[。？！；]|\n\s*\n|\n\s*[-*+>#]|\|/g;
 function sentenceBefore(text: string, start: number): string {
   const window = text.slice(Math.max(0, start - 160), start);
   let cut = 0;
-  STATEMENT_BREAK.lastIndex = 0;
-  for (let m = STATEMENT_BREAK.exec(window); m !== null; m = STATEMENT_BREAK.exec(window)) {
-    cut = (m.index ?? 0) + (m[0] as string).length;
-  }
+  for (const m of window.matchAll(STATEMENT_BREAK)) cut = m.index + m[0].length;
   return window
     .slice(cut)
     .toLowerCase()
@@ -1624,8 +1624,7 @@ function findBareReferences(scanned: ScannedDocument, links: readonly Link[]): B
   text += source.slice(cursor);
 
   const out: BareReference[] = [];
-  BARE_REF.lastIndex = 0;
-  for (let m = BARE_REF.exec(text); m !== null; m = BARE_REF.exec(text)) {
+  for (const m of text.matchAll(BARE_REF)) {
     const written = m[0];
     // The family as resolution will read it, which takes the shortest prefix
     // the number allows: `base64` is `base` and 64. Read off this pattern's

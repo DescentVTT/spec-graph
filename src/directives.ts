@@ -87,8 +87,7 @@ export function parseDirectives(comments: readonly HtmlComment[]): Directive[] {
     const unknown: string[] = [];
     const allowed = SCHEMA[directiveName];
 
-    ATTRIBUTE.lastIndex = 0;
-    for (let m = ATTRIBUTE.exec(body); m !== null; m = ATTRIBUTE.exec(body)) {
+    for (const m of body.matchAll(ATTRIBUTE)) {
       const key = (m[1] as string).toLowerCase();
       const quoted = m[3] ?? m[4];
       const bare = m[5];
