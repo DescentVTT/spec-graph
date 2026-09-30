@@ -28,11 +28,18 @@ jobs:
   test:
     name: test (${{ matrix.os }}, node ${{ matrix.node }})
     runs-on: ${{ matrix.os }}
+    # Headroom for a bad runner, not a budget: the slowest leg, Windows, took
+    # about a minute. A job that hangs stops here rather than at GitHub's six
+    # hours, and so does the release, which runs this matrix.
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
+        # 22 is the floor package.json promises, 24 the active LTS, 26 the
+        # current release and the next LTS: a break there is news before it is
+        # an incident.
         os: [ubuntu-latest, windows-latest, macos-latest]
-        node: ['22', '24']
+        node: ['22', '24', '26']
 
     steps:
       # Pinned to a commit with the tag beside it, because a tag can be moved
@@ -71,10 +78,11 @@ jobs:
       # argument: the step above fails with a line number for whoever is fixing
       # it, and says nothing to whoever is deciding whether to merge.
       #
-      # Once, not six times, because the check runs on three platforms and two
-      # Node versions and six identical tables are six times nothing. Even when
-      # the check failed, because that is when somebody wants the table. Only
-      # when the build succeeded, because there is no dist to run otherwise.
+      # Once, not nine times, because the check runs on three platforms and
+      # three Node versions and nine identical tables are nine times nothing.
+      # Even when the check failed, because that is when somebody wants the
+      # table. Only when the build succeeded, because there is no dist to run
+      # otherwise.
       # And never deciding the verdict - `check` already did that, and a second
       # red step for one finding is a second thing to read and dismiss.
       - name: Summarise it on the job
@@ -85,6 +93,7 @@ jobs:
   coverage:
     name: coverage
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
