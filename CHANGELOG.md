@@ -11,7 +11,11 @@ the family's
 [versioning policy](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0009-versions-before-1-0.md)
 records.
 
-## Unreleased
+## 0.11.0
+
+spec-graph reads English only again, by the maintainer's decision; the
+two-column status table stays with English keys. spec-core's copy is
+unchanged.
 
 ### Removed
 
