@@ -34,11 +34,11 @@ describe('a front-matter line that was not read', () => {
     { name: 'a title spaced before its colon', lines: ['status: accepted', '# a note', '  Title : B'], counted: false },
     { name: 'a line that is not key: value', lines: ['title: A', '# a note', '- title: B'], counted: true },
     { name: 'a status written twice', lines: ['status: draft', 'status: accepted'], counted: false },
-    // A key of any script is named as spec-core's reader takes one; a line
-    // with a full-width colon names none, and could have held anything.
-    { name: 'a Chinese status indented under no key', lines: ['status: accepted', '# a note', '  狀態: 草案'], counted: true },
-    { name: 'a Chinese title indented under no key', lines: ['status: accepted', '# a note', '  標題: B'], counted: false },
-    { name: 'a Chinese title with a full-width colon', lines: ['status: accepted', '標題：B'], counted: true },
+    // A key of any script is named as spec-core's reader takes one, and one
+    // that is none of the keys read is lost to nobody; a line with a
+    // full-width colon names no key, and could have held anything.
+    { name: 'a key in Han characters indented under no key', lines: ['status: accepted', '# a note', '  狀態: 草案'], counted: false },
+    { name: 'a key in Han characters with a full-width colon', lines: ['status: accepted', '標題：B'], counted: true },
     // A leading `_`, and a combining acute accent, a digit, `_`, `-` and `.`
     // inside, are all part of the key.
     {
@@ -72,11 +72,11 @@ describe('a front-matter line that was not read', () => {
     expect(covered(text, problem.at)).toBe('---');
   });
 
-  it('reads a key of any script, so a status under a Chinese key is no problem', () => {
-    // It was the problem `not a "key: value" line`, counted as a lost status.
-    const { document, problems } = extract(block('狀態: 已接受'));
+  it('reads a key of any script, so a key in Han characters is no problem', () => {
+    // It was the problem `not a "key: value" line`.
+    const { document, problems } = extract(block('標題: A'));
     expect(problems).toEqual([]);
-    expect(document.frontMatter['狀態']).toBe('已接受');
+    expect(document.frontMatter['標題']).toBe('A');
   });
 
   it('reads the last of a key written twice', () => {

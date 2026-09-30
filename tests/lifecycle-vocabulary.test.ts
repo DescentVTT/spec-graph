@@ -48,8 +48,6 @@ function documented(): Vocabulary {
   };
 }
 
-const HAN = /\p{Script=Han}/u;
-
 const corpus = (files: Record<string, string>): Source[] => Object.entries(files).map(([path, text]) => ({ path, text }));
 
 const number = (index: number): string => String(index + 1).padStart(4, '0');
@@ -60,10 +58,6 @@ describe('the documented status words', () => {
     expect(new Set(words.map(([phase]) => phase))).toEqual(new Set(['retired', 'record', 'frozen', 'active', 'draft']));
     // A table that failed to parse would pass every test below vacuously.
     expect(words.length).toBeGreaterThan(80);
-    // And so would the Chinese table, row by row.
-    expect(new Set(words.filter(([, word]) => HAN.test(word)).map(([phase]) => phase))).toEqual(
-      new Set(['retired', 'record', 'frozen', 'active', 'draft']),
-    );
   });
 
   it('each give a document that declares it the phase of its row', () => {
@@ -180,7 +174,7 @@ describe('where a status is looked for', () => {
 
   it('reads the section under each documented heading, however it is decorated', () => {
     const { headings } = documented();
-    const written = [...headings, '**Status**', 'Status:', '`Status`', 'Status :', '狀態：', '**状态**：'];
+    const written = [...headings, '**Status**', 'Status:', '`Status`', 'Status :'];
     const files: Record<string, string> = {};
     written.forEach((heading, index) => {
       files[`docs/adr/${number(index)}-heading.md`] = `# Heading\n\n## ${heading}\n\nAccepted\n\n## Context\n`;

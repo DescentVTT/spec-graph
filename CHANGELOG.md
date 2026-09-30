@@ -11,6 +11,20 @@ the family's
 [versioning policy](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0009-versions-before-1-0.md)
 records.
 
+## Unreleased
+
+### Removed
+
+- Statuses, relations, obligation and bookkeeping headings and markers
+  written in Chinese are no longer read: a Chinese status word, `狀態` or
+  `状态` as a status key, heading, label or table key, and a full-width
+  colon after a status label or heading give an unknown phase, and a
+  Chinese phrase, heading or marker draws nothing. The two-column status
+  table stays, with `Status` and `State`, and so do the stop at `。？！；`
+  and a full-width comma or semicolon between successors (ADR-0002,
+  ADR-0003, ADR-0006). Upgrading: write the status in English, e.g.
+  `status: superseded`.
+
 ## 0.10.0
 
 Statuses, status tables, relations, obligations and markers written in

@@ -133,8 +133,9 @@ onto four phases, chosen so one question can be answered from the phase alone:
 | `frozen` | `final`, `ratified`, `locked`, `published`, … | **no** |
 | `retired` | `superseded`, `deprecated`, `rejected`, `withdrawn`, … | **no** |
 
-The status is found wherever your team writes it, in English or in Chinese
-(`## 狀態` / `已接受`), and however it is dressed (`**Accepted** (2026-03-01) ✅`):
+The status is found wherever your team writes it, and however it is dressed
+(`**Accepted** (2026-03-01) ✅`). A document may be written in any language; its
+status is read in English (`status: superseded`):
 
 - front matter: `status:`, `state:`, `stage:`
 - a `## Status` section
@@ -167,44 +168,14 @@ that `provisionally accepted` is a draft.
 | `active` | `accepted`, `active`, `approved`, `adopted`, `agreed`, `implementable`, `implemented`, `implementing`, `current`, `effective`, `in-effect`, `enforced`, `stable`, `merged`, `released`, `shipped`, `live`, `done`, `complete`, `completed`, `signed-off`, `committed` |
 | `draft` | `draft`, `drafting`, `proposed`, `proposal`, `provisional`, `provisionally-accepted`, `prospective`, `wip`, `work-in-progress`, `in-progress`, `in_progress`, `review`, `in-review`, `under-review`, `reviewing`, `discussion`, `discussing`, `pending`, `idea`, `exploratory`, `candidate`, `open`, `new`, `unreviewed`, `rfc`, `experimental`, `alpha`, `beta`, `incubating` |
 
-Chinese is read in Traditional and Simplified characters, each word as the
-English word it translates, so it lands in that word's row: `延後` is
-`deferred` and retired, `封存` is `archived` and a record, and `暫定` is
-`provisionally accepted`, so `暫定接受` is a draft.
-
-- **A Chinese word counts wherever it stands in the status**, because Chinese
-  puts no space between words: `已接受，後被ADR-0003取代` holds `已接受` and a
-  supersession.
-- **Except directly after a negation:** `不`, `未`, `非`, `沒`, `没`, `無`,
-  `无`, `勿`, `尚未` or `不再`. `未接受`, `尚未核准` and `不再生效` say nothing;
-  a word that starts with one, `不採納`, is itself.
-- **Superseded is also `被` followed by `取代`, `替代` or `取而代之`**, within 30
-  characters and in the same sentence: `已被 ADR-0003 取代` is retired, and
-  names ADR-0003 as what replaced it.
-- **`已取代` alone is retired.** Followed by a name, after spaces or a colon -
-  `已取代 ADR-0002` - it says what this document replaced, and is not read.
-- **`取代` with no `被`**, as in `已接受（取代 ADR-0002）`, retires nothing.
-
-| Phase | Chinese status words |
-| --- | --- |
-| `retired` | `已被取代`, `被取代`, `已取代`, `已棄用`, `棄用`, `已弃用`, `弃用`, `已廢棄`, `廢棄`, `已废弃`, `废弃`, `已停用`, `已過時`, `已过时`, `已否決`, `否決`, `已否决`, `否决`, `已拒絕`, `已拒绝`, `不採納`, `不采纳`, `已撤回`, `撤回`, `已作廢`, `作廢`, `已作废`, `作废`, `延後`, `延后`, `暫緩`, `暂缓`, `擱置`, `搁置` |
-| `record` | `封存`, `已封存`, `歸檔`, `已歸檔`, `归档`, `已归档` |
-| `frozen` | `已定案`, `定案`, `已凍結`, `已冻结` |
-| `active` | `已接受`, `接受`, `已採納`, `採納`, `已采纳`, `采纳`, `已核准`, `核准`, `已批准`, `批准`, `已生效`, `生效`, `已實施`, `已实施`, `已完成` |
-| `draft` | `暫定`, `暂定`, `草稿`, `草案`, `提議`, `提议`, `提案`, `審查中`, `审查中`, `審核中`, `审核中`, `討論中`, `讨论中`, `待審`, `待审`, `待審核`, `待审核` |
-
 | Where | Read from |
 | --- | --- |
-| Front matter, the first key present | `status`, `狀態`, `状态`, `state`, `stage`, `lifecycle`, `phase`, `adr-status` |
-| A section, under the heading, with or without a colon, `:` or `：` | `Status`, `State`, `Stage`, `Lifecycle`, `Current status`, `狀態`, `状态` |
-| A two-column table above the first `##`, in the cell right of the first key in the left column, the header row included | `Status`, `State`, `狀態`, `状态` |
+| Front matter, the first key present | `status`, `state`, `stage`, `lifecycle`, `phase`, `adr-status` |
+| A section, under the heading, with or without a colon | `Status`, `State`, `Stage`, `Lifecycle`, `Current status` |
+| A two-column table above the first `##`, in the cell right of the first key in the left column, the header row included | `Status`, `State` |
 | A directory, for a document that declares no status | `archive`, `archived`, `attic`, `deprecated`, `graveyard`, `historical`, `obsolete`, `rejected`, `retired`, `superseded`, `superceded`, `withdrawn` |
 
-In front matter only an ASCII colon ends a key, as YAML has it: `狀態：已接受`
-there is a line left unread, where a heading or a label takes either colon.
-
-The table is where many teams put a document's fields, `| 狀態 | 已接受 |` or
-`| Status | Accepted |`:
+The table is where many teams put a document's fields, `| Status | Accepted |`:
 
 - It is read where a `## Status` section is, after one: a document with both is
   read from the section, and front matter still wins over either.
@@ -275,26 +246,23 @@ code. *"We resolved to keep the queue"* does not close anything.
 | Disposition | Checkboxes | Markers | `state=` |
 | --- | --- | --- | --- |
 | `unresolved` | `[ ]` `[?]` `[!]` `[*]` | `unresolved`, `still open`, `open question`, `tbd`, `undecided`, `reopened` | `open`, `unresolved`, `todo` |
-| `narrowed` | `[~]` `[/]` | `partially resolved`, `partially answered`, `partially done`, `partly resolved`, `narrowed`, `narrowed to`, `scoped down`, `reduced scope`, `reduced to`, `partial`, `in progress`, `in_progress`, `remaining`, `split`, `部分解決`, `部分解决` | `narrowed`, `partial` |
-| `delegated` | | `delegated`, `delegated to`, `moved to`, `tracked in`, `tracked by`, `handed off`, `handed off to`, `handed to`, `deferred to`, `follow up in`, `follow-up in`, `followup in`, `continued in`, `owned by`, `已移交` | `delegated` |
-| `satisfied` | `[x]` `[X]` `[+]` | `resolved`, `answered`, `decided`, `settled`, `done`, `complete`, `completed`, `closed`, `fixed`, `shipped`, `addressed`, `implemented`, `solved`, `confirmed`, `已解決`, `已解决`, `已決定`, `已决定`, `已定案` | `satisfied`, `resolved`, `done`, `closed` |
-| `accepted-debt` | | `accepted debt`, `accepted as debt`, `accepted risk`, `known limitation`, `known issue`, `known gap`, `technical debt`, `tech debt`, `wontfix`, `won't fix`, `won’t fix`, `will not fix`, `by design`, `tolerated`, `living with it`, `技術債`, `技术债`, `已知限制` | `accepted-debt`, `debt`, `wontfix` |
+| `narrowed` | `[~]` `[/]` | `partially resolved`, `partially answered`, `partially done`, `partly resolved`, `narrowed`, `narrowed to`, `scoped down`, `reduced scope`, `reduced to`, `partial`, `in progress`, `in_progress`, `remaining`, `split` | `narrowed`, `partial` |
+| `delegated` | | `delegated`, `delegated to`, `moved to`, `tracked in`, `tracked by`, `handed off`, `handed off to`, `handed to`, `deferred to`, `follow up in`, `follow-up in`, `followup in`, `continued in`, `owned by` | `delegated` |
+| `satisfied` | `[x]` `[X]` `[+]` | `resolved`, `answered`, `decided`, `settled`, `done`, `complete`, `completed`, `closed`, `fixed`, `shipped`, `addressed`, `implemented`, `solved`, `confirmed` | `satisfied`, `resolved`, `done`, `closed` |
+| `accepted-debt` | | `accepted debt`, `accepted as debt`, `accepted risk`, `known limitation`, `known issue`, `known gap`, `technical debt`, `tech debt`, `wontfix`, `won't fix`, `won’t fix`, `will not fix`, `by design`, `tolerated`, `living with it` | `accepted-debt`, `debt`, `wontfix` |
 | `rejected` | `[-]` | `rejected`, `declined`, `dropped`, `not doing`, `will not do`, `abandoned`, `cancelled`, `canceled`, `withdrawn` | `rejected`, `declined` |
 | `obviated` | | `no longer applicable`, `no longer relevant`, `no longer needed`, `overtaken by events`, `premise invalid`, `obviated`, `obsolete`, `not applicable`, `moot`, `void`, `n/a`, `obe` | `obviated`, `moot` |
 
 Where a marker counts, and how it may be written:
 
 - A marker counts where a statement starts: at the start of the item or of a
-  line, after the end of a sentence - a Chinese one, `。`, `？`, `！` or `；`,
-  with a space after it or none - or after `(` or `[`.
+  line, after the end of a sentence, or after `(` or `[`.
 - Punctuated means followed by `:`, `：`, `-`, `–`, `—` or `.`, so `Done.`
   closes an item; emphasised means the emphasis closes on the marker, so
   `**Closed beta**` does not.
 - A marker of more than one word may be spaced, hyphenated or joined by an
   underscore, whichever the table has: `**Tech-debt:**` and `TECH_DEBT:` are
   `tech debt`. An apostrophe may be straight or curly.
-- A Chinese marker is the English one it translates, and has no case to shout
-  in: `已決定：` and `**已決定**` close an item, and `我們已決定採用` does not.
 
 </details>
 
@@ -309,8 +277,7 @@ heading of its level. Every other bullet is the document's own prose.
 `Follow Ups`, `Follow-Ups`, `Followups`, `Follow Up`, `Follow-Up`,
 `Unresolved`, `Outstanding`, `Outstanding Questions`, `Tasks`, `Task List`,
 `Work Items`, `Remaining Work`, `Decisions Needed`, `Blockers`, `Parking Lot`,
-`Future Work`, `Deferred`, `待決事項`, `待决事项`, `未決問題`, `未决问题`,
-`待辦事項`, `待办事项`, `後續工作`, `后续工作`.
+`Future Work`, `Deferred`.
 
 ### References, resolved forgivingly and validated strictly
 
@@ -473,6 +440,9 @@ A phrase governs a reference when it stands no more than 40 characters before
 it, in the same statement: a sentence, a paragraph, a list item or a table cell.
 
 - A negation between the two - `owned by nobody` - cancels it.
+- A sentence written in Chinese ends at `。`, `？`, `！` or `；`, with a space
+  after it or none, so `Deferred to later。另見 ADR-0002` hands nothing to
+  ADR-0002. A stop only ends a statement sooner: it reads less, never more.
 - Prose reads both directions too: `supersedes` and `superseded by`, `amends`
   and `amended by`, `blocked by` and `blocks` or `blocking`, `depends on` and
   `depended on by` - the second of each pair points back at the document that
@@ -482,30 +452,12 @@ it, in the same statement: a sentence, a paragraph, a list item or a table cell.
   phrase: `[ADR-0002](0002.md) requires a migration` says nothing about this
   document.
 
-In Chinese a phrase before the reference hands the work on, as `deferred to`
-does. **Chinese hand-off phrases:** `延後至`, `延后至`, `延至`, `移交至`,
-`移交給`, `移交给`, `留待`, `交由`, `併入`, `并入`.
-
-- Chinese puts no space between words, so one counts wherever it stands,
-  `此問題延後至ADR-0002`, except directly after a negation - `不`, `未`, `非`,
-  `沒`, `没`, `無`, `无`, `勿`, `尚未` or `不再` - so `未移交給 ADR-0002` hands
-  nothing on.
-- An English phrase counts beside Chinese as well, `此問題deferred to ADR-0002`:
-  a Han character is not part of an English word.
-- A statement also ends at `。`, `？`, `！` and `；`, with a space after it or
-  none, so `上次延後至別處。另見 ADR-0002` hands nothing to ADR-0002.
-- A phrase written around the reference, `由 ADR-0002 決定` or
-  `在 ADR-0002 中追蹤`, is not read, and neither are `根據`, `依據` and `基於`:
-  Chinese uses them for any citation, and an `assumes` read from one would make
-  a stale premise of it.
-
 A link under a heading that files it as bookkeeping is `relates-to` unless a
 phrase beside it says more. **Bookkeeping headings:** `See also`, `References`,
 `Reference`, `Related`, `Related work`, `Related decisions`,
 `Related documents`, `Links`, `Further reading`, `Prior art`, `History`,
 `Changelog`, `Change log`, `Revision history`, `Bibliography`, `Sources`,
-`Appendix`, `More information`, `Resources`, `Index`, `參考資料`, `参考资料`,
-`相關文件`, `相关文件`, `延伸閱讀`, `延伸阅读`, `附錄`, `附录`, `修訂紀錄`, `修订记录`.
+`Appendix`, `More information`, `Resources`, `Index`.
 
 Two properties do the work:
 
@@ -531,8 +483,8 @@ decisions. **A specification is a region of a file, not a file**, so both work:
 Shard by tenant id.
 ```
 
-Each section with an identifier *and* a status - a `**Status:**` line,
-`**狀態：**` in Chinese, or a `### Status` section under its heading - becomes a
+Each section with an identifier *and* a status - a `**Status:**` line or a
+`### Status` section under its heading - becomes a
 specification in its own right, with its own lifecycle, its own obligations and
 its own relations — resolvable from anywhere in the corpus as `ADR-0007`,
 whether it lives in a register or in its own file. Moving it out later breaks

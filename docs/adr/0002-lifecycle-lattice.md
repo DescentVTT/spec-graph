@@ -108,6 +108,26 @@ section, after one, and front matter still wins. A table with more columns,
 one under a heading, and one spec-graph reads as a register are never read for
 it: a legend or a register describes other things.
 
+*Amended 2026-09-30, after 0.10.0.* The Chinese reading above is taken out
+again, and a status is read in English. A document may be written in any
+language; its status is written in English - `status: superseded`, or
+`Superseded by ADR-0007` under `## Status` - and every spec-* tool reads
+that. The maintainer chose one language: a small team keeps one vocabulary
+right, and a heuristic in a second language is where false positives come
+from (ADR-0006). A term found anywhere in a status, a list of negations and
+two passive forms were rules nobody here could check against the documents
+they read. So a Chinese status word, `被 ... 取代`, `已取代`, `狀態` or `状态`
+as a key, a heading, a label or a table key, and a full-width colon after a
+status label or heading, all say nothing: the phase is unknown, as it is for
+any status the table does not hold. The table at the top stays, with the
+English keys `Status` and `State`: a table of a document's fields is where
+many teams put its status, whatever language they write in. A front-matter
+key of any script is still read as a key, as YAML reads one, and so is no
+parse problem; `狀態` is simply no status key. And a list of successors
+punctuated full-width, `Superseded by ADR-0003，ADR-0004`, is split as one
+punctuated in ASCII: left whole, it names no document, and each successor
+would be reported as one the status never acknowledged.
+
 ## Open Questions
 
 - [ ] Should `frozen` and `retired` be distinguishable in the `receptivity`

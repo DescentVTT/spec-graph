@@ -94,6 +94,14 @@ also starts after a Chinese sentence end, `。`, `？`, `！` or `；`, with a s
 after it or none, since Chinese writes none: `是否分片？已決定：不分片。` closes
 its item. The README lists every word, and the tests read the list.
 
+*Amended 2026-09-30, after 0.10.0.* The Chinese markers and obligation
+headings are taken out with the Chinese statuses (ADR-0002, the same day),
+and so is the start of a statement after `。`, `？`, `！` or `；`. It let a
+marker count after a Chinese stop, which reads more rather than less, and it
+was there for the Chinese markers. An English marker after a Chinese
+question, `是否分片？**Resolved:** 不分片`, is now missed, the direction
+ADR-0006 prefers.
+
 ## Open Questions
 
 - [ ] Should `narrowed` items carry the *remaining* scope as structured data
