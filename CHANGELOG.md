@@ -91,6 +91,11 @@ front matter reads a key in any script.
   typed.** `--history 0002.md` typed in `docs` named the root's `0002.md`: it
   was left alone as a bare `--ignore` name is, but a history pattern is
   matched as a whole path, so it is now `docs/0002.md` (ADR-0018).
+- **`tighten it: spec-graph check --record-baseline <file>` names the file as
+  it is typed where the run was.** Run from `pkg`, a configured `pkg/b.json`
+  was printed as `pkg/b.json`, which typed there writes `pkg/pkg/b.json`; it
+  is `../pkg/b.json` now, and a `--baseline` typed on the command line is
+  printed as it was typed (ADR-0018).
 
 ### Documentation
 

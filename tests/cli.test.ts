@@ -986,6 +986,36 @@ describe('finding the configuration from a subdirectory', () => {
     expect(drive.err).toContain('no specifications matched "C:/elsewhere/*.md"');
   });
 
+  it('names the baseline to re-record as it is typed where the run was', async () => {
+    const { mkdir, rm, writeFile } = await import('node:fs/promises');
+    const root = `tests/fixtures/.tmp/cli-rerecord-${process.pid}`;
+    await rm(root, { recursive: true, force: true });
+    await mkdir(`${root}/pkg/docs`, { recursive: true });
+    const configure = (baseline: string) =>
+      writeFile(`${root}/.spec-graph.json`, `${JSON.stringify({ patterns: ['pkg/docs/*.md'], baseline })}\n`);
+    await configure('pkg/b.json');
+    await writeFile(`${root}/pkg/docs/0001.md`, '# ADR-0001: One\n\nstatus: accepted\n\nSee [gone](nope.md).\n');
+    const pkg = absolute(`${root}/pkg`);
+    const hint = (out: string): string | undefined => /tighten it: (.*)$/m.exec(out)?.[1];
+    try {
+      expect((await run('check', '--root', root, '--record-baseline', 'pkg/b.json')).code).toBe(EXIT_OK);
+      // Fixed, so the entry no longer occurs and the run says how to strike it.
+      await writeFile(`${root}/pkg/docs/0001.md`, '# ADR-0001: One\n\nstatus: accepted\n');
+      expect(hint((await run('check', '--root', root)).out)).toBe('spec-graph check --record-baseline pkg/b.json');
+      // From `pkg` the configuration's path is still from the root: typed
+      // there as it was, `pkg/b.json` would write `pkg/pkg/b.json`.
+      expect(hint((await runIn(pkg, 'check')).out)).toBe('spec-graph check --record-baseline ../pkg/b.json');
+      // A path typed on the command line is relative to where it was typed.
+      expect(hint((await runIn(pkg, 'check', '--baseline', 'b.json')).out)).toBe('spec-graph check --record-baseline b.json');
+      // And an absolute one reads the same from anywhere.
+      const outright = absolute(`${root}/pkg/b.json`);
+      await configure(outright);
+      expect(hint((await runIn(pkg, 'check')).out)).toBe(`spec-graph check --record-baseline ${outright}`);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it('reads a baseline typed in a subdirectory as a file there, not as a pattern', async () => {
     const { access, mkdir, rm, writeFile } = await import('node:fs/promises');
     const root = `tests/fixtures/.tmp/cli-nested-baseline-${process.pid}`;
