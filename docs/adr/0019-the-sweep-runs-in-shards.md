@@ -76,6 +76,81 @@ spec-core's copies report, so shard 2 is nearer ten minutes than forty-one and
 shard 3 some eight minutes lighter until a sweep measures them again. The wall
 time is still `extract.ts`'s, in shard 1.
 
+*Amended 2026-10-01.* It was not. The table above was balanced on a sweep run
+in one process, and a shard instruments only its own files, so a file's
+minutes in a shard are not its minutes there, as spec-core found when it split
+its own sweep ([its record of
+2026-09-30](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0007-verification.md)).
+In the three sweeps of 58a5389's source, shard 2 finished in 5 to 7 minutes
+and shard 3, which held `state.ts`, in 30 to 31, and shard 3 set the wall time
+of all three while `extract.ts` alone took 23 to 30. Read shard by shard,
+those sweeps (runs 36681244752, 36684834993 and 36695585590) give:
+
+| file | minutes | static mutants timed out |
+| --- | ---: | ---: |
+| `extract.ts` | 22.5 to 29.3 | 102 |
+| `state.ts` | 16.3 to 16.8 | 84 |
+| `identity.ts` | 4.7 to 6.4 | 0 |
+| `resolve.ts` | 4.3 to 4.8 | 0 |
+| `rules.ts` | 4.1 to 4.5 | 0 |
+| `select.ts` | 3.3 to 4.0 | 5 |
+| the other sixteen | 23.7 to 24.5 | 0 |
+
+Most of `extract.ts`'s minutes, and of `state.ts`'s, are those static mutants.
+Stryker cuts each off at one and a half times the whole suite's time, plus
+`timeoutMS`, plus the overhead of a test run, and the suite and the overhead
+are slower on a slower runner and in a shard that instruments more files. The
+runner is most of what moves `extract.ts`: over five sweeps its clock read
+28.9 to 36.2 seconds, and its minutes followed, 22.5 on the fastest and 31.0
+on the slowest.
+
+**The layout.** `extract.ts` keeps a shard to itself, and it is the floor.
+`state.ts` shares one with three small files, and the other files are balanced
+under `extract.ts`:
+
+| shard | files | mutants | minutes, run 36714214913 |
+| --- | --- | ---: | ---: |
+| 1 | `extract.ts` | 1,292 | 31.6 |
+| 2 | `state.ts`, `glob.ts`, `paths.ts`, `yaml.ts` | 902 | 20.6 |
+| 3 | `identity.ts`, `resolve.ts`, `rules.ts`, `select.ts` | 1,975 | 19.3 |
+| 4 | everything else the configuration mutates: `cli.ts`, `report.ts`, `diff.ts`, `sections.ts`, `config.ts`, `lifecycle.ts`, `directives.ts`, `project-rules.ts`, `baseline.ts`, `graph.ts`, `runner.ts`, `markdown.ts`, `source.ts` | 4,224 | 21.4 |
+
+The first try held `yaml.ts` in shard 3, and its sweep (run 36710662185) took
+30.2, 15.2, 21.8 and 16.4 minutes; `yaml.ts`, 110 mutants and under two
+minutes, moved to the lighter shard. That sweep drew fast runners for shards 2
+and 4, and the sweep of this layout slow ones for all four; shards 2 to 4 took
+15 to 22 minutes between them, and none came within a minute of `extract.ts`'s
+fastest.
+
+**Still four.** Three would put 28 minutes or more beside `extract.ts`. A
+fifth would wait on it just the same, from one more job, and a push already
+runs CI's seven jobs beside these, on an account whose other repositories'
+CI and sweeps share the twenty jobs GitHub runs at once on a free plan.
+
+**The sweeps**, from the first shard starting to the merged score:
+
+| sweep | score | killed | timeout | survived | shards | took |
+| --- | ---: | ---: | ---: | ---: | --- | ---: |
+| main, 58a5389 | 96.32 | 7,825 | 259 | 293 | 29m48s, 6m39s, 31m09s, 22m43s | 31m49s |
+| main, 56f8a6c | 96.32 | 7,827 | 257 | 293 | 24m55s, 5m22s, 30m03s, 23m28s | 30m38s |
+| tag v0.11.0 | 96.32 | 7,825 | 259 | 293 | 22m53s, 7m15s, 30m52s, 23m59s | 31m43s |
+| dispatch, first try | 96.32 | 7,827 | 257 | 293 | 30m11s, 15m12s, 21m49s, 16m26s | 31m28s |
+| dispatch, this layout | 96.32 | 7,826 | 258 | 293 | 31m33s, 20m36s, 19m15s, 21m24s | 32m12s |
+
+The same source throughout, 8,393 mutants with 16 uncovered. Mutant by mutant,
+the two dispatched sweeps differ from main's three by one to three mutants
+moving between killed and timed out, in `graph.ts` and `extract.ts`, as main's
+three differ from each other by two; the same 293 survived in all five.
+
+The wall time is now `extract.ts`'s and no other shard's: 23 to 32 minutes as
+its runner goes, where it used to be the larger of that and shard 3's 30 to 31.
+Both dispatched sweeps drew `extract.ts` its two slowest runners yet, so they
+took as long as the sweeps before them. On the tag's runners this layout
+would have waited on `extract.ts`'s 22m53s, not on shard 3's 30m52s. What
+moves the floor now is `extract.ts`'s own minutes, about half of them its 102
+static mutants waiting out their clock, and that is
+[ADR-0007](0007-mutation-testing.md)'s to decide, not a layout's.
+
 ### Not splitting `extract.ts`
 
 Stryker's `mutate` takes line ranges, and splitting `extract.ts` and
@@ -199,6 +274,8 @@ measured at full size: about 300 kills that no assertion earned.
 where it used to cost one incremental job. On a public repository that is free,
 and it buys a governing figure for every push, not every tag. With CI's seven
 jobs a push runs about a dozen at once, under the twenty a free account gets.
+*Amended 2026-10-01:* one of 23 to 32 minutes, `extract.ts`'s, and three of
+15 to 22 beside it.
 
 **The sweep's figure and a pull request's figure are labelled apart** in the
 job summary. The shard checks are not the gate; the score job is.
