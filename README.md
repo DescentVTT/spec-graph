@@ -1061,13 +1061,23 @@ permissions:
   contents: read
   security-events: write
 steps:
-  # check out the repository and set up Node, then:
+  - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+    with:
+      persist-credentials: false
+  - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+    with:
+      node-version: '24'
+  - run: npm ci
   - run: npx spec-graph --format sarif > spec-graph.sarif
     continue-on-error: true
-  - uses: github/codeql-action/upload-sarif@v4
+  - uses: github/codeql-action/upload-sarif@1c5b675653bb5c22dbe9b12b556ec555138e09fd # v4.38.1
     with:
       sarif_file: spec-graph.sarif
 ```
+
+The actions are pinned to commits, with the version beside each, because a tag
+can be moved and a commit cannot; Dependabot's `github-actions` updates keep
+pins like these current.
 
 Findings land as comments on the changed lines, and they persist across commits
 without drifting, because the `partialFingerprints` spec-graph writes are the

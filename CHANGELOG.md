@@ -11,6 +11,14 @@ the family's
 [versioning policy](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0009-versions-before-1-0.md)
 records.
 
+## Unreleased
+
+### Documentation
+
+- The README's SARIF example checks out and sets up Node itself, pins each
+  action to a commit with its version beside it, and keeps no token in the
+  checkout.
+
 ## 0.11.0
 
 spec-graph reads English only again, by the maintainer's decision; the
