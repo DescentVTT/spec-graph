@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { basename } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
@@ -1126,6 +1127,13 @@ describe('help and version', () => {
 });
 
 const LEGACY = 'tests/fixtures/legacy';
+/**
+ * Copies the legacy corpus without the baselines the tests below record into it
+ * under `.tmp-` names, in every worker running this file: a copy that lists one
+ * as the worker that wrote it deletes it fails on the missing file, and a
+ * mutant is counted as killed by no assertion.
+ */
+const LEGACY_ALONE = { recursive: true, filter: (source: string) => !basename(source).startsWith('.tmp-') };
 
 describe('historical records', () => {
   it('indicts a journal until it is declared one, and never after', async () => {
@@ -1193,7 +1201,7 @@ describe('the baseline', () => {
     const root = `tests/fixtures/.tmp/legacy-${process.pid}`;
     const path = `${root}/${FILE}`;
     await rm(root, { recursive: true, force: true });
-    await cp(LEGACY, root, { recursive: true });
+    await cp(LEGACY, root, LEGACY_ALONE);
     try {
       const recorded = await run('check', '--root', root, '--no-config', '--record-baseline', FILE);
       expect(recorded.code).toBe(EXIT_OK);

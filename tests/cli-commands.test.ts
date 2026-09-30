@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { basename } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
@@ -14,6 +15,13 @@ import { RULE_IDS, RULE_QUERIES } from '../src/rules.js';
 
 const DEMO = 'tests/fixtures/demo';
 const LEGACY = 'tests/fixtures/legacy';
+/**
+ * Copies the legacy corpus without the baselines tests/cli.test.ts records into
+ * it under `.tmp-` names: a copy that lists one as the worker that wrote it
+ * deletes it fails on the missing file, and a mutant is counted as killed by no
+ * assertion.
+ */
+const LEGACY_ALONE = { recursive: true, filter: (source: string) => !basename(source).startsWith('.tmp-') };
 const PROJECT = 'tests/fixtures/project';
 
 interface Run {
@@ -176,7 +184,7 @@ describe('the stale baseline entries a person is shown', () => {
     const { cp, readFile, rm, writeFile } = await import('node:fs/promises');
     const root = `tests/fixtures/.tmp/cli-slack-${process.pid}`;
     await rm(root, { recursive: true, force: true });
-    await cp(LEGACY, root, { recursive: true });
+    await cp(LEGACY, root, LEGACY_ALONE);
     try {
       await run('check', '--root', root, '--no-config', '--record-baseline', 'b.json');
       const held = JSON.parse(await readFile(`${root}/b.json`, 'utf8')) as { findings: unknown[] };
