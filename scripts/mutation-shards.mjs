@@ -59,7 +59,9 @@ import { calculateMutationTestMetrics } from 'mutation-testing-metrics';
 // remembering to list it here; the price is that new files all land in one
 // shard. When a shard passes the others by more than runner variance, re-measure
 // and move files or add a shard, and add it to the workflow's matrix, which a
-// test checks. Minutes, file by file and summed, the slower of the two sweeps:
+// test checks. Minutes, file by file and summed, the slower of the two
+// sweeps; the sweep of this table (run 36732850656) took 14.7, 12.8, 16.3 and
+// 10.7, runner by runner:
 export const ASSIGNED = [
   ['src/extract.ts'], // 14.4
   ['src/identity.ts', 'src/select.ts', 'src/state.ts', 'src/paths.ts'], // 14.4

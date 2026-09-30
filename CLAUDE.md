@@ -68,18 +68,21 @@ accommodate a regression:
   commit it read 3.18 points high at 0.3.0, 1.29 low at 0.4.0 and 0.40 low at
   0.5.0. Its cost varies as much - 110 minutes when a broad change left nothing
   to reuse, 64 when half the corpus was reused. See ADR-0007. The guard moved
-  from 70 to 90 and then 93 with those passes. 259 mutants are detected by
-  timeout, and losing all of them would take 96.32 to 93.23, just over the
-  guard - but the 283 of 8f5e6e8 were replayed by hand (ADR-0007, 2026-09-30):
-  two are killed by an assertion, and 281 never end, so no runner, however fast, turns one
-  into a survivor. A mutant a test catches only by being slow is a reason to
+  from 70 to 90 and then 93 with those passes. 259 mutants were detected by
+  timeout on 58a5389, and 69 are since the scans stepped past an empty match
+  (ADR-0007, 2026-10-01): 186 of those 259 were an emptied phrase or table
+  that never ended, and now fail an assertion. Losing every timeout left
+  would take 96.31 to 95.49, where it took 96.32 to 93.23. The 283 of 8f5e6e8
+  were replayed by hand (ADR-0007, 2026-09-30): two are killed by an
+  assertion, and 281 never ended, so no runner, however fast, turns one into a
+  survivor. A mutant a test catches only by being slow is a reason to
   strengthen tests, never to move the floor. One runner took 166 to
   171 minutes for the sweep. CI splits it into four shards, and the gate is
   applied to their merged report, never to a shard (ADR-0019). `extract.ts` has
-  a shard to itself and takes 23 to 30 minutes, as the runner goes; a file
-  cannot be split, so that is the sweep's wall time, and the other three shards
-  are balanced under it on the minutes `scripts/mutation-timeline.mjs` reads off
-  a sweep's log, shard by shard.
+  a shard to itself and takes 14 to 15 minutes; a file cannot be split, so that
+  is the floor, and the other three shards are balanced level with it on the
+  minutes `scripts/mutation-timeline.mjs` reads off a sweep's log, shard by
+  shard. The sweep takes 17 to 20 minutes.
   The time is the work: a static mutant runs the whole suite, so a slow test can
   cost its duration once for each of them. There are 1,282, most of them
   vocabulary tables built at import. A test that analyses a corpus in a
