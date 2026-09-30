@@ -32,42 +32,37 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { minimatch } from 'minimatch';
 import { calculateMutationTestMetrics } from 'mutation-testing-metrics';
 
-// Minutes each file took in the three sweeps of 58a5389's source (runs
-// 36681244752, 36684834993 and 36695585590), read shard by shard off their
-// logs with scripts/mutation-timeline.mjs:
+// Minutes each file took in the sweep of 2d02aac (run 36724681688), read
+// shard by shard off its logs with scripts/mutation-timeline.mjs:
 //
-//   extract 22.5-29.3   state 16.3-16.8   identity 4.7-6.4   resolve 4.3-4.8
-//   rules 4.1-4.5   select 3.3-4.0   sections 3.3-3.8   graph 2.4-2.7
-//   cli 2.5   report 2.4-2.5   lifecycle 2.2-2.3   glob 1.8-1.9
-//   directives 1.7-1.9   yaml 1.6-1.8   the other eight 5.5-5.7 between them
+//   extract 14.4   identity 7.0   resolve 4.3   rules 4.1   select 3.7
+//   sections 2.6   state 2.3   graph 2.1   cli 1.9   report 1.9   lifecycle 1.7
+//   directives 1.2   yaml 1.1   glob 1.0   the other eight 4.3 between them
 //
-// 82 to 88 minutes in all. A file cannot be split, because a line range loses
-// the mutants that cross it (ADR-0019), so no shard finishes before extract.ts,
-// which has one to itself. Most of its minutes, and of state.ts's, are static
-// mutants that time out, 102 and 84 of them, each cut off on a clock of one
-// and a half times the whole suite, plus fifteen seconds, plus the runner's
-// overhead. The runner's overhead is most of what moves extract.ts: 22.5
-// minutes on a clock of 29 seconds, 31.0 on one of 36. A shard that
-// instruments more files runs the suite and its overhead slower too, so
-// state.ts shares its shard with three small files.
+// 54 minutes in all. A file cannot be split, because a line range loses the
+// mutants that cross it (ADR-0019), so no shard finishes before extract.ts,
+// which has one to itself. Its minutes and state.ts's were mostly static
+// mutants that timed out, 102 and 84 of them, each on a clock of 29 to 36
+// seconds, until the scans stepped past an empty match: 22.5 to 31.0 minutes
+// for extract.ts and 13.3 to 16.8 for state.ts in the sweeps before, over
+// runners whose speed moved them both.
 //
-// The other files hold 57 to 61 minutes. Three shards would put 28 or more
-// beside extract.ts; four put about twenty in each, under extract.ts on the
-// fastest runner that measured it. A fifth shard would wait on extract.ts just
-// the same, from one more job, where CI's seven jobs already run beside these.
+// The other files hold 39 minutes. Three shards beside extract.ts put about
+// thirteen in each, under its 14.4; two would put twenty. A fifth shard would
+// wait on extract.ts just the same, from one more job, where CI's ten jobs
+// already run beside these.
 //
 // The first shards are listed. The last mutates everything else the base
 // configuration mutates, so a file added later is still mutated without anyone
 // remembering to list it here; the price is that new files all land in one
 // shard. When a shard passes the others by more than runner variance, re-measure
 // and move files or add a shard, and add it to the workflow's matrix, which a
-// test checks. Minutes, file by file and summed, in the two sweeps of this
-// table (runs 36710662185, which held yaml.ts in shard 3, and 36714214913):
+// test checks. Minutes in that sweep, file by file and summed:
 export const ASSIGNED = [
-  ['src/extract.ts'], // 29.7, 31.0
-  ['src/state.ts', 'src/glob.ts', 'src/paths.ts', 'src/yaml.ts'], // 16.6, 20.2
-  ['src/identity.ts', 'src/resolve.ts', 'src/rules.ts', 'src/select.ts'], // 19.5, 18.7
-]; // and the rest: 16.1, 20.8
+  ['src/extract.ts'], // 14.4
+  ['src/identity.ts', 'src/select.ts', 'src/state.ts'], // 13.0
+  ['src/resolve.ts', 'src/rules.ts', 'src/sections.ts', 'src/graph.ts'], // 13.1
+]; // and the rest: 13.1
 
 export const SHARD_COUNT = ASSIGNED.length + 1;
 
