@@ -117,7 +117,10 @@ rebased, as it always was.
 as paths: a brace or a `!` in a baseline's name is a character, where a
 leading `!` was moved in front of the directory, and a `..` past the root is a
 path outside the repository, as an absolute one may be. A bare `--ignore`
-name is left alone, as before.
+name is left alone, as before. A bare `--history` name was left alone too,
+though only the walk prunes a name at any depth and a history pattern is
+matched as a whole path: `--history 0002.md` typed in `docs` named the root's
+`0002.md`. It is rebased as the patterns to check are, to `docs/0002.md`.
 
 `--ignore-ref`, `--family` and `--ignore-family` are not paths and are left
 alone. So is an absolute path: it was never relative to anywhere, so moving the

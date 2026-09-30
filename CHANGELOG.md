@@ -87,6 +87,10 @@ front matter reads a key in any script.
   id or relation left out; it is the key `標題`, and a line under such a key
   that is not read counts only where the key is one the graph is built from,
   as an English key does.
+- **A bare `--history` name typed below the root is read from where it was
+  typed.** `--history 0002.md` typed in `docs` named the root's `0002.md`: it
+  was left alone as a bare `--ignore` name is, but a history pattern is
+  matched as a whole path, so it is now `docs/0002.md` (ADR-0018).
 
 ### Documentation
 
