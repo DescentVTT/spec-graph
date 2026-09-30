@@ -11,7 +11,11 @@ the family's
 [versioning policy](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0009-versions-before-1-0.md)
 records.
 
-## Unreleased
+## 0.11.1
+
+Documentation and robustness: the README's SARIF example is pinned as CI
+pins its own, and every scan steps past an empty match, so no table entry
+can hang a run. Nothing a run answers has changed.
 
 ### Documentation
 
