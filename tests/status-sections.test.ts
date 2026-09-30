@@ -60,3 +60,18 @@ describe('a status section with a value', () => {
     expect(statuses({ 'docs/adr/0001-a.md': '# A\n\n## Status\n\n#accepted\n' })).toEqual(['ADR-0001 active "#accepted"']);
   });
 });
+
+describe('a status line in a section of a register', () => {
+  // The README's `**Status:**` line is the word status and a colon. A label
+  // that only ends in it names some other state - of a review, of a build -
+  // and read as the section's, it gave the decision the wrong phase, or made a
+  // specification of a section that declares none.
+  it('is the word status, not a label that ends in it', () => {
+    expect(
+      statuses({
+        'docs/register.md':
+          '# Register\n\n## ADR-0001: One writer\n\nReview-status: rejected\n\n**Status:** Accepted\n\n## ADR-0002: Two writers\n\nBuild-status: superseded\n',
+      }),
+    ).toEqual(['register unknown null', 'ADR-0001 active "Accepted"']);
+  });
+});
