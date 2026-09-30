@@ -929,11 +929,18 @@ describe('finding the configuration from a subdirectory', () => {
   });
 
   it('rebases a --history pattern typed below the root as it rebases the patterns to check', async () => {
+    const records = async (history: string): Promise<string[]> => {
+      const run = await runIn(absolute(`${PROJECT}/docs`), 'query', 'document[phase=record]', '--history', history, '--format', 'json');
+      expect(run.code, run.err).toBe(EXIT_OK);
+      const parsed = JSON.parse(run.out) as { matches: { nodes: { file: string }[] }[] };
+      return parsed.matches.map((match) => (match.nodes[0] as { file: string }).file);
+    };
     // Left as typed, `deep/*.md` would name a `deep` at the root, which there is not.
-    const run = await runIn(absolute(`${PROJECT}/docs`), 'query', 'document[phase=record]', '--history', 'deep/*.md', '--format', 'json');
-    expect(run.code, run.err).toBe(EXIT_OK);
-    const parsed = JSON.parse(run.out) as { matches: { nodes: { file: string }[] }[] };
-    expect(parsed.matches.map((match) => (match.nodes[0] as { file: string }).file)).toEqual(['docs/deep/0003.md']);
+    expect(await records('deep/*.md')).toEqual(['docs/deep/0003.md']);
+    // A bare name too: a history pattern is a whole path, not a directory
+    // pruned at any depth as a bare `--ignore` name is, so `0002.md` typed in
+    // `docs` is `docs/0002.md`. It was left alone, and named the root's.
+    expect(await records('0002.md')).toEqual(['docs/0002.md']);
   });
 
   it('refuses a pattern typed in a directory whose name a pattern would read as syntax', async () => {

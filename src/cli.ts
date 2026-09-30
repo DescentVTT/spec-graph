@@ -707,18 +707,19 @@ export async function main(io: CliIO = {}): Promise<number> {
     err(`configuration: ${'../'.repeat(depth)}${loaded.source}\n`);
   }
 
-  // A bare name prunes a directory of that name at any depth, the way a
-  // .gitignore line does, so it means the same thing wherever it was typed.
-  // A path or a glob is matched against the repository-relative path, and
-  // leaving that one alone would make it silently match nothing. A pattern
-  // that cannot be rebased onto the root stops the run as one the dialect
-  // refuses does, named as it was typed.
+  // A bare `--ignore` name prunes a directory of that name at any depth, the
+  // way a .gitignore line does, so it means the same thing wherever it was
+  // typed. Every other pattern is matched against the repository-relative
+  // path, a bare `--history` name included, and leaving one alone would make
+  // it silently match something else or nothing. A pattern that cannot be
+  // rebased onto the root stops the run as one the dialect refuses does,
+  // named as it was typed.
   let typed;
   try {
     typed = {
       patterns: options.patterns.map((pattern) => anchor(here, pattern)),
       ignore: options.ignore.map((pattern) => anchorPath(here, pattern)),
-      history: options.historyPatterns.map((pattern) => anchorPath(here, pattern)),
+      history: options.historyPatterns.map((pattern) => anchor(here, pattern)),
     };
   } catch (error) {
     err(`spec-graph: ${(error as Error).message}\n`);
@@ -948,7 +949,11 @@ function anchor(prefix: string, pattern: string): string {
   return isAbsolutePath(pattern) ? pattern : rebasePattern(pattern, prefix);
 }
 
-/** The same, for an ignore, where a bare name is a directory at any depth. */
+/**
+ * The same, for an `--ignore`, where a bare name is a directory at any depth.
+ * Only the walk reads a name that way; a `--history` pattern is matched as a
+ * whole path, and goes to {@link anchor}.
+ */
 function anchorPath(prefix: string, pattern: string): string {
   return isGlob(pattern) || pattern.includes('/') ? anchor(prefix, pattern) : pattern;
 }
