@@ -8,6 +8,7 @@
  * each way of not being one sweep must be refused rather than scored.
  */
 
+import { execFileSync } from 'node:child_process';
 import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -391,14 +392,34 @@ describe('the merged report as people read it', () => {
 describe('this repository', () => {
   const config = readFileSync('stryker.config.mjs', 'utf8');
   const base = JSON.parse(/mutate: (\[.*\]),/.exec(config)![1]!.replaceAll("'", '"')) as string[];
-  const vendored = readdirSync('src/vendor', { recursive: true, withFileTypes: true })
+  const sources = readdirSync('src', { recursive: true, withFileTypes: true })
     .filter((entry) => entry.isFile() && entry.name.endsWith('.ts'))
     .map((entry) => `${entry.parentPath.replaceAll('\\', '/')}/${entry.name}`);
+  const vendored = sources.filter((file) => file.startsWith('src/vendor/'));
+
+  // Stryker's reading of `mutate`, written again here with minimatch, the
+  // matcher Stryker uses, so the script is not checked against itself.
+  const reads = (patterns: readonly string[], file: string): boolean =>
+    patterns.reduce((hit, pattern) => (pattern.startsWith('!') ? hit && !minimatch(file, pattern.slice(1)) : hit || minimatch(file, pattern)), false);
 
   it('lists only files the configuration mutates, each once', () => {
     expect(base).toEqual([...BASE, '!src/vendor/**']);
     expect([...checkAssignment(base).keys()].sort()).toEqual(ASSIGNED.flat().sort());
-    for (const file of ASSIGNED.flat()) expect(() => readFileSync(file)).not.toThrow();
+    for (const file of ASSIGNED.flat()) expect(sources).toContain(file);
+  });
+
+  it('mutates every file the one-process sweep mutates in exactly one shard, a file added later in the last', () => {
+    const shards = Array.from({ length: SHARD_COUNT }, (_, index) => mutateFor(base, index + 1));
+    const holders = (file: string) => shards.flatMap((patterns, index) => (reads(patterns, file) ? [index + 1] : []));
+    const expected = (file: string) => {
+      if (!reads(base, file)) return [];
+      const listed = ASSIGNED.findIndex((files) => files.includes(file));
+      return listed === -1 ? [SHARD_COUNT] : [listed + 1];
+    };
+    for (const file of [...sources, 'src/later/new.ts']) expect(holders(file), file).toEqual(expected(file));
+    expect(holders('src/later/new.ts')).toEqual([SHARD_COUNT]);
+    for (const file of ['src/types.ts', 'src/index.ts', vendored[0]!]) expect(holders(file), file).toEqual([]);
+    expect(sources.filter((file) => holders(file)[0] === SHARD_COUNT).length).toBeGreaterThan(1);
   });
 
   it('leaves the vendored spec-core to spec-core, in every shard', async () => {
@@ -410,8 +431,6 @@ describe('this repository', () => {
     const { default: stryker } = (await import(pathToFileURL(path.resolve('stryker.config.mjs')).href)) as {
       default: { disableTypeChecks: string };
     };
-    const reads = (patterns: readonly string[], file: string): boolean =>
-      patterns.reduce((hit, pattern) => (pattern.startsWith('!') ? hit && !minimatch(file, pattern.slice(1)) : hit || minimatch(file, pattern)), false);
     for (let shard = 1; shard <= SHARD_COUNT; shard += 1) {
       for (const file of vendored) expect(reads(mutateFor(base, shard), file), `shard ${shard}: ${file}`).toBe(false);
     }
@@ -438,6 +457,24 @@ describe('this repository', () => {
     // The timeline reads the progress reporter's counts; without them a
     // sweep's minutes cannot be measured again.
     expect(shard.reporters).toEqual(['json', 'clear-text', 'progress']);
+  });
+
+  it('refuses to load for a shard that is unset or not one of them, rather than mutate everything', () => {
+    const url = pathToFileURL(path.resolve('stryker.shard.config.mjs')).href;
+    const load = (shard: string | undefined) => {
+      const env = { ...process.env };
+      delete env.MUTATION_SHARD;
+      if (shard !== undefined) env.MUTATION_SHARD = shard;
+      try {
+        execFileSync(process.execPath, ['--input-type=module', '-e', `await import(${JSON.stringify(url)});`], { env, stdio: 'pipe' });
+        return 'loaded';
+      } catch (error) {
+        return String((error as { stderr: Buffer }).stderr);
+      }
+    };
+    expect(load(String(SHARD_COUNT))).toBe('loaded');
+    expect(load(String(SHARD_COUNT + 1))).toContain(`A shard is a number from 1 to ${SHARD_COUNT}, got "${SHARD_COUNT + 1}".`);
+    expect(load(undefined)).toContain(`A shard is a number from 1 to ${SHARD_COUNT}, got "undefined".`);
   });
 
   it('runs one job per shard', () => {
