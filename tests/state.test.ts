@@ -125,6 +125,15 @@ describe('marker false positives', () => {
     const md = ['- [ ] Document the convention.', '', '  ```md', '  **Resolved:** example', '  ```'].join('\n');
     expect(stateOf(md).disposition).toBe('unresolved');
   });
+
+  it('reads no marker in a statement that is only its punctuation', () => {
+    // A marker is a word from the table. A line under the item that opens on a
+    // colon, a dash or emphasis has the shape of a qualified marker and no word.
+    for (const line of [': see #412.', '— see #412.', '** ** see #412.']) {
+      const state = stateOf(`- [ ] Ship the export\n  ${line}`);
+      expect([line, state.disposition, state.evidence.source]).toEqual([line, 'unresolved', 'checkbox']);
+    }
+  });
 });
 
 describe('strikethrough', () => {
