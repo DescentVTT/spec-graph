@@ -221,8 +221,11 @@ const RETIRING_DIRECTORIES: ReadonlySet<string> = new Set([
   'withdrawn',
 ]);
 
-/** Front-matter keys that may carry a status, in order of preference. */
-export const STATUS_KEYS: readonly string[] = ['status', 'state', 'stage', 'lifecycle', 'phase', 'adr-status'];
+/**
+ * Front-matter keys that may carry a status, in order of preference. The
+ * Chinese key is the English one it translates, so it ranks beside it.
+ */
+export const STATUS_KEYS: readonly string[] = ['status', '狀態', '状态', 'state', 'stage', 'lifecycle', 'phase', 'adr-status'];
 
 /** Heading names whose body declares the document status. */
 const STATUS_HEADINGS: ReadonlySet<string> = new Set([

@@ -195,13 +195,13 @@ English word it translates, so it lands in that word's row: `延後` is
 
 | Where | Read from |
 | --- | --- |
-| Front matter, the first key present | `status`, `state`, `stage`, `lifecycle`, `phase`, `adr-status` |
+| Front matter, the first key present | `status`, `狀態`, `状态`, `state`, `stage`, `lifecycle`, `phase`, `adr-status` |
 | A section, under the heading, with or without a colon, `:` or `：` | `Status`, `State`, `Stage`, `Lifecycle`, `Current status`, `狀態`, `状态` |
 | A two-column table above the first `##`, in the cell right of the first key in the left column, the header row included | `Status`, `State`, `狀態`, `状态` |
 | A directory, for a document that declares no status | `archive`, `archived`, `attic`, `deprecated`, `graveyard`, `historical`, `obsolete`, `rejected`, `retired`, `superseded`, `superceded`, `withdrawn` |
 
-A front-matter key is read in ASCII letters, so write `status: 已接受` rather
-than `狀態: 已接受`.
+In front matter only an ASCII colon ends a key, as YAML has it: `狀態：已接受`
+there is a line left unread, where a heading or a label takes either colon.
 
 The table is where many teams put a document's fields, `| 狀態 | 已接受 |` or
 `| Status | Accepted |`:
