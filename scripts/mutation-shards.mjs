@@ -48,7 +48,7 @@ import { calculateMutationTestMetrics } from 'mutation-testing-metrics';
 // and a half times the whole suite, plus fifteen seconds, plus the runner's
 // overhead. A shard that instruments more files runs the suite and its
 // overhead slower and waits longer for each of those, so state.ts shares its
-// shard with two small files.
+// shard with three small files.
 //
 // The other files hold 57 to 61 minutes. Three shards would put 28 or more
 // beside extract.ts; four put about twenty in each, under extract.ts on the
@@ -63,8 +63,8 @@ import { calculateMutationTestMetrics } from 'mutation-testing-metrics';
 // test checks. Minutes in the sweeps above:
 export const ASSIGNED = [
   ['src/extract.ts'], // 22.5-29.3
-  ['src/state.ts', 'src/glob.ts', 'src/paths.ts'], // 19.4-19.8
-  ['src/identity.ts', 'src/resolve.ts', 'src/rules.ts', 'src/select.ts', 'src/yaml.ts'], // 18.8-21.3
+  ['src/state.ts', 'src/glob.ts', 'src/paths.ts', 'src/yaml.ts'],
+  ['src/identity.ts', 'src/resolve.ts', 'src/rules.ts', 'src/select.ts'],
 ]; // and the rest: 19.0-19.9
 
 export const SHARD_COUNT = ASSIGNED.length + 1;
