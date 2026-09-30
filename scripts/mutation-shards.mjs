@@ -46,9 +46,10 @@ import { calculateMutationTestMetrics } from 'mutation-testing-metrics';
 // which has one to itself. Most of its minutes, and of state.ts's, are static
 // mutants that time out, 102 and 84 of them, each cut off on a clock of one
 // and a half times the whole suite, plus fifteen seconds, plus the runner's
-// overhead. A shard that instruments more files runs the suite and its
-// overhead slower and waits longer for each of those, so state.ts shares its
-// shard with three small files.
+// overhead. The runner's overhead is most of what moves extract.ts: 22.5
+// minutes on a clock of 29 seconds, 31.0 on one of 36. A shard that
+// instruments more files runs the suite and its overhead slower too, so
+// state.ts shares its shard with three small files.
 //
 // The other files hold 57 to 61 minutes. Three shards would put 28 or more
 // beside extract.ts; four put about twenty in each, under extract.ts on the
@@ -60,12 +61,13 @@ import { calculateMutationTestMetrics } from 'mutation-testing-metrics';
 // remembering to list it here; the price is that new files all land in one
 // shard. When a shard passes the others by more than runner variance, re-measure
 // and move files or add a shard, and add it to the workflow's matrix, which a
-// test checks. Minutes in the sweeps above:
+// test checks. Minutes, file by file and summed, in the two sweeps of this
+// table (runs 36710662185, which held yaml.ts in shard 3, and 36714214913):
 export const ASSIGNED = [
-  ['src/extract.ts'], // 22.5-29.3
-  ['src/state.ts', 'src/glob.ts', 'src/paths.ts', 'src/yaml.ts'],
-  ['src/identity.ts', 'src/resolve.ts', 'src/rules.ts', 'src/select.ts'],
-]; // and the rest: 19.0-19.9
+  ['src/extract.ts'], // 29.7, 31.0
+  ['src/state.ts', 'src/glob.ts', 'src/paths.ts', 'src/yaml.ts'], // 16.6, 20.2
+  ['src/identity.ts', 'src/resolve.ts', 'src/rules.ts', 'src/select.ts'], // 19.5, 18.7
+]; // and the rest: 16.1, 20.8
 
 export const SHARD_COUNT = ASSIGNED.length + 1;
 
