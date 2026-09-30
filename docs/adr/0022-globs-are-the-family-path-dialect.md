@@ -186,6 +186,15 @@ does not read braces: `{/docs,x}` typed in `sub` is `sub/{/docs,x}`, which
 reads `sub/docs` or `sub/x`, as it did, where `/docs` typed there is an
 absolute path and left alone.
 
+*Amended 2026-09-30.* **A leading `./` takes the slashes after it along**, as
+POSIX reads `.//docs` as `./docs`, from spec-core 5666c96. `.//docs`,
+`././/docs`, `{.//docs,x}` and `./{/docs,x}` read `docs`, where the slashes
+left behind rooted what followed at the filesystem's root and the pattern
+named nothing the walk finds: as a pattern to check it read nothing, and as an
+`--ignore` or a `--history` pattern it took out, or made records of, nothing.
+`{.//,docs}` is still refused, as `{./,docs}` is. `--ignore-ref` is
+unchanged: its leading dot is text, escaped before the dialect reads it.
+
 Two refusals are narrower than they could be, on purpose. `**` inside a name
 is refused rather than read as `*`: the tools the dialect replaced read
 `docs/**.md` three ways, and the quiet reading turned a scope that reached every

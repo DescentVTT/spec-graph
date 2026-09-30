@@ -17,7 +17,7 @@ Chinese statuses, status tables, and relations, obligations and markers
 written in Chinese are read, and `check` writes GitHub annotations. Over this
 repository, its fixtures and the rest of the family, which write neither,
 every `check` format and every graph export is byte for byte what 0.9.10
-wrote.
+wrote. spec-core is at 5666c96: `.//docs` reads as `./docs`.
 
 ### Added
 
@@ -54,6 +54,10 @@ wrote.
   a `ghost-handover` or `state-conflict` on a Chinese document is a rule
   reaching it for the first time - fix it, or accept it in a baseline with
   `--record-baseline <file>`.
+- **spec-core 5666c96: `.//docs` reads as `./docs`**, inside braces too. It
+  was `/docs`, rooted at the filesystem's root, and matched nothing as a
+  pattern to check, an `--ignore` or a `--history` pattern (ADR-0022).
+  Upgrading: nothing to change; such a pattern now reads `docs`.
 
 ### Fixed
 

@@ -266,14 +266,22 @@ describe('the dialect every spec-* tool reads', () => {
     // repository-relative path is under. The slash was dropped as an empty
     // segment, and `{/docs,x}` read `docs` (spec-core 7e41240).
     const paths = ['docs', 'docs/a.md', '/docs', '/docs/a.md', 'x', 'x/a.md'];
-    // A run of slashes roots it as one does, and a leading `./` is dropped
-    // first, as from a whole pattern: `.//docs` is `/docs`.
-    for (const alone of ['/docs', '//docs', './/docs', '././/docs']) {
+    // A run of slashes roots it as one does.
+    for (const alone of ['/docs', '//docs']) {
       const braced = createGlobMatcher([`{${alone},x}`]);
       expect(paths.filter(braced), alone).toEqual(paths.filter(createGlobMatcher([alone, 'x'])));
       expect(braced('docs/a.md'), alone).toBe(false);
       expect(braced('x/a.md'), alone).toBe(true);
     }
+    // A leading `./` takes the slashes after it along, as POSIX reads
+    // `.//docs` as `./docs`, so what is left roots nothing: `.//docs` was
+    // `/docs`, a path outside the repository (spec-core 5666c96).
+    for (const dotted of ['.//docs', '././/docs', '{.//docs,x}', './{/docs,x}']) {
+      const matcher = createGlobMatcher([dotted]);
+      expect(matcher('docs/a.md'), dotted).toBe(true);
+      expect(matcher('/docs/a.md'), dotted).toBe(false);
+    }
+    expect(globBase('.//docs/*.md')).toBe('docs');
     expect(createGlobMatcher(['{{/docs,y},x}'])('docs/a.md')).toBe(false);
     expect(compileGlob('{/docs/*.md,x/*.md}').test('docs/a.md')).toBe(false);
     expect(compileGlob('{/docs/*.md,x/*.md}').test('x/a.md')).toBe(true);
