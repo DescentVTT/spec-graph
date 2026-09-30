@@ -68,9 +68,12 @@ accommodate a regression:
   commit it read 3.18 points high at 0.3.0, 1.29 low at 0.4.0 and 0.40 low at
   0.5.0. Its cost varies as much - 110 minutes when a broad change left nothing
   to reuse, 64 when half the corpus was reused. See ADR-0007. The guard moved
-  from 70 to 90 and then 93 with those passes. Timeouts are the margin to
-  watch: 283 mutants are detected by timeout, and losing all of them takes
-  96.34 to 93.04, just over the guard. That is a reason to strengthen tests, never to move the floor. One runner took 166 to
+  from 70 to 90 and then 93 with those passes. 283 mutants are detected by
+  timeout, and losing all of them would take 96.34 to 93.04, just over the
+  guard - but each was replayed by hand (ADR-0007, 2026-09-30): two are killed
+  by an assertion, and 281 never end, so no runner, however fast, turns one
+  into a survivor. A mutant a test catches only by being slow is a reason to
+  strengthen tests, never to move the floor. One runner took 166 to
   171 minutes for the sweep. CI splits it into four shards of 26 to 36 minutes,
   and the gate is applied to their merged report, never to a shard (ADR-0019).
   The time is the work: a static mutant runs the whole suite, so a slow test can

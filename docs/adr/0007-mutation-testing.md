@@ -632,6 +632,72 @@ Two lessons from the first pass:
   into a failed test.
 - **Vocabulary is tested from the README**, as the amendment above says.
 
+### 2026-09-30: what the timeouts held
+
+Main's sweep of 8f5e6e8, run 36654889728, read **96.34% over 8,575
+mutants**, 283 of the detections timeouts, and 93.04% with every timeout
+lost, a whisker over the `break` of 93. spec-core found that a faster runner
+finishes mutants a slower one timed out, and that some of them then survive
+(its ADR-0007, 2026-09-28): a timeout had been the only thing holding them.
+Two more sweeps of the same source, on 37e2295, read 96.34% and 96.35%, with
+283 and 285 timeouts; across the three, six mutants changed verdict, and no
+timeout became a survivor.
+
+Every one of the 283 was replayed by hand: applied to the source, the tests
+that cover it run - the whole suite for the 217 that are static, as Stryker
+runs it - with the clock the tests read held at 0, so that only an assertion
+about an answer could kill, and a hard limit: 120 seconds where the covering
+tests take a few, 50 to 60 where the whole suite takes about fifteen.
+
+- **Killed by an assertion, 2.** Copying the whole source again for every
+  link `findBareReferences` blanks doubles a document's references, and
+  fifteen tests say so once the pathological corpora have taken their time;
+  a node the cycle search never numbers is visited again, and eight tests
+  find cycles where there are none. Neither needs the clock.
+- **Never end, 281.** 22 filled the heap, among them the argument loops that
+  push `--ignore` forever once `i += 1` goes backwards and the glob compiler
+  that stops advancing. The other 259 were still running at the limit: 42
+  loops that no longer step - a counter turned round, a `pop` or a `shift`
+  taken out, a block emptied, a guard made `true` or `false` - and the 217
+  static mutants. 200 of those empty a phrase of the relation or marker
+  tables, and an empty alternative matches at a place without moving: `exec`
+  with `/g` does not step past an empty match, so the scan finds it again,
+  forever. The other 17 empty a table or the alternation built from one,
+  drop the escaping, the respelling of a marker or the `g` flag, or stop the
+  selector parser's loops, which `rules.ts` runs at import. 66 of the 283
+  Stryker cut off by its hit limit, a hundred times the calls the dry run
+  made, which counts rather than times.
+- **Detected only by being slow: none.**
+
+No runner, however fast, finishes a loop that does not end, so none of the
+281 can survive, and the two the suite kills would read as killed. Counted
+as Stryker counts them, main's report is the projection on any runner:
+96.34%, and 96.35% with the survivor below killed; losing every timeout,
+93.04% was never a reading a runner could produce. 25 of the 281 are in the
+Chinese reading 0.10.0 added (its phrases and markers, the split of the
+relation pattern by script, the search for a Han term), which is being
+taken out.
+
+The same pass read the survivors on the lines 0.10.0 changed, eleven. One
+was not equivalent and is killed: a status label is the word status, so
+`Review-status: rejected` is not a register section's status. Three were
+already commented as equivalent, two plant an entry in an empty fallback
+list and are commented where they are, one is a test of script that goes
+with the Chinese reading, and the other four - the successor clean-up in
+`supersessionTargetsIn`, and the `.trim()` that `phaseOf` gained when it
+stopped calling `normaliseStatus` - are there because of it or were there
+before it.
+
+**A race counted mutants killed.** tests/cli.test.ts records baselines into
+tests/fixtures/legacy under `.tmp-` names, one per process, and two tests
+copy that corpus. A copy that lists one of those files as the worker that
+wrote it deletes it fails with ENOENT, by no assertion. The three sweeps
+counted 2, 6 and 6 mutants killed that way; replayed, 13 of the 14 are
+killed by an assertion, and the fourteenth is the comparator's `<=` in
+`runner.ts`, commented as equivalent. In the sweep of 0.9.10 it was how
+`value.trim()` in `parsePrefixedRef` read as killed. The copies now leave
+`.tmp-` files out.
+
 ## Open Questions
 
 - [x] Should the `Regex` mutator be scoped? At 57.9% it was among the weakest.
