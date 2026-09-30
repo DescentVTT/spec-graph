@@ -61,8 +61,8 @@ const NOTHING: FrontMatterReading = { entries: [], problems: [] };
 
 /**
  * A line that reads as `key:` at any indentation, and the key it names: a key
- * as spec-core's reader takes one, of any script, so `  狀態: 草案` names a
- * status and `  標題: B` a title. A full-width colon ends no key there.
+ * as spec-core's reader takes one, of any script, since YAML allows one. A
+ * full-width colon ends no key there.
  */
 const KEY_SHAPE = /^[ \t]*([\p{L}_][\p{L}\p{M}\p{N}_.-]*)[ \t]*:/u;
 

@@ -141,6 +141,16 @@ is the direction this ADR prefers. `併入`, merged into, is a hand-off rather
 than the supersession `rolled into` is: read as a supersession, a constraint
 merged into another decision's design would retire the document stating it.
 
+*Amended 2026-09-30, after 0.10.0.* The Chinese phrases are taken out with
+the Chinese statuses (ADR-0002, the same day), and with them the negation
+read directly before a phrase and the boundary that let an English phrase
+touch a Han character: a Han character is a letter again, so
+`此問題deferred to ADR-0002` is a reference and no more. The stop at `。`,
+`？`, `！` and `；` stays. It only ends a statement sooner, so it reads fewer
+relations and never more - `Deferred to later。另見 ADR-0002` hands nothing
+to ADR-0002 - which is this ADR's direction whatever language a document is
+written in.
+
 ## Open Questions
 
 - [ ] Should the default include patterns be widened, or is naming the fix in
