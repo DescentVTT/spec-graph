@@ -96,6 +96,11 @@ front matter reads a key in any script.
   was printed as `pkg/b.json`, which typed there writes `pkg/pkg/b.json`; it
   is `../pkg/b.json` now, and a `--baseline` typed on the command line is
   printed as it was typed (ADR-0018).
+- **The terminal report lines up a path in Chinese.** The notes beside a
+  finding's related locations, and the caret under a selector that does not
+  parse, were placed by UTF-16 units, one column short for each Han
+  character, which a terminal draws two columns wide; they are placed by
+  the columns a terminal draws, with spec-core's `displayWidth`.
 
 ### Documentation
 

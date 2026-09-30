@@ -245,6 +245,30 @@ describe('human report', () => {
     expect(formatReport(one, { ascii: true })).toContain('! 1 front-matter value not read - see --verbose');
   });
 
+  it('lines up the notes of related locations by the columns a terminal draws', () => {
+    const at = (file: string, line: number) => {
+      const point = { offset: 0, line, column: 1 };
+      return { file, span: { start: point, end: point } };
+    };
+    const finding: Diagnostic = {
+      rule: 'broken-reference',
+      severity: 'error',
+      message: '"x.md" does not resolve to any document',
+      hint: 'fix the identifier, or add the document it names',
+      at: at('docs/adr/0001-a.md', 3),
+      nodes: ['ADR-0001'],
+      related: [
+        { at: at('docs/決策.md', 3), note: 'cited here' },
+        { at: at('docs/a.md', 12), note: 'and here' },
+      ],
+      target: 'x.md',
+    };
+    // Both references are fourteen UTF-16 units, and `.padEnd` padded
+    // neither; the Han one is sixteen columns, so the other is padded by two.
+    const text = formatReport({ ...result(), diagnostics: [finding] }, { ascii: true });
+    expect(text).toContain('    | docs/決策.md:3:1  cited here\n    | docs/a.md:12:1    and here\n');
+  });
+
   it('pluralises counts correctly', () => {
     const one = formatReport(result([{ path: 'docs/adr/0001-a.md', text: '# A\n' }]), { ascii: true });
     expect(one).toContain('1 document');

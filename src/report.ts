@@ -18,6 +18,7 @@ import type { SpecGraph } from './graph.js';
 import type { ProjectRule } from './project-rules.js';
 import { formatRef } from './source.js';
 import { DEFAULT_SEVERITIES, RULE_DESCRIPTIONS, RULE_IDS } from './rules.js';
+import { displayWidth } from './vendor/spec-core/text/index.js';
 import type { AnalysisResult } from './runner.js';
 import type {
   AnyRuleId,
@@ -290,10 +291,14 @@ function formatDiagnostic(
     `    ${diagnostic.message}`,
   ];
 
-  const width = Math.max(0, ...diagnostic.related.map((entry) => formatRef(entry.at).length));
+  // Padded to the columns a terminal draws, not to UTF-16 units: `docs/決策.md`
+  // is ten units and twelve columns, so `.padEnd` left the notes beside it two
+  // columns out of line.
+  const width = Math.max(0, ...diagnostic.related.map((entry) => displayWidth(formatRef(entry.at))));
   for (const entry of diagnostic.related) {
     const reference = formatRef(entry.at);
-    lines.push(`    ${paint.dim(marks.related)} ${paint.dim(reference.padEnd(width))}  ${paint.dim(entry.note)}`);
+    const padded = `${reference}${' '.repeat(width - displayWidth(reference))}`;
+    lines.push(`    ${paint.dim(marks.related)} ${paint.dim(padded)}  ${paint.dim(entry.note)}`);
   }
 
   lines.push(`    ${paint.hint(marks.hint)} ${paint.hint(diagnostic.hint)}`);

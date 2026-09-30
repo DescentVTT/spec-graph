@@ -440,6 +440,16 @@ describe('the query command', () => {
     expect(caret?.trim()).toBe('^');
   });
 
+  it('counts the columns a terminal draws before the caret, two for a Han character', async () => {
+    // `決策` is two UTF-16 units and four columns, and the caret stood two
+    // columns short of the relation it points at.
+    const selector = 'document[title="決策"] -invents-> document';
+    const refused = await run('query', selector, '--root', DEMO);
+    const [, echoed, caret] = refused.err.split('\n');
+    expect(echoed).toBe(`  ${selector}`);
+    expect(caret).toBe(`  ${' '.repeat(selector.indexOf('invents') + 2)}^`);
+  });
+
   it('runs every selector of a project rule, and tells two paths apart even when their ids run together', async () => {
     // `ab -> c` and `a -> bc` are two paths whose ids, run together, spell the
     // same word. A union keyed on that word would print one.

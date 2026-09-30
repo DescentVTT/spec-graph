@@ -56,6 +56,7 @@ import { isAbsolutePath, joinPosix, toPosix } from './paths.js';
 import { formatRef } from './source.js';
 import { execute, parseQuery, QueryError, renderMatch, type Match, type QuerySpec } from './select.js';
 import { isProjectRule, type AnyRuleId, type RuleId, type Severity, type SpecNode } from './types.js';
+import { displayWidth } from './vendor/spec-core/text/index.js';
 
 export const EXIT_OK = 0;
 export const EXIT_FAILED = 1;
@@ -1109,9 +1110,14 @@ function nodeSummary(node: SpecNode): Record<string, unknown> {
   };
 }
 
-/** Points at the exact character of a selector that failed to parse. */
+/**
+ * Points at the exact character of a selector that failed to parse, in the
+ * columns a terminal draws: a Han character before it takes two, so an offset
+ * counted in UTF-16 units put the caret short of it. The offset is a position
+ * the parser reached, never negative, so it needs no floor.
+ */
 function renderQueryError(selector: string, error: QueryError): string {
-  const caret = `${' '.repeat(Math.max(0, error.offset))}^`;
+  const caret = `${' '.repeat(displayWidth(selector.slice(0, error.offset)))}^`;
   return `spec-graph: ${error.message}\n  ${selector}\n  ${caret}\n`;
 }
 
