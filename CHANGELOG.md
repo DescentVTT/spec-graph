@@ -17,7 +17,8 @@ Chinese statuses, status tables, and relations, obligations and markers
 written in Chinese are read, and `check` writes GitHub annotations. Over this
 repository, its fixtures and the rest of the family, which write neither,
 every `check` format and every graph export is byte for byte what 0.9.10
-wrote. spec-core is at 5666c96: `.//docs` reads as `./docs`.
+wrote. spec-core is at 5666c96: a pattern typed below the root is rebased
+brace alternative by brace alternative, and `.//docs` reads as `./docs`.
 
 ### Added
 
@@ -54,6 +55,17 @@ wrote. spec-core is at 5666c96: `.//docs` reads as `./docs`.
   a `ghost-handover` or `state-conflict` on a Chinese document is a rule
   reaching it for the first time - fix it, or accept it in a baseline with
   `--record-baseline <file>`.
+- **spec-core 5666c96: a pattern typed below the root is rebased brace
+  alternative by brace alternative.** `{/docs,x}` typed in `sub` is `/docs`
+  or `sub/x`, `!/docs` stays rooted, and `{../a,b}` typed in `sub/deep` reads
+  `sub/a` or `sub/deep/b`; the pattern was joined to the directory whole, so
+  `{/docs,x}` read `sub/docs` and that `..` was refused. A `..` past the root,
+  an empty pattern and a pattern typed in a directory whose name holds glob
+  syntax, `notes[1]`, exit `2` named as typed, and `{/,x}`, which read all of
+  `sub`, exits `2` as it does at the root; a baseline's path is joined as a
+  path, braces and all (ADR-0018, ADR-0022). Upgrading: in a subdirectory
+  write `{docs,x}` for what `{/docs,x}` read, and pass no pattern rather than
+  an empty one.
 - **spec-core 5666c96: `.//docs` reads as `./docs`**, inside braces too. It
   was `/docs`, rooted at the filesystem's root, and matched nothing as a
   pattern to check, an `--ignore` or a `--history` pattern (ADR-0022).

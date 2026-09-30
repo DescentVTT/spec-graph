@@ -186,6 +186,13 @@ does not read braces: `{/docs,x}` typed in `sub` is `sub/{/docs,x}`, which
 reads `sub/docs` or `sub/x`, as it did, where `/docs` typed there is an
 absolute path and left alone.
 
+*Amended 2026-09-30.* **Re-anchoring reads braces, alternative by
+alternative**, with spec-core's `rebaseGlob` from 5666c96: `{/docs,x}` typed
+in `sub` is `{/docs,sub/x}`, its `/docs` rooted at the filesystem's root as
+`/docs` typed there is, and `!/docs` is `!/docs` where it was `!sub//docs`,
+which took back `sub/docs`. What else changes, and what is refused, is in
+[ADR-0018](0018-the-configuration-file-is-the-root.md).
+
 *Amended 2026-09-30.* **A leading `./` takes the slashes after it along**, as
 POSIX reads `.//docs` as `./docs`, from spec-core 5666c96. `.//docs`,
 `././/docs`, `{.//docs,x}` and `./{/docs,x}` read `docs`, where the slashes

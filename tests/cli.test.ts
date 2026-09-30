@@ -889,9 +889,74 @@ describe('finding the configuration from a subdirectory', () => {
     expect(await files(absolute(`${PROJECT}/docs/deep`), '..\\..\\docs\\deep\\*.md')).toEqual(['docs/deep/0003.md']);
     expect(await files(absolute(`${PROJECT}/docs/deep`), '..')).toEqual(['docs/0001.md', 'docs/0002.md', 'docs/deep/0003.md']);
     expect(await files(absolute(`${PROJECT}/docs/deep`), '..', '!../*.md')).toEqual(['docs/deep/0003.md']);
+    // Past the root it is refused, named as it was typed rather than as the
+    // pattern it would have become.
     const beyond = await runIn(absolute(`${PROJECT}/docs`), 'check', '../../elsewhere/*.md');
     expect(beyond.code).toBe(EXIT_ERROR);
-    expect(beyond.err).toContain('invalid glob "../elsewhere/*.md": a pattern cannot climb out of its root');
+    expect(beyond.err).toBe('spec-graph: invalid glob "../../elsewhere/*.md": a pattern cannot climb out of its root with ".."\n');
+  });
+
+  it('rebases each brace alternative as it would be written alone', async () => {
+    const files = async (cwd: string, ...argv: string[]): Promise<string[]> => {
+      const run = await runIn(cwd, 'query', 'document', ...argv, '--format', 'json');
+      expect(run.code, run.err).toBe(EXIT_OK);
+      const parsed = JSON.parse(run.out) as { matches: { nodes: { file: string }[] }[] };
+      return parsed.matches.map((match) => (match.nodes[0] as { file: string }).file).sort();
+    };
+    const docs = absolute(`${PROJECT}/docs`);
+    // A leading `/` roots an alternative wherever it was typed, as it roots
+    // `/deep` typed alone. The whole pattern was joined to `docs/`, and
+    // `docs/{/deep,x}/*.md` read `docs/deep/*.md`.
+    expect(await files(docs, '*.md', '{/deep,x}/*.md')).toEqual(['docs/0001.md', 'docs/0002.md']);
+    expect(await files(docs, '**/*.md', '!/deep/**')).toEqual(['docs/0001.md', 'docs/0002.md', 'docs/deep/0003.md']);
+    expect(await files(docs, '**/*.md', '!deep/**')).toEqual(['docs/0001.md', 'docs/0002.md']);
+    // A `..` climbs from where it was typed in each alternative, where it was
+    // left inside the braces and refused.
+    expect(await files(`${docs}/deep`, '{../0001,0003}.md')).toEqual(['docs/0001.md', 'docs/deep/0003.md']);
+
+    // `{/,x}` read `docs/` and `docs/x`, every document in `docs`; its `/`
+    // alternative names the root itself now, which no pattern may.
+    const root = await runIn(docs, 'check', '{/,x}');
+    expect(root.code).toBe(EXIT_ERROR);
+    expect(root.err).toContain('the braces expand to "/", which names no path');
+    // An empty pattern is refused typed anywhere, as it is at the root: joined
+    // to `docs/`, an unset variable checked every document in `docs`.
+    for (const empty of ['', '  ', '!']) {
+      const refused = await runIn(docs, 'check', empty);
+      expect(refused.code, JSON.stringify(empty)).toBe(EXIT_ERROR);
+      expect(refused.err, JSON.stringify(empty)).toBe(`spec-graph: invalid glob "${empty}": the pattern is empty\n`);
+    }
+  });
+
+  it('rebases a --history pattern typed below the root as it rebases the patterns to check', async () => {
+    // Left as typed, `deep/*.md` would name a `deep` at the root, which there is not.
+    const run = await runIn(absolute(`${PROJECT}/docs`), 'query', 'document[phase=record]', '--history', 'deep/*.md', '--format', 'json');
+    expect(run.code, run.err).toBe(EXIT_OK);
+    const parsed = JSON.parse(run.out) as { matches: { nodes: { file: string }[] }[] };
+    expect(parsed.matches.map((match) => (match.nodes[0] as { file: string }).file)).toEqual(['docs/deep/0003.md']);
+  });
+
+  it('refuses a pattern typed in a directory whose name a pattern would read as syntax', async () => {
+    const { mkdir, rm, writeFile } = await import('node:fs/promises');
+    const root = `tests/fixtures/.tmp/cli-syntax-dir-${process.pid}`;
+    await rm(root, { recursive: true, force: true });
+    await mkdir(`${root}/notes[1]`, { recursive: true });
+    await writeFile(`${root}/.spec-graph.json`, '{"patterns":["**/*.md"]}\n');
+    await writeFile(`${root}/notes[1]/0001.md`, '# ADR-0001: One\n\nstatus: accepted\n');
+    try {
+      // `notes[1]/*.md` would be a class, reading `notes1`, so the documents
+      // typed for were never read and nothing said so.
+      const typed = await runIn(absolute(`${root}/notes[1]`), 'check', '*.md');
+      expect(typed.code).toBe(EXIT_ERROR);
+      expect(typed.err).toContain('invalid glob "*.md": the directory "notes[1]" cannot be named in a pattern');
+      // Only a pattern that has to name the directory is refused.
+      expect((await runIn(absolute(`${root}/notes[1]`), 'check')).code).toBe(EXIT_OK);
+      expect((await runIn(absolute(`${root}/notes[1]`), 'check', '{/a,/b}/*.md')).err).toContain(
+        'no specifications matched "{/a,/b}/*.md"',
+      );
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
   });
 
   it('anchors a negated pattern by its glob, not by its exclamation mark', async () => {
@@ -908,6 +973,39 @@ describe('finding the configuration from a subdirectory', () => {
     const nested = await runIn(absolute(`${PROJECT}/docs`), 'check', absolutePattern, '--format', 'markdown');
     const top = await run('check', '--root', PROJECT, absolutePattern, '--format', 'markdown');
     expect(nested.out).toBe(top.out);
+    // A drive letter is absolute on every host, as a repository is read on a
+    // Windows checkout and in Linux CI alike, and no `docs/` is put before it.
+    const drive = await runIn(absolute(`${PROJECT}/docs`), 'check', 'C:/elsewhere/*.md');
+    expect(drive.err).toContain('no specifications matched "C:/elsewhere/*.md"');
+  });
+
+  it('reads a baseline typed in a subdirectory as a file there, not as a pattern', async () => {
+    const { access, mkdir, rm, writeFile } = await import('node:fs/promises');
+    const root = `tests/fixtures/.tmp/cli-nested-baseline-${process.pid}`;
+    await rm(root, { recursive: true, force: true });
+    await mkdir(`${root}/pkg/docs`, { recursive: true });
+    await writeFile(`${root}/.spec-graph.json`, '{"patterns":["pkg/docs/*.md"]}\n');
+    await writeFile(`${root}/pkg/docs/0001.md`, '# ADR-0001: One\n\nstatus: accepted\n\nSee [gone](nope.md).\n');
+    const pkg = absolute(`${root}/pkg`);
+    try {
+      // A brace and a `!` are characters in a file name. Read as a pattern,
+      // `!{b}.json` would be the list entry `!pkg/{b}.json`.
+      const recorded = await runIn(pkg, 'check', '--record-baseline', '!{b}.json');
+      expect(recorded.code, recorded.err).toBe(EXIT_OK);
+      await access(`${root}/pkg/!{b}.json`);
+      // Named from the root, whichever separator it was typed with, a `..`
+      // resolved against where it was typed.
+      const climbed = await runIn(pkg, 'check', '--baseline', '..\\pkg\\!{b}.json');
+      expect(climbed.code, climbed.err).toBe(EXIT_OK);
+      expect(climbed.out).toContain('1 accepted by pkg/!{b}.json');
+      const outright = await runIn(pkg, 'check', '--baseline', absolute(`${root}/pkg/!{b}.json`));
+      expect(outright.code, outright.err).toBe(EXIT_OK);
+      // At the root it is named as it was typed.
+      const top = await run('check', '--root', root, '--baseline', './pkg/!{b}.json');
+      expect(top.out).toContain('1 accepted by ./pkg/!{b}.json');
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
   });
 
   it('does not discover anything when --root says where the root is', async () => {

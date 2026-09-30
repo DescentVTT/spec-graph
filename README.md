@@ -874,7 +874,9 @@ reports, byte for byte, because every path here is relative to the root.
 
 - The nearest file wins.
 - `--root` names the root yourself and turns discovery off.
-- A path typed on the command line stays relative to where you typed it.
+- A path typed on the command line stays relative to where you typed it, brace
+  alternative by brace alternative: `{/docs,x}` typed in `sub` is `/docs` or
+  `sub/x`.
 
 See [ADR-0018](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0018-the-configuration-file-is-the-root.md).
 
@@ -942,7 +944,9 @@ target. See
 
 A class never matches a `/`. A parenthesis with no `|` in its group is itself,
 so `C++(notes).md` names that file. A `..` typed below the root,
-`spec-graph "../*.md"` from `docs/deep`, is resolved against where you typed it.
+`spec-graph "../*.md"` from `docs/deep`, is resolved against where you typed it;
+one that climbs past the root is refused, and so is a pattern typed in a
+directory whose name a pattern would read as syntax, such as `notes[1]`.
 
 A bare name and a path read differently as an `--ignore`:
 
