@@ -114,6 +114,13 @@ run that is not the maintainer's can at most queue one. The job installs an npm
 new enough to stage, 11.15 or later inside 11.x. spec-guard releases the same
 way.
 
+*Amended 2026-10-01.* `publish` installs npm at an exact version, 11.20.0, the
+one every staged release so far has used, rather than the newest 11.x: a range
+would bring a version published an hour earlier into the one job that can
+stage, past the cooldown Dependabot holds every other dependency to. Moving it
+is an edit made on purpose. `pack` restores no dependency cache, because other
+runs write it and the tarball comes from the lockfile and the registry alone.
+
 ## Consequences
 
 - **A maintainer sets up npmjs.com once.** In the package's settings, add a
