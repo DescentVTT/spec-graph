@@ -11,106 +11,63 @@ the family's
 [versioning policy](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0009-versions-before-1-0.md)
 records.
 
-## Unreleased
+## 0.10.0
 
-Chinese statuses, status tables, and relations, obligations and markers
-written in Chinese are read, and `check` writes GitHub annotations. Over this
+Statuses, status tables, relations, obligations and markers written in
+Chinese are read, and `check` writes GitHub annotations. Over this
 repository, its fixtures and the rest of the family, which write neither,
-every `check` format and every graph export is byte for byte what 0.9.10
-wrote. spec-core is at 5666c96: a pattern typed below the root is rebased
-brace alternative by brace alternative, `.//docs` reads as `./docs`, and
-front matter reads a key in any script.
+every `check` format and graph export is byte for byte what 0.9.10 wrote.
+spec-core is at 5666c96.
 
 ### Added
 
-- **`--format github`.** `check` writes one GitHub Actions workflow command
-  per finding, `::error file=…,line=…,title=…::message`, and the job's log
-  turns each into an annotation on the diff with no upload step. An error is
-  `error`, a warning `warning` and a note `notice`, as spec-guard writes them,
-  and the message carries the hint.
+- `check --format github` writes one GitHub Actions workflow command per
+  finding, with the hint in the message; severities as spec-guard's.
 
 ### Changed
 
-- **A status written in Chinese is read.** Traditional and Simplified, each
-  word as the English word it translates: `已接受` is accepted, `延後` retired
-  as `deferred` is, `封存` a record as `archived` is, `已被 ADR-0003 取代`
-  retired with ADR-0003 named as its successor, and `未接受` nothing. `## 狀態`
-  heads a status section and `**狀態：**` labels a register section's
-  (ADR-0002). `狀態:` and `状态:` are front-matter keys, after `status:`,
-  with the ASCII colon YAML reads. A Chinese document that read as `unknown`
-  now takes part in the lifecycle rules. Upgrading: run `check`; a finding on
-  a Chinese document is a rule reaching it for the first time - fix it, or
-  accept it in a baseline with `--record-baseline <file>`.
-- **A status in a two-column table at the top of a document is read.**
-  `| 狀態 | 已接受 |` or `| Status | Accepted |` above the first `##` gives the
-  document's status, after a `## Status` section and never over front
-  matter; a legend, a register or a wider table is never read (ADR-0002).
-  Upgrading: as for Chinese.
-- **Relations, obligations and markers written in Chinese are read.**
-  `延後至`, `移交給`, `留待`, `交由`, `併入` and their kin before a
-  reference hand the work on as `deferred to` does, not directly after a
-  negation (`未移交給`); `待辦事項` and `未決問題` hold obligations,
-  `參考資料` and `附錄` hold bookkeeping, and `已解決：`, `已決定：` and
-  `**技術債**` close an item. An English phrase beside Chinese counts too,
-  `此問題deferred to ADR-0002` (ADR-0003, ADR-0006). Upgrading: run `check`;
-  a `ghost-handover` or `state-conflict` on a Chinese document is a rule
-  reaching it for the first time - fix it, or accept it in a baseline with
-  `--record-baseline <file>`.
-- **spec-core 5666c96: a pattern typed below the root is rebased brace
-  alternative by brace alternative.** `{/docs,x}` typed in `sub` is `/docs`
-  or `sub/x`, `!/docs` stays rooted, and `{../a,b}` typed in `sub/deep` reads
-  `sub/a` or `sub/deep/b`; the pattern was joined to the directory whole, so
-  `{/docs,x}` read `sub/docs` and that `..` was refused. A `..` past the root,
-  an empty pattern and a pattern typed in a directory whose name holds glob
-  syntax, `notes[1]`, exit `2` named as typed, and `{/,x}`, which read all of
-  `sub`, exits `2` as it does at the root; a baseline's path is joined as a
-  path, braces and all (ADR-0018, ADR-0022). Upgrading: in a subdirectory
-  write `{docs,x}` for what `{/docs,x}` read, and pass no pattern rather than
-  an empty one.
-- **spec-core 5666c96: `.//docs` reads as `./docs`**, inside braces too. It
-  was `/docs`, rooted at the filesystem's root, and matched nothing as a
-  pattern to check, an `--ignore` or a `--history` pattern (ADR-0022).
-  Upgrading: nothing to change; such a pattern now reads `docs`.
+- A status written in Chinese, Traditional or Simplified, is read as the
+  English word it translates (`已接受` accepted, `延後` deferred, `封存`
+  archived, `已被 ADR-0003 取代` superseded by ADR-0003), from front matter
+  (`狀態:`), a `## 狀態` section or a register label (ADR-0002). Upgrading:
+  run `check`; fix what a rule now finds on a Chinese document, or baseline
+  it with `--record-baseline <file>`.
+- A two-column table above the first `##`, `| 狀態 | 已接受 |` or
+  `| Status | Accepted |`, gives the status, after a `## Status` section and
+  never over front matter (ADR-0002). Upgrading: as above.
+- Hand-off phrases (`延後至`, `移交給`, `留待`, `交由`, `併入`), obligation
+  and bookkeeping sections (`待辦事項`, `未決問題`, `參考資料`, `附錄`) and
+  markers (`已解決：`, `已決定：`, `**技術債**`) written in Chinese are read,
+  not after a negation (ADR-0003, ADR-0006). Upgrading: as above.
+- A pattern typed below the root is rebased alternative by alternative:
+  `{/docs,x}` in `sub` is `/docs` or `sub/x`, `!/docs` stays rooted, and
+  `{../a,b}` in `sub/deep` works; a `..` past the root, an empty pattern, a
+  directory name holding glob syntax and `{/,x}` exit 2 (ADR-0018,
+  ADR-0022). Upgrading: write `{docs,x}` for what `{/docs,x}` read in a
+  subdirectory.
+- `.//docs` reads as `./docs`, where it was rooted and matched nothing
+  (ADR-0022). Upgrading: nothing to change.
 
 ### Fixed
 
-- **The README's SARIF example uploads with
-  `github/codeql-action/upload-sarif@v4`**, the current major - v3 is
-  deprecated in December 2026 - and declares the `security-events: write`
-  permission the upload needs, beside the `contents: read` a job that
-  declares permissions must then name for its checkout.
-- **A statement ends at `。`, `？`, `！` and `；`.** A phrase no longer
-  governs a reference in the next Chinese sentence, as `上次延後至別處。另見
-  ADR-0002` did, and a marker counts after one.
-- **spec-core 5666c96: a front-matter key in any script is read.** `標題: 快取`
-  was the problem `not a "key: value" line`, counted on every run as a status,
-  id or relation left out; it is the key `標題`, and a line under such a key
-  that is not read counts only where the key is one the graph is built from,
-  as an English key does.
-- **A bare `--history` name typed below the root is read from where it was
-  typed.** `--history 0002.md` typed in `docs` named the root's `0002.md`: it
-  was left alone as a bare `--ignore` name is, but a history pattern is
-  matched as a whole path, so it is now `docs/0002.md` (ADR-0018).
-- **`tighten it: spec-graph check --record-baseline <file>` names the file as
-  it is typed where the run was.** Run from `pkg`, a configured `pkg/b.json`
-  was printed as `pkg/b.json`, which typed there writes `pkg/pkg/b.json`; it
-  is `../pkg/b.json` now, and a `--baseline` typed on the command line is
-  printed as it was typed (ADR-0018).
-- **The terminal report lines up a path in Chinese.** The notes beside a
-  finding's related locations, and the caret under a selector that does not
-  parse, were placed by UTF-16 units, one column short for each Han
-  character, which a terminal draws two columns wide; they are placed by
-  the columns a terminal draws, with spec-core's `displayWidth`.
+- A statement ends at `。？！；`, so a Chinese phrase no longer governs a
+  reference in the next sentence.
+- A front-matter key in any script is read, where it was counted as a
+  problem line on every run.
+- A bare `--history` name typed below the root is read from where it was
+  typed (ADR-0018).
+- The `--record-baseline` hint names the file as typed where the run was
+  (ADR-0018).
+- The terminal report lines up paths in Chinese, and the caret under a
+  selector that does not parse.
+- The README's SARIF example uses `upload-sarif@v4` and the
+  `security-events: write` permission it needs.
 
 ### Documentation
 
-- **The README is reorganised, with nothing left out.** Directives and
-  journals follow how a document is read, registers follow relations, a
-  deliberate gap in the references is its own section, and the two CI sections
-  are one; the glob rules, the walk, the Chinese rules and the GitLab report
-  are lists where they were paragraphs of up to 230 words. It links the
-  family's glossary and tutorial, and `SECURITY.md` says how to report a
-  vulnerability privately.
+- The README is reorganised into lists and tables with nothing left out,
+  links the family's glossary and tutorial, and SECURITY.md says how to
+  report a vulnerability privately.
 
 ## 0.9.10
 
