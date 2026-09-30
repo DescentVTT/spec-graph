@@ -702,10 +702,7 @@ export async function main(io: CliIO = {}): Promise<number> {
   // report, and in three of the four formats it is a document: a line above it
   // made `--verbose --format json` unparseable and handed `--format sarif` to a
   // code-scanning uploader that rejects it over a schema.
-  if (options.verbose && loaded.source !== null) {
-    const depth = here === '' ? 0 : here.split('/').length;
-    err(`configuration: ${'../'.repeat(depth)}${loaded.source}\n`);
-  }
+  if (options.verbose && loaded.source !== null) err(`configuration: ${fromHere(here, loaded.source)}\n`);
 
   // A bare `--ignore` name prunes a directory of that name at any depth, the
   // way a .gitignore line does, so it means the same thing wherever it was
@@ -850,6 +847,7 @@ export async function main(io: CliIO = {}): Promise<number> {
             entries: readonly StaleEntry[];
           }
         | undefined;
+      let recordAs: string | undefined;
       if (source !== null) {
         const held = await readBaseline(underRoot(root, source), source);
         // A path typed on the command line says the file is there for this run.
@@ -878,6 +876,10 @@ export async function main(io: CliIO = {}): Promise<number> {
           ratchet,
           entries: outcome.stale,
         };
+        // The command that re-records it is typed where this run was: a path
+        // typed on this command line is relative to there already, and the
+        // configuration's is from the root.
+        recordAs = options.baseline ?? fromHere(here, source);
         // Listed rather than counted when the run turns on them: a number is
         // enough to know the file has slack, and not enough to strike it. On
         // stdout only for a human - the structured formats carry the same rows
@@ -893,7 +895,7 @@ export async function main(io: CliIO = {}): Promise<number> {
       }
       const looseBaseline = note !== undefined && note.ratchet && note.stale > 0;
 
-      const reporterOptions = { verbose: options.verbose, max: options.max, escalated, baseline: note };
+      const reporterOptions = { verbose: options.verbose, max: options.max, escalated, baseline: note, recordAs };
       out(
         options.format === 'sarif'
           ? formatSarif(reported, reported.graph, { version: await readVersion(), escalated, projectRules })
@@ -931,6 +933,14 @@ function below(root: string, from: string): string {
   // which nothing returns; for `start` itself, slicing past its end is `''`
   // too, so emptying the prefix changes nothing a run can reach.
   return start.startsWith(`${root}/`) ? start.slice(root.length + 1) : '';
+}
+
+/**
+ * A path from the root, as it is typed in `here`: one `../` for each directory
+ * `here` is below the root. An absolute path reads the same from anywhere.
+ */
+function fromHere(here: string, path: string): string {
+  return here === '' || isAbsolutePath(path) ? path : `${'../'.repeat(here.split('/').length)}${path}`;
 }
 
 /**

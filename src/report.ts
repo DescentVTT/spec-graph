@@ -64,6 +64,14 @@ export interface ReporterOptions {
         readonly entries?: readonly StaleEntry[] | undefined;
       }
     | undefined;
+  /**
+   * The baseline's path as it is typed where the run was started, for the
+   * command that re-records it; `baseline.source` when unset. The source reads
+   * from the root, and typed in a directory below it, it names another file.
+   * Beside the baseline rather than in it, because the JSON report writes the
+   * baseline whole.
+   */
+  readonly recordAs?: string | undefined;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -240,7 +248,7 @@ export function formatReport(result: AnalysisResult, options: ReporterOptions = 
     const gone = (baseline.entries ?? []).filter((entry) => entry.reason === 'gone').length;
     const because =
       gone === 0
-        ? `tighten it: spec-graph check --record-baseline ${baseline.source}`
+        ? `tighten it: spec-graph check --record-baseline ${options.recordAs ?? baseline.source}`
         : `${gone} of them ${gone === 1 ? 'names a document' : 'name documents'} this run did not see - check the include patterns before re-recording`;
     const text = `${baseline.stale} baseline ${plural(baseline.stale, 'entry', 'entries')} no longer ${
       baseline.stale === 1 ? 'occurs' : 'occur'

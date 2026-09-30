@@ -136,6 +136,15 @@ Not an absolute path, which would make the output machine-specific, and not a
 bare file name, which is what it printed before and is a lie when the file is
 two directories up.
 
+*Amended 2026-09-30.* The command a run prints to strike a baseline's stale
+entries, `tighten it: spec-graph check --record-baseline <file>`, names the
+file the same way. It named it from the root, so typed where the run was
+started below the root it wrote another file: from `pkg`, a configured
+`pkg/b.json` was `pkg/pkg/b.json`. It is now `../pkg/b.json`, a baseline
+typed on the command line is named as it was typed, and an absolute path as
+it is. The rest of the report still names the baseline from the root, as it
+names every other file.
+
 ## Consequences
 
 **A subdirectory run now reports repository-relative paths.** That is the point
