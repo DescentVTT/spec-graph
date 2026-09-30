@@ -698,6 +698,64 @@ killed by an assertion, and the fourteenth is the comparator's `<=` in
 `value.trim()` in `parsePrefixedRef` read as killed. The copies now leave
 `.tmp-` files out.
 
+### 2026-10-01: the scans step past an empty match
+
+The three sweeps of 58a5389's source counted 191 static mutants timed out, 186
+of them in `extract.ts` and `state.ts`: 179 empty a phrase of the relation or
+marker tables, six empty a table, the alternation built from one, or the
+escaping or respelling of its phrases, and one drops the `g` flag. The record
+above says why none of them ended: an empty alternative matches without
+moving, and a loop over `exec` resumes at `lastIndex`, which an empty match
+leaves where it began; without `g`, `exec` starts again from the beginning.
+Each held a worker for Stryker's clock, 29 to 36 seconds, and between them
+they were most of the minutes of the two files that set the sweep's wall time
+([ADR-0019](0019-the-sweep-runs-in-shards.md)).
+
+No real input reaches that, since no table has an empty entry, so every scan
+over a `/g` pattern now steps past an empty match. Five use `matchAll`, which
+does, and refuses a pattern without `g`. The marker scan resumes inside its
+match, where `matchAll` cannot, and steps past by hand (`execPast` in
+`state.ts`, whose six mutants its own tests kill by assertion). Every output
+over the fixtures and the four family repositories is byte-identical.
+
+All 191 were replayed on the change: applied to the source, the whole suite
+run as Stryker runs a static mutant, stopping at the first failure, with the
+clock the tests read held at 0 and a limit of 120 seconds.
+
+- **Killed by an assertion, 184**: all 102 in `extract.ts` and 82 of the 84
+  in `state.ts`, in 5 to 17 seconds each for `extract.ts` and a median of 11
+  for `state.ts`, on a machine running three replays at once, most of it
+  starting vitest. The first test to fail was most often the README's markers
+  read one by one (61), the README's relation examples (36), a baseline naming
+  its citations (31) and ghost-handover as the README prints it (19). An emptied relation phrase matches wherever its lookarounds
+  allow, at the end of the text before a reference among them, so it takes
+  over the classification of nearly every reference; an emptied marker is
+  simply not read.
+- **Survived, 2, and killed now.** Emptying `follow up in` or `follow-up in`
+  loses no phrase: the two respell to one alternative and fold to one key.
+  What the empty entry adds is a marker read from punctuation alone, and a
+  test now holds that `: see #412.` under an item is no marker.
+- **Still never end, 5**: the query parser's loops in `select.ts`, which
+  `rules.ts` runs at import and which the change does not touch.
+
+The sweeps of the change, dispatched on its branch:
+
+| Commit | Run | Score | Mutants | Killed | Timed out | Survived | No coverage |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 58a5389, main | 36681244752 | 96.32% | 8,393 | 7,825 | 259 | 293 | 16 |
+| 2d02aac | 36724681688 | 96.29% | 8,385 | 8,008 | 66 | 295 | 16 |
+| c6c7d00 | 36729888575 | 96.31% | 8,385 | 8,011 | 65 | 293 | 16 |
+| dba9ed5 | 36732850656 | 96.31% | 8,385 | 8,007 | 69 | 293 | 16 |
+
+Mutant by mutant against main's sweep, the static timeouts of `extract.ts` and
+`state.ts` are killed, and so are two of `state.ts`'s others, which moved the
+scan's resume back before its match; from c6c7d00 on the survivors are main's
+293, and no kill is lost. The lines the change rewrote hold 32 new mutants, all killed.
+What timing still decides is 69 mutants, and losing every one of them would
+take 96.31 to 95.49, where it took 96.32 to 93.23. `extract.ts`'s 447 static
+mutants took 3.9 to 4.3 minutes of its shard, where they had taken 15.5 to
+20.5, and the file 13.9 to 14.7; `state.ts` took 2.3 to 2.8.
+
 ## Open Questions
 
 - [x] Should the `Regex` mutator be scoped? At 57.9% it was among the weakest.
