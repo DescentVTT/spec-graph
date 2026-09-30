@@ -365,12 +365,11 @@ function splitTargets(cell: TableCell): { text: string; start: number; end: numb
   // Links are taken out whole rather than flattened with everything else: a
   // path would otherwise be cut in half by its own slash, and its underscores
   // stripped as emphasis.
-  // A fresh matcher per cell. `prose` calls `flatten`, which drives the shared
-  // pattern; one /g regex advanced from inside its own scan resets its cursor
-  // and never terminates.
-  const links = new RegExp(MARKDOWN_LINK.source, 'g');
+  // `matchAll` scans a copy of the pattern. `prose` calls `flatten`, which
+  // drives the shared one, and one /g regex advanced from inside its own scan
+  // resets its cursor and never terminates.
   let last = 0;
-  for (let match = links.exec(cell.text); match !== null; match = links.exec(cell.text)) {
+  for (const match of cell.text.matchAll(MARKDOWN_LINK)) {
     prose(cell.text.slice(last, match.index));
     // Both groups always take part in a match, so the `?? ''` below and in the
     // label are for the type.

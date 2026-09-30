@@ -350,7 +350,7 @@ function findMarkers(body: string): MarkerHit[] {
   const out: MarkerHit[] = [];
 
   MARKER_PATTERN.lastIndex = 0;
-  for (let m = MARKER_PATTERN.exec(body); m !== null; m = MARKER_PATTERN.exec(body)) {
+  for (let m = MARKER_PATTERN.exec(body); m !== null; m = execPast(MARKER_PATTERN, body, m.index)) {
     const phrase = m[2] as string;
     const emphasisOpen = m[1];
     const emphasisClose = m[3];
@@ -381,6 +381,22 @@ function findMarkers(body: string): MarkerHit[] {
   }
 
   return out;
+}
+
+/**
+ * `exec` from past where the last match began.
+ *
+ * The other scans over a /g pattern use `matchAll`, which steps past an empty
+ * match. This one cannot: it resumes inside its match, on the stop a marker's
+ * qualifier took, so that the stop can start the next statement. No marker is
+ * empty, so no match is, and the resume is always past where its match began.
+ * A marker emptied by mistake would match empty at the start of every line,
+ * and `exec` would find it there for ever; this steps past it, and the marker
+ * tests fail instead.
+ */
+export function execPast(pattern: RegExp, text: string, index: number): RegExpExecArray | null {
+  if (pattern.lastIndex <= index) pattern.lastIndex = index + 1;
+  return pattern.exec(text);
 }
 
 /** Built once: this used to be rebuilt for every item in the corpus. */
