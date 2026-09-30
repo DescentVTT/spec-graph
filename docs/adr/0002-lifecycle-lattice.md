@@ -93,9 +93,11 @@ since reading it either way would be a guess (ADR-0006). `取代` with no `被`,
 `已接受（取代 ADR-0002）`, retires nothing.
 
 `## 狀態` and `## 状态` head a status section, with an ASCII or a full-width
-colon, and `**狀態：**` labels a register section's status. A front-matter key
-is read in ASCII letters only, by spec-core's reader, so `狀態:` in front matter
-is not read: that waits on spec-core, and `status: 已接受` is read today.
+colon, and `**狀態：**` labels a register section's status. In front matter
+`狀態:` and `状态:` are status keys, after `status` and before `state`, from
+spec-core 5666c96, which reads a key of any script. Only an ASCII colon ends a
+key there, as YAML has it, so `狀態：已接受` in front matter is a line left
+unread, counted as a status left out, and not a status.
 
 A status is also read from a key-value table at the top of a document,
 `| 狀態 | 已接受 |` or `| Status | Accepted |`: a table of exactly two columns,

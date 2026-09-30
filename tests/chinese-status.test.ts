@@ -41,6 +41,14 @@ describe('a Chinese status, as the outside review tried it', () => {
     expect(statuses({ 'docs/adr/0001-a.md': '# A\n\n## 狀態：\n\n已接受\n' })).toEqual(['ADR-0001 active "已接受"']);
   });
 
+  it('reads a Chinese key in front matter, and only with the colon YAML reads', () => {
+    expect(statuses({ 'docs/adr/0001-a.md': '---\n狀態: 已接受\n---\n\n# A\n' })).toEqual(['ADR-0001 active "已接受"']);
+    expect(statuses({ 'docs/adr/0001-a.md': '---\n状态: 草案\n---\n\n# A\n' })).toEqual(['ADR-0001 draft "草案"']);
+    // YAML has no full-width separator, so front matter does not take one,
+    // where a heading or a label does.
+    expect(statuses({ 'docs/adr/0001-a.md': '---\n狀態：已接受\n---\n\n# A\n' })).toEqual(['ADR-0001 unknown null']);
+  });
+
   it('reads 暫定接受 as a draft, though it holds 接受', () => {
     expect(phaseOf('暫定接受')).toBe('draft');
     expect(phaseOf('暂定接受')).toBe('draft');

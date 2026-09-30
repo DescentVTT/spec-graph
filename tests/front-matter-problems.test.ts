@@ -34,6 +34,18 @@ describe('a front-matter line that was not read', () => {
     { name: 'a title spaced before its colon', lines: ['status: accepted', '# a note', '  Title : B'], counted: false },
     { name: 'a line that is not key: value', lines: ['title: A', '# a note', '- title: B'], counted: true },
     { name: 'a status written twice', lines: ['status: draft', 'status: accepted'], counted: false },
+    // A key of any script is named as spec-core's reader takes one; a line
+    // with a full-width colon names none, and could have held anything.
+    { name: 'a Chinese status indented under no key', lines: ['status: accepted', '# a note', '  狀態: 草案'], counted: true },
+    { name: 'a Chinese title indented under no key', lines: ['status: accepted', '# a note', '  標題: B'], counted: false },
+    { name: 'a Chinese title with a full-width colon', lines: ['status: accepted', '標題：B'], counted: true },
+    // A leading `_`, and a combining acute accent, a digit, `_`, `-` and `.`
+    // inside, are all part of the key.
+    {
+      name: 'a title with every kind of character a key holds',
+      lines: ['status: accepted', '# a note', `  _ti${String.fromCodePoint(0x301)}tulo_2-a.b: B`],
+      counted: false,
+    },
   ];
 
   for (const { name, lines, counted } of cases) {
@@ -58,6 +70,13 @@ describe('a front-matter line that was not read', () => {
     expect(problem.message).toMatch(/^front matter: opened here and never closed/);
     expect(problem.unread).toBe(true);
     expect(covered(text, problem.at)).toBe('---');
+  });
+
+  it('reads a key of any script, so a status under a Chinese key is no problem', () => {
+    // It was the problem `not a "key: value" line`, counted as a lost status.
+    const { document, problems } = extract(block('狀態: 已接受'));
+    expect(problems).toEqual([]);
+    expect(document.frontMatter['狀態']).toBe('已接受');
   });
 
   it('reads the last of a key written twice', () => {

@@ -18,7 +18,8 @@ written in Chinese are read, and `check` writes GitHub annotations. Over this
 repository, its fixtures and the rest of the family, which write neither,
 every `check` format and every graph export is byte for byte what 0.9.10
 wrote. spec-core is at 5666c96: a pattern typed below the root is rebased
-brace alternative by brace alternative, and `.//docs` reads as `./docs`.
+brace alternative by brace alternative, `.//docs` reads as `./docs`, and
+front matter reads a key in any script.
 
 ### Added
 
@@ -35,11 +36,11 @@ brace alternative by brace alternative, and `.//docs` reads as `./docs`.
   as `deferred` is, `封存` a record as `archived` is, `已被 ADR-0003 取代`
   retired with ADR-0003 named as its successor, and `未接受` nothing. `## 狀態`
   heads a status section and `**狀態：**` labels a register section's
-  (ADR-0002). A Chinese document that read as `unknown` now takes part in the
-  lifecycle rules; a front-matter key is still `status:`, as spec-core reads
-  keys in ASCII. Upgrading: run `check`; a finding on a Chinese document is a
-  rule reaching it for the first time - fix it, or accept it in a baseline
-  with `--record-baseline <file>`.
+  (ADR-0002). `狀態:` and `状态:` are front-matter keys, after `status:`,
+  with the ASCII colon YAML reads. A Chinese document that read as `unknown`
+  now takes part in the lifecycle rules. Upgrading: run `check`; a finding on
+  a Chinese document is a rule reaching it for the first time - fix it, or
+  accept it in a baseline with `--record-baseline <file>`.
 - **A status in a two-column table at the top of a document is read.**
   `| 狀態 | 已接受 |` or `| Status | Accepted |` above the first `##` gives the
   document's status, after a `## Status` section and never over front
@@ -81,6 +82,11 @@ brace alternative by brace alternative, and `.//docs` reads as `./docs`.
 - **A statement ends at `。`, `？`, `！` and `；`.** A phrase no longer
   governs a reference in the next Chinese sentence, as `上次延後至別處。另見
   ADR-0002` did, and a marker counts after one.
+- **spec-core 5666c96: a front-matter key in any script is read.** `標題: 快取`
+  was the problem `not a "key: value" line`, counted on every run as a status,
+  id or relation left out; it is the key `標題`, and a line under such a key
+  that is not read counts only where the key is one the graph is built from,
+  as an English key does.
 
 ### Documentation
 
