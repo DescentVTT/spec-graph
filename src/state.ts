@@ -154,26 +154,32 @@ const MARKERS: Readonly<Record<Disposition, readonly string[]>> = {
   unresolved: ['unresolved', 'still open', 'open question', 'tbd', 'undecided', 'reopened'],
 };
 
-/** Words accepted in a `state=` attribute, including friendly synonyms. */
-const STATE_ALIASES: Readonly<Record<string, Disposition>> = {
-  open: 'unresolved',
-  unresolved: 'unresolved',
-  todo: 'unresolved',
-  narrowed: 'narrowed',
-  partial: 'narrowed',
-  delegated: 'delegated',
-  satisfied: 'satisfied',
-  resolved: 'satisfied',
-  done: 'satisfied',
-  closed: 'satisfied',
-  'accepted-debt': 'accepted-debt',
-  debt: 'accepted-debt',
-  wontfix: 'accepted-debt',
-  rejected: 'rejected',
-  declined: 'rejected',
-  obviated: 'obviated',
-  moot: 'obviated',
-};
+/**
+ * Words accepted in a `state=` attribute, including friendly synonyms.
+ *
+ * A map, because the word comes from a document and an object answers to more
+ * names than it was given: `state="constructor"` was a state, of no
+ * disposition, and the run that met it ended there.
+ */
+const STATE_ALIASES: ReadonlyMap<string, Disposition> = new Map<string, Disposition>([
+  ['open', 'unresolved'],
+  ['unresolved', 'unresolved'],
+  ['todo', 'unresolved'],
+  ['narrowed', 'narrowed'],
+  ['partial', 'narrowed'],
+  ['delegated', 'delegated'],
+  ['satisfied', 'satisfied'],
+  ['resolved', 'satisfied'],
+  ['done', 'satisfied'],
+  ['closed', 'satisfied'],
+  ['accepted-debt', 'accepted-debt'],
+  ['debt', 'accepted-debt'],
+  ['wontfix', 'accepted-debt'],
+  ['rejected', 'rejected'],
+  ['declined', 'rejected'],
+  ['obviated', 'obviated'],
+  ['moot', 'obviated'],
+]);
 
 const MARKER_PATTERN = buildMarkerPattern();
 const MARKER_LOOKUP = markerLookup();
@@ -208,7 +214,7 @@ export function resolveItemState(input: StateInput): ResolvedState {
   if (input.directive) {
     const declared = attr(input.directive, 'state');
     if (declared) {
-      const mapped = STATE_ALIASES[declared.value.toLowerCase()];
+      const mapped = STATE_ALIASES.get(declared.value.toLowerCase());
       if (mapped) {
         signals.push({
           source: 'directive',
@@ -441,4 +447,4 @@ function escapeRegExp(value: string): string {
 }
 
 /** Exposed for the query language, which lets users filter on these names. */
-export const KNOWN_STATE_WORDS: readonly string[] = Object.keys(STATE_ALIASES);
+export const KNOWN_STATE_WORDS: readonly string[] = [...STATE_ALIASES.keys()];

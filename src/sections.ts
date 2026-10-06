@@ -95,30 +95,34 @@ const TITLE_COLUMNS = /^(?:title|name|summary|description|subject|decision|topic
  * Written the way a header is written - "Depends on", "Superseded by" - rather
  * than the way a front-matter key is, because that is what an author types at
  * the top of a column.
+ *
+ * A map, because a header is whatever an author typed and an object answers to
+ * more names than it was given: a column headed `Constructor` was a relation
+ * of no kind, and every cell in it an edge to wherever it pointed.
  */
-const RELATION_COLUMNS: Readonly<Record<string, { kind: EdgeKind; inverted: boolean }>> = {
-  'depends on': { kind: 'depends-on', inverted: false },
-  'depends-on': { kind: 'depends-on', inverted: false },
-  dependencies: { kind: 'depends-on', inverted: false },
-  requires: { kind: 'depends-on', inverted: false },
-  supersedes: { kind: 'supersedes', inverted: false },
-  replaces: { kind: 'supersedes', inverted: false },
-  'superseded by': { kind: 'supersedes', inverted: true },
-  'replaced by': { kind: 'supersedes', inverted: true },
-  'blocked by': { kind: 'blocked-by', inverted: false },
-  'blocked on': { kind: 'blocked-by', inverted: false },
-  blocks: { kind: 'blocked-by', inverted: true },
-  amends: { kind: 'amends', inverted: false },
-  extends: { kind: 'amends', inverted: false },
-  assumes: { kind: 'assumes', inverted: false },
-  'delegates to': { kind: 'delegates-to', inverted: false },
-  'delegated to': { kind: 'delegates-to', inverted: false },
-  'tracked in': { kind: 'delegates-to', inverted: false },
-  related: { kind: 'relates-to', inverted: false },
-  'related to': { kind: 'relates-to', inverted: false },
-  'see also': { kind: 'relates-to', inverted: false },
-  references: { kind: 'references', inverted: false },
-};
+const RELATION_COLUMNS: ReadonlyMap<string, { kind: EdgeKind; inverted: boolean }> = new Map([
+  ['depends on', { kind: 'depends-on', inverted: false }],
+  ['depends-on', { kind: 'depends-on', inverted: false }],
+  ['dependencies', { kind: 'depends-on', inverted: false }],
+  ['requires', { kind: 'depends-on', inverted: false }],
+  ['supersedes', { kind: 'supersedes', inverted: false }],
+  ['replaces', { kind: 'supersedes', inverted: false }],
+  ['superseded by', { kind: 'supersedes', inverted: true }],
+  ['replaced by', { kind: 'supersedes', inverted: true }],
+  ['blocked by', { kind: 'blocked-by', inverted: false }],
+  ['blocked on', { kind: 'blocked-by', inverted: false }],
+  ['blocks', { kind: 'blocked-by', inverted: true }],
+  ['amends', { kind: 'amends', inverted: false }],
+  ['extends', { kind: 'amends', inverted: false }],
+  ['assumes', { kind: 'assumes', inverted: false }],
+  ['delegates to', { kind: 'delegates-to', inverted: false }],
+  ['delegated to', { kind: 'delegates-to', inverted: false }],
+  ['tracked in', { kind: 'delegates-to', inverted: false }],
+  ['related', { kind: 'relates-to', inverted: false }],
+  ['related to', { kind: 'relates-to', inverted: false }],
+  ['see also', { kind: 'relates-to', inverted: false }],
+  ['references', { kind: 'references', inverted: false }],
+]);
 
 /** Cell values that mean "nothing here". */
 const MARKDOWN_LINK = /!?\[([^\]]*)\]\(([^)]*)\)/g;
@@ -325,7 +329,7 @@ function readSchema(table: Table): TableSchema | null {
       status = column;
       return;
     }
-    const relation = RELATION_COLUMNS[name];
+    const relation = RELATION_COLUMNS.get(name);
     if (relation) {
       relations.push([column, relation]);
       return;

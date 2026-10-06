@@ -182,9 +182,10 @@ function entriesOf(read: Read, shift: number): { entries: YamlEntry[]; problems:
 
 /** Collapses parsed entries into the flat record stored on a document node. */
 export function toRecord(entries: readonly YamlEntry[]): Record<string, string | readonly string[]> {
-  const out: Record<string, string | readonly string[]> = {};
-  for (const entry of entries) out[entry.key] = entry.value;
-  return out;
+  // Defined rather than assigned: assigning `__proto__` sets what the record
+  // inherits from, so a list under that key answered `fm.0` and the key
+  // itself was lost. Of a key written twice the last is kept, as it was.
+  return Object.fromEntries(entries.map((entry) => [entry.key, entry.value]));
 }
 
 /** Every value of a key as a flat list, whether it was a scalar or a sequence. */

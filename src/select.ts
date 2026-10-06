@@ -87,18 +87,26 @@ export const DEFAULT_MATCH_LIMIT = 10_000;
 /* Parsing                                                                    */
 /* -------------------------------------------------------------------------- */
 
-const NODE_KINDS: Readonly<Record<string, NodeKind | null>> = {
-  document: 'document',
-  documents: 'document',
-  doc: 'document',
-  docs: 'document',
-  item: 'item',
-  items: 'item',
-  node: null,
-  nodes: null,
-  any: null,
-  '*': null,
-};
+/**
+ * The words that name a node type, and `null` for the ones that name any.
+ *
+ * A map, because a selector is typed by a person and an object answers to
+ * more names than it was given: `constructor` was a node type no node has, so
+ * `constructor[status=draft]` matched nothing where `construct[status=draft]`
+ * was refused.
+ */
+const NODE_KINDS: ReadonlyMap<string, NodeKind | null> = new Map<string, NodeKind | null>([
+  ['document', 'document'],
+  ['documents', 'document'],
+  ['doc', 'document'],
+  ['docs', 'document'],
+  ['item', 'item'],
+  ['items', 'item'],
+  ['node', null],
+  ['nodes', null],
+  ['any', null],
+  ['*', null],
+]);
 
 /** Compiles a selector string into a {@link QuerySpec}. */
 export function parseQuery(source: string): QuerySpec {
@@ -138,13 +146,13 @@ class Parser {
     const word = /^[A-Za-z]+|^\*/.exec(this.source.slice(this.position));
     if (word) {
       const text = (word[0] as string).toLowerCase();
-      if (!(text in NODE_KINDS)) {
+      if (!NODE_KINDS.has(text)) {
         throw new QueryError(
           `unknown node type "${word[0]}", expected one of: document, item, * (any)`,
           this.position,
         );
       }
-      kind = NODE_KINDS[text] as NodeKind | null;
+      kind = NODE_KINDS.get(text) as NodeKind | null;
       this.position += (word[0] as string).length;
     } else if (this.source[this.position] !== '[') {
       throw new QueryError('expected a node type (document, item or *) or a [predicate]', this.position);
@@ -356,8 +364,11 @@ export function attributesOf(node: SpecNode, key: string, graph?: SpecGraph): st
         return [...node.aliases];
     }
     if (key.startsWith('fm.')) {
-      const value = node.frontMatter[key.slice(3)];
-      if (value === undefined) return [];
+      // Its own keys only: every object answers to `constructor`, and no
+      // document's front matter said so.
+      const name = key.slice(3);
+      if (!Object.hasOwn(node.frontMatter, name)) return [];
+      const value = node.frontMatter[name] as string | readonly string[];
       return typeof value === 'string' ? [value] : [...value];
     }
     return [];

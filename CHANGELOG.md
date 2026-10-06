@@ -13,6 +13,47 @@ records.
 
 ## Unreleased
 
+### Changed
+
+- **A node type named as something every JavaScript object answers to is
+  refused, as any unknown type is.** `constructor` was read as a node type
+  no node has: `spec-graph query 'constructor[status=draft]'` printed
+  `no matches` and exited 1 where `construct[status=draft]` is a usage error,
+  and a project rule written with it loaded and found nothing. It is now
+  `unknown node type "constructor", expected one of: document, item, * (any)`
+  with exit 2, and such a rule is a problem in the configuration, which
+  stops the check. Upgrading: write `document`, `item` or `*`.
+- **A table column headed `Constructor` declares no relation.** The header
+  was read as a relation of no kind. A table with an id column and that one
+  was a register, each row a specification, and each cell under it an edge
+  the graph export labelled `undefined`, reported as a `broken-reference`
+  wherever the cell named no document: `new Foo()` in an API table was one.
+  The column is now what any other column is, so such a table is a register
+  only by a status column or a relation column, and an identifier in the
+  cell is a citation. Upgrading: a table that was a register only by that
+  column needs a `Status` column or a relation the README lists as its
+  header, such as `Depends on`, for its rows to be specifications again.
+
+### Fixed
+
+- A front-matter key, a `state=` word and a directory named as something
+  every JavaScript object answers to - `constructor`, `__proto__` - are
+  read as the unknown names they are.
+  `spec-graph query 'document[fm.constructor]'` ended on a stack trace with
+  exit 1, and a project rule whose message held `{0.fm.constructor}` ended
+  `check` with `value is not iterable` and exit 2; the key is now found in
+  the documents that wrote it and in no other, and the placeholder is left
+  as written where none did. A list under a `__proto__` key answered
+  `fm.0`, and a scalar there was lost: it is a key like any other.
+  `<!-- @spec-item state="constructor" -->` ended the check with
+  `Cannot read properties of undefined (reading 'toLowerCase')` and exit 2,
+  and is now ignored, as `state="banana"` is. A document under
+  `docs/constructor/` or `docs/__proto__/` was named
+  `function Object() { [native code] }-0007`, and a number cited beside it
+  ended the check with `family.toLowerCase is not a function` and exit 2:
+  the directory names no family now, as `docs/notes/` names none, and the
+  document is `0007-sharding`.
+
 ### Documentation
 
 - The README's SARIF example pins checkout v7.0.1 and setup-node v7.0.0, the
