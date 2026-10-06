@@ -34,9 +34,9 @@ permissions:
 jobs:
   # The whole matrix, on the commit being published. CI on main cancels a run
   # when a newer push arrives, so a tagged commit may never have finished one.
-  # The mutation sweep is not here: it takes about three hours, it runs on a
-  # `v*` tag of its own accord, and a gate the release waits on would make
-  # every release wait for a number that moves with the runner (ADR-0007).
+  # The mutation sweep is not here: it runs on a `v*` tag of its own accord,
+  # and a gate the release waits on would make every release wait for a number
+  # that moves with the runner (ADR-0007, ADR-0021).
   ci:
     uses: ./.github/workflows/ci.yml
 
