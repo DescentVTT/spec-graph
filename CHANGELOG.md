@@ -11,6 +11,15 @@ the family's
 [versioning policy](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0009-versions-before-1-0.md)
 records.
 
+## Unreleased
+
+### Documentation
+
+- The README's SARIF example pins checkout v7.0.1 and setup-node v7.0.0, the
+  commits this repository's workflows run now, and upload-sarif v4.38.2, the
+  one spec-guard's runs. A test holds checkout and setup-node to the
+  workflows, so the example moves when they do.
+
 ## 0.11.1
 
 Documentation and robustness: the README's SARIF example is pinned as CI
