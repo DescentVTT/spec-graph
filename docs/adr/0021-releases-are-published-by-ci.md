@@ -82,11 +82,18 @@ cannot be taken back.
 
 ### The mutation sweep is not in the release path
 
-It takes about three hours in four shards, it already runs on a `v*` tag of its
+It takes 17 to 20 minutes in four shards, it already runs on a `v*` tag of its
 own accord, and its score moves with the runner by more than the margin anybody
 would gate on ([ADR-0007](0007-mutation-testing.md),
 [ADR-0019](0019-the-sweep-runs-in-shards.md)). A release that waited on it would
 be a release waiting on a number nobody can reproduce.
+
+*Amended 2026-10-07.* The first sentence said "about three hours in four
+shards". Three hours was the sweep on one runner, 166 to 171 minutes; its four
+shards took 26 to 36 minutes each at first, and the whole sweep takes 17 to 20
+since the scans step past an empty match (ADR-0019, amended 2026-10-01). The
+decision is as it was: the sweep runs on the tag of its own accord, and the
+release does not wait for it.
 
 ### The actions are pinned to commits
 
