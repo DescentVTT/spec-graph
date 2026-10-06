@@ -42,6 +42,14 @@ updates:
       - dependency-name: '@types/node'
         update-types: ['version-update:semver-major']
     open-pull-requests-limit: 5
+  # Dependabot moves the pins in .github/workflows and reads no Markdown. The
+  # README shows a workflow with the same actions, and
+  # tests/action-pins.test.ts holds each to the pin the workflows here have.
+  # So a bump of checkout or setup-node fails that test until the README
+  # follows: copy the new commit and version into its `uses:` line, on
+  # Dependabot's branch. No workflow here runs upload-sarif, so no bump
+  # reaches the README's pin of it: that one follows spec-guard's ci.yml, by
+  # hand, when spec-guard's moves.
   - package-ecosystem: github-actions
     directory: /
     schedule:
