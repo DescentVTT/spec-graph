@@ -33,6 +33,18 @@ records.
   cell is a citation. Upgrading: a table that was a register only by that
   column needs a `Status` column or a relation the README lists as its
   header, such as `Depends on`, for its rows to be specifications again.
+- **A `@spec-edge` whose `kind` names no relation is a citation.** The word
+  was taken as written, so `kind="blocks"` or `kind="Depends-On"` drew an
+  edge of a kind no rule knows, the graph export printed it, a document with
+  such an edge to itself ended the check with
+  `Cannot read properties of undefined (reading 'transfersObligation')` and
+  exit 2, and `kind="constructor"` did not. The edge is now `references`,
+  as a link with nothing said about it is, and `--verbose` lists the
+  directive as a parse problem with the relations it could have named
+  (ADR-0014). Its target is checked as it was. Upgrading: write one of
+  `references`, `relates-to`, `depends-on`, `assumes`, `delegates-to`,
+  `blocked-by`, `supersedes` or `amends`; a project rule over
+  `-references->` now sees such an edge.
 
 ### Fixed
 

@@ -552,6 +552,8 @@ Each takes these attributes. Any other is a parse problem, listed by
 
 - `reason`, `note`, `owner` and a node's `kind` are for whoever reads the
   source; spec-graph reads nothing from them.
+- An edge's `kind` is one of the relations a selector steps along. Any other
+  word is a parse problem too, and the edge is read as `references`.
 - `aliases` splits at commas, semicolons and spaces.
 - A value is quoted with either quote mark, or bare when it holds no space or
   quote, and an attribute with no value is a flag.

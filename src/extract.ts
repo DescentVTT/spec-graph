@@ -49,15 +49,16 @@ import {
 } from './sections.js';
 import { resolveItemState } from './state.js';
 import { refOf, type LineIndex } from './source.js';
-import type {
-  DocumentNode,
-  EdgeKind,
-  EdgeOrigin,
-  ItemNode,
-  MisreadKey,
-  ParseProblem,
-  Phase,
-  SourceRef,
+import {
+  EDGE_KINDS,
+  type DocumentNode,
+  type EdgeKind,
+  type EdgeOrigin,
+  type ItemNode,
+  type MisreadKey,
+  type ParseProblem,
+  type Phase,
+  type SourceRef,
 } from './types.js';
 import { readEntries, toRecord, valuesOf, type YamlEntry } from './yaml.js';
 
@@ -673,6 +674,13 @@ export function extractDocument(input: ExtractInput): ExtractedDocument | null {
         at: at(directive.start, directive.end),
       });
     }
+    const kind = directive.name === 'spec-edge' ? attr(directive, 'kind') : null;
+    if (kind !== null && !isEdgeKind(kind.value)) {
+      problems.push({
+        message: `unknown relation "${kind.value}" on @spec-edge, read as references - expected one of: ${EDGE_KINDS.join(', ')}`,
+        at: at(kind.start, kind.end),
+      });
+    }
   }
 
   const { entries, problems: unread } = readEntries(scanned);
@@ -1253,6 +1261,18 @@ function isClaimed(claimed: readonly { start: number; end: number }[], offset: n
   return claimed.some((range) => offset >= range.start && offset < range.end);
 }
 
+/**
+ * Whether a word a `@spec-edge` gives as its kind is a relation.
+ *
+ * Asked of the list, as a selector's relation is: the word was once taken as
+ * it stood, so `kind="blocks"` made an edge of a kind no rule knows, a
+ * document with such an edge to itself ended the run, and `kind="constructor"`
+ * did not, since the table of kinds is an object and answers to that name.
+ */
+function isEdgeKind(word: string): word is EdgeKind {
+  return (EDGE_KINDS as readonly string[]).includes(word);
+}
+
 function extractReferences(context: ReferenceContext): ReferenceCandidate[] {
   const { scanned, directives, document, documentAt, items, byKey, status, claimed, file, index } = context;
   // This list and the one `withoutOverlaps` builds from it are only ever read
@@ -1306,10 +1326,13 @@ function extractReferences(context: ReferenceContext): ReferenceCandidate[] {
   // Explicit edge directives.
   for (const directive of directives) {
     if (directive.name !== 'spec-edge') continue;
-    const kind = attr(directive, 'kind')?.value as EdgeKind | undefined;
+    const written = attr(directive, 'kind')?.value;
     const to = attr(directive, 'to');
     const from = attr(directive, 'from');
-    if (!kind) continue;
+    if (!written) continue;
+    // A word that names no relation is still a link to somewhere, as a cell
+    // under a column that names none is: a citation, and no more than one.
+    const kind: EdgeKind = isEdgeKind(written) ? written : 'references';
     const owner = ownerOf(items, directive.start) ?? documentAt(directive.start).id;
     if (to) {
       out.push({
@@ -1318,7 +1341,7 @@ function extractReferences(context: ReferenceContext): ReferenceCandidate[] {
         target: to.value,
         origin: 'directive',
         declaredAt: at(to.start, to.end),
-        raw: `@spec-edge kind="${kind}" to="${to.value}"`,
+        raw: `@spec-edge kind="${written}" to="${to.value}"`,
         inverted: false,
         opportunistic: false,
       });
@@ -1330,7 +1353,7 @@ function extractReferences(context: ReferenceContext): ReferenceCandidate[] {
         target: from.value,
         origin: 'directive',
         declaredAt: at(from.start, from.end),
-        raw: `@spec-edge kind="${kind}" from="${from.value}"`,
+        raw: `@spec-edge kind="${written}" from="${from.value}"`,
         inverted: true,
         opportunistic: false,
       });
