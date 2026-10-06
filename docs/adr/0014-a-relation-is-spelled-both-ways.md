@@ -112,6 +112,24 @@ project prefers - [CLAUDE.md](../../CLAUDE.md) asks for a table entry rather tha
 a code change - and the cost is that every added key is a word a repository can
 no longer use in front matter for something else.
 
+*Amended 2026-10-07.* **A `@spec-edge` names its relation by its kind, and a
+`kind` that is none of them is a citation.** A directive's `kind` is a closed
+set, the relations a selector steps along, and it was never asked of the set:
+`kind="blocks"` and `kind="Depends-On"` drew an edge of a kind no rule knows,
+the export printed the word, and a document with such an edge to itself ended
+the check on the missing traits. `kind="constructor"` did not, because the
+table of kinds is an object, and every object answers to that name. The word
+is asked of the list now, as a selector's relation is. One that is not there
+leaves a link with nothing said about it, which is what `references` is: the
+edge is drawn as one, its target is checked as any deliberate reference is, and
+the directive is a parse problem that names the word and the kinds, where an
+attribute it does not take goes. Not folded to the nearest kind, for the reason
+a near-miss key is not: `blocks` reads as `blocked-by` the wrong way round.
+The same fault read a column headed `Constructor` as a relation column, a
+directory of that name as a family, `state="constructor"` as a state and
+`constructor` as a node type; each is now the unknown word it is, and
+`tests/object-names.test.ts` holds them.
+
 ## Open Questions
 
 - [ ] `assumed-by` and `referenced-by` were added for symmetry and have no prose

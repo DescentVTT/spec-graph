@@ -7,6 +7,7 @@ import { compileProjectRules } from '../src/project-rules.js';
 import { analyseSources, type Source } from '../src/runner.js';
 import { attributesOf, parseQuery, query, QueryError } from '../src/select.js';
 import { KNOWN_STATE_WORDS } from '../src/state.js';
+import { EDGE_KINDS } from '../src/types.js';
 import { parseFrontMatter, toRecord } from '../src/yaml.js';
 
 /**
@@ -306,5 +307,71 @@ describe('the directory a document is kept in', () => {
     } finally {
       await rm(base, { recursive: true, force: true });
     }
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+
+describe('the kind a @spec-edge directive gives', () => {
+  const other = { 'docs/adr/0002-b.md': '---\nstatus: accepted\n---\n\n# B\n' };
+  const directive = (word: string, target = 'ADR-0002'): string => `# A\n\n<!-- @spec-edge kind="${word}" to="${target}" -->\n`;
+  const drawn = (result: ReturnType<typeof analyse>): string[] =>
+    result.graph.edges.filter((edge) => edge.kind !== 'contains').map((edge) => `${edge.from} ${edge.kind} ${edge.to}`);
+
+  it('is a citation when it names no relation, whichever word it is, and the report says which word', () => {
+    for (const word of [...NAMES, 'blocks', 'Depends-On']) {
+      const text = directive(word);
+      const result = analyse({ ...other, 'docs/adr/0001-a.md': text });
+      expect(drawn(result), word).toEqual(['ADR-0001 references ADR-0002']);
+      expect(result.corpus.problems.map((problem) => problem.message), word).toEqual([
+        `unknown relation "${word}" on @spec-edge, read as references - expected one of: ${EDGE_KINDS.join(', ')}`,
+      ]);
+      const [problem] = result.corpus.problems;
+      expect(text.slice(problem?.at.span.start.offset, problem?.at.span.end.offset), word).toBe(word);
+    }
+  });
+
+  it('is the relation when it names one, and nothing is reported', () => {
+    for (const kind of EDGE_KINDS.filter((kind) => kind !== 'contains')) {
+      const result = analyse({ ...other, 'docs/adr/0001-a.md': directive(kind) });
+      expect(drawn(result), kind).toEqual([`ADR-0001 ${kind} ADR-0002`]);
+      expect(result.corpus.problems, kind).toEqual([]);
+    }
+  });
+
+  it('is asked of a @spec-edge alone: what a @spec-node gives as its kind is no relation, and none is reported', () => {
+    const result = analyse({ ...other, 'docs/adr/0001-a.md': '<!-- @spec-node id="ADR-0001" kind="constructor" -->\n# A\n' });
+    expect(result.corpus.problems).toEqual([]);
+    expect(drawn(result)).toEqual([]);
+  });
+
+  it('keeps the word as written in the text that declared the edge', () => {
+    const [spec] = extractSpecifications({ path: 'docs/adr/0001-a.md', text: directive('constructor') });
+    expect(spec?.references.map((reference) => `${reference.kind}: ${reference.raw}`)).toEqual([
+      'references: @spec-edge kind="constructor" to="ADR-0002"',
+    ]);
+    // Written from the other end, it is the same word.
+    const [inverse] = extractSpecifications({ path: 'docs/adr/0001-a.md', text: directive('constructor').replace(' to=', ' from=') });
+    expect(inverse?.references.map((reference) => `${reference.kind}: ${reference.raw} (${reference.inverted})`)).toEqual([
+      'references: @spec-edge kind="constructor" from="ADR-0002" (true)',
+    ]);
+  });
+
+  it('does not end the run when such an edge points at its own document, where a word no object answers to did', () => {
+    for (const word of [...NAMES, 'blocks']) {
+      const result = analyse({ 'docs/adr/0001-a.md': directive(word, 'ADR-0001') });
+      expect(drawn(result), word).toEqual(['ADR-0001 references ADR-0001']);
+      // A document citing itself is not a finding; one depending on itself is.
+      expect(result.diagnostics, word).toEqual([]);
+    }
+    const depends = analyse({ 'docs/adr/0001-a.md': directive('depends-on', 'ADR-0001') });
+    expect(depends.diagnostics.map((diagnostic) => diagnostic.rule)).toEqual(['self-reference']);
+  });
+
+  it('still reports a target that does not resolve, as it did', () => {
+    const result = analyse({ 'docs/adr/0001-a.md': directive('constructor', 'ADR-0099') });
+    expect(result.diagnostics.map((diagnostic) => `${diagnostic.rule}: ${diagnostic.message}`)).toEqual([
+      'broken-reference: "ADR-0099" does not resolve to any document',
+    ]);
   });
 });
