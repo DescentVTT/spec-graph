@@ -14,27 +14,33 @@
  * them would be worse than reporting nothing.
  */
 
-/** Directory names that name a specification family, mapped to a canonical prefix. */
-const FAMILY_DIRECTORIES: Readonly<Record<string, string>> = {
-  adr: 'ADR',
-  adrs: 'ADR',
-  'architecture-decisions': 'ADR',
-  'decision-records': 'ADR',
-  decisions: 'ADR',
-  rfc: 'RFC',
-  rfcs: 'RFC',
-  kep: 'KEP',
-  keps: 'KEP',
-  enhancements: 'KEP',
-  proposal: 'PROPOSAL',
-  proposals: 'PROPOSAL',
-  design: 'DESIGN',
-  designs: 'DESIGN',
-  prd: 'PRD',
-  prds: 'PRD',
-  spec: 'SPEC',
-  specs: 'SPEC',
-};
+/**
+ * Directory names that name a specification family, mapped to a canonical prefix.
+ *
+ * A map, because a directory is named by whoever made it and an object answers
+ * to more names than it was given: `docs/constructor/` was a family, of no
+ * prefix, and the run that read a document in it ended there.
+ */
+const FAMILY_DIRECTORIES: ReadonlyMap<string, string> = new Map([
+  ['adr', 'ADR'],
+  ['adrs', 'ADR'],
+  ['architecture-decisions', 'ADR'],
+  ['decision-records', 'ADR'],
+  ['decisions', 'ADR'],
+  ['rfc', 'RFC'],
+  ['rfcs', 'RFC'],
+  ['kep', 'KEP'],
+  ['keps', 'KEP'],
+  ['enhancements', 'KEP'],
+  ['proposal', 'PROPOSAL'],
+  ['proposals', 'PROPOSAL'],
+  ['design', 'DESIGN'],
+  ['designs', 'DESIGN'],
+  ['prd', 'PRD'],
+  ['prds', 'PRD'],
+  ['spec', 'SPEC'],
+  ['specs', 'SPEC'],
+]);
 
 /** Front-matter keys that may carry an explicit identifier, in preference order. */
 export const ID_KEYS: readonly string[] = ['id', 'adr', 'adr-id', 'rfc', 'rfc-id', 'kep-number', 'number', 'slug'];
@@ -299,7 +305,7 @@ export function familyFromPath(posixPath: string): string | null {
   const segments = posixPath.toLowerCase().split('/');
   // Nearest enclosing directory wins: `docs/rfcs/adr/0007.md` is an ADR.
   for (let i = segments.length - 2; i >= 0; i -= 1) {
-    const found = FAMILY_DIRECTORIES[segments[i] as string];
+    const found = FAMILY_DIRECTORIES.get(segments[i] as string);
     if (found) return found;
   }
   return null;
