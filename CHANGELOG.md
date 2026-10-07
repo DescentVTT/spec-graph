@@ -28,10 +28,10 @@ not this project's package. spec-graph itself is unchanged.
   The CI examples install first, and [Names](README.md#names) says whose the
   names are; what was measured is in the family's
   [adopting guide](https://github.com/DescentVTT/spec-core/blob/main/docs/adopting.md#names).
-  Upgrading: where a CI job or a script runs `npx spec-graph`, write
-  `npx --no-install @descent-vtt/spec-graph`. `--no-install` before the bare
-  name is not enough: npm still runs a copy of that name's package an earlier
-  fetch left in its cache.
+  Upgrading: where a CI job or a script gives `npx` the command's name
+  alone, write `npx --no-install @descent-vtt/spec-graph`. `--no-install`
+  before the bare name is not enough: npm still runs a copy of that name's
+  package an earlier fetch left in its cache.
 
 ## 0.12.0
 
