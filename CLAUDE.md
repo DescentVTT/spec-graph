@@ -105,10 +105,18 @@ figure for both reasons. Confirm a drop by mutating the line by hand, or
 re-measure that one file:
 
 ```bash
-npx stryker run --mutate src/runner.ts --coverageAnalysis all   # seconds, and honest
+npx --no-install stryker run --mutate src/runner.ts --coverageAnalysis all   # seconds, and honest
 ```
 
 See `docs/adr/0007-mutation-testing.md`.
+
+Run a tool through `npm run <script>` or `npx --no-install <tool>`, as above,
+never a bare `npx <name>`: before `npm ci` that fetches whatever the registry
+has under the name. `.npmrc` has npm stop there instead, and
+`tests/npm.test.ts` holds both. One of the family's own tools takes its
+package's full name (spec-core's
+[ADR-0005](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0005-the-family-contract.md#names),
+Names).
 
 ## Design rules
 
