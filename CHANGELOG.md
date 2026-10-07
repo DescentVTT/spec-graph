@@ -11,31 +11,27 @@ the family's
 [versioning policy](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0009-versions-before-1-0.md)
 records.
 
-## Unreleased
+## 0.12.1
+
+The README's commands gave `npx` the command's bare name, which on npm is
+not this project's package. spec-graph itself is unchanged.
 
 ### Security
 
-- **The README gave `npx` the command's name, which on npm is not this
-  project's.** `spec-graph` without the `@descent-vtt` scope belonged to
-  nobody on the registry on 2026-10-07, so anyone can register it; and `npx`
-  given a name the project has not installed fetches the package of that
-  name and runs it, unasked when no terminal is attached. That is a fresh
-  clone, a worktree before `npm ci`, and the GitLab job the README showed,
-  which had no install step. Every command in the README, in ADR-0020's
-  recipe and in the one older entry of this file that showed a CI step now
-  gives the package's full name behind `--no-install`, as in
-  `npx --no-install @descent-vtt/spec-graph --format github`: it runs the
-  project's install, or stops with an error that names this package. The
-  GitLab job installs first, and [Names](README.md#names) says whose the
-  names are. spec-graph itself is unchanged. What was measured, under npm
-  10.9.9, 11.20.0 and 12.2.0, is in the family's
-  [adopting guide](https://github.com/DescentVTT/spec-core/blob/main/docs/adopting.md#names),
-  and `tests/names.test.ts` holds every file here to the rule.
-  Upgrading: in a CI job or a script that gives `npx` the command's name
-  alone, write `npx --no-install @descent-vtt/spec-graph`. `--no-install` in
-  front of the bare name is not enough: it stops a download, and npm still
-  runs a copy of the bare name's package that an earlier fetch left in its
-  cache.
+- Every command in the README gives `npx` the package's full name behind
+  `--no-install`, as in `npx --no-install @descent-vtt/spec-graph ...`.
+  `spec-graph` without the scope belongs to nobody on npm (2026-10-07), so
+  anyone can register it.
+  `npx` given a name the project has not installed fetches the package of
+  that name and runs it, unasked when no terminal is attached: a fresh
+  clone, a worktree before `npm ci`, a CI job with no install step.
+  The CI examples install first, and [Names](README.md#names) says whose the
+  names are; what was measured is in the family's
+  [adopting guide](https://github.com/DescentVTT/spec-core/blob/main/docs/adopting.md#names).
+  Upgrading: where a CI job or a script runs `npx spec-graph`, write
+  `npx --no-install @descent-vtt/spec-graph`. `--no-install` before the bare
+  name is not enough: npm still runs a copy of that name's package an earlier
+  fetch left in its cache.
 
 ## 0.12.0
 
