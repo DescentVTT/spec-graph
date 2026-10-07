@@ -599,6 +599,19 @@ describe('the relation column vocabulary', () => {
     // ordinary citation rather than typed - and stays a citation.
     expect(edge('Owner')?.kind).toBe('references');
   });
+
+  it('counts "References" as the relation column that makes a table a register', () => {
+    // A citation reads as `references` under any header, so the kind alone
+    // cannot tell a column the vocabulary names from one it does not. What can:
+    // an identifier column beside a relation column is a register with no
+    // status column at all, and beside a column of prose it is a citation list.
+    const rows = (header: string): string[] =>
+      ids({
+        'docs/register.md': ['# Register', '', `| ID | ${header} |`, '| :- | :----- |', '| ADR-0001 | - |', '| ADR-0002 | ADR-0001 |'].join('\n'),
+      });
+    expect(rows('References')).toEqual(['ADR-0001', 'ADR-0002', 'register']);
+    expect(rows('Owner')).toEqual(['register']);
+  });
 });
 
 describe('a column header is matched whole', () => {
