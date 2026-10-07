@@ -51,7 +51,7 @@ jobs:
 
   pack:
     needs: ci
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     outputs:
       version: ${{ steps.release.outputs.version }}
@@ -125,7 +125,7 @@ jobs:
 
   publish:
     needs: pack
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     # Named in the trusted publisher on npmjs.com. Protection rules - which refs
     # may deploy, and a required reviewer - go on this environment in the
@@ -250,7 +250,7 @@ jobs:
   github-release:
     needs: [pack, publish]
     if: github.event_name == 'push'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       contents: write # gh release create

@@ -57,7 +57,10 @@ env:
 jobs:
   shard:
     name: stryker (shard ${{ matrix.shard }} of ${{ strategy.job-total }})
-    runs-on: ubuntu-latest
+    # The image the hosted sweeps in ADR-0007 and ADR-0019 were measured on.
+    # Another image is another measurement: spec-core's ADR-0008 says what
+    # moving takes.
+    runs-on: ubuntu-24.04
     # Headroom for a bad runner, not a budget. The first two sharded sweeps took
     # 26 to 36 minutes a shard, and the same shard moved by up to six minutes
     # between runners on identical work. A shard that keeps passing 45 means the
@@ -144,7 +147,7 @@ jobs:
     # Runs when a shard failed too, so the failure is reported as an incomplete
     # sweep rather than as a skipped check.
     if: ${{ !cancelled() }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
 
     steps:
