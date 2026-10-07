@@ -1048,7 +1048,8 @@ spec-graph diff <before> <after>     Compare two JSON graph exports.
 Exit codes: `0` clean, `1` findings, `2` the tool could not run. A mistyped flag
 never masquerades as a passing build, and neither does a pattern that matches
 nothing, a configuration file that did not load, or a `--baseline` that is not
-there.
+there. An error spec-graph did not expect is `2` as well, never findings: it is
+reported on stderr as `spec-graph: unexpected error:` with its stack.
 
 **There is no `--watch`.** A full run on this repository takes 60 ms, so the
 loop that would justify a resident process is one line of shell, and it belongs

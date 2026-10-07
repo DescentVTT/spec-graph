@@ -11,6 +11,20 @@ the family's
 [versioning policy](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0009-versions-before-1-0.md)
 records.
 
+## Unreleased
+
+### Changed
+
+- **An error spec-graph did not expect ends the run with exit 2, not 1.** It
+  left the process as Node's uncaught error, and exit 1 reads as findings;
+  every command now reports it as `spec-graph: unexpected error:` with its
+  stack on stderr, nothing on stdout, and exit 2, as does an error thrown
+  where nothing waits for it, such as a pipe its reader closed
+  ([ADR-0010](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0010-configuration-belongs-to-the-repository.md)).
+  Upgrading: a script that took exit 1 after a crash for findings now sees
+  2, "the tool could not run"; `main()` from the package resolves to 2 where
+  its promise rejected.
+
 ## 0.12.1
 
 The README's commands gave `npx` the command's bare name, which on npm is
