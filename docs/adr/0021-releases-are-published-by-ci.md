@@ -195,6 +195,14 @@ the pin for a tag whatever the run is handed, the version a rehearsal names,
 and nothing installed for any other text; and it holds that the input is
 written into no script.
 
+**What the first rehearsal showed.** On 2026-10-07 a rehearsal dispatched from
+main, run 37598771763 under the pin, read as the source said: `POST 201` from
+the exchange, `npm verbose oidc Successfully retrieved and set token`, then
+npm's version check on 0.12.0, which the workflow takes as the rehearsal's
+end. So npmjs.com does give a rehearsal dispatched from main a token.
+spec-guard's ADR-0019 has the same day's dry run under 12.2.0, which read the
+same as far as a dry run goes.
+
 ## Consequences
 
 - **A maintainer sets up npmjs.com once.** In the package's settings, add a
