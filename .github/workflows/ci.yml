@@ -56,7 +56,10 @@ jobs:
           node-version: ${{ matrix.node }}
           cache: npm
 
-      - run: npm ci
+      # No dependency's install script runs: the tree needs none, npm 12 runs
+      # none unless package.json allows the package, and the flag has npm 10 and
+      # 11 run none either (tests/npm.test.ts).
+      - run: npm ci --ignore-scripts
 
       - name: Type check
         run: npm run lint
@@ -104,7 +107,7 @@ jobs:
           node-version: '22'
           cache: npm
 
-      - run: npm ci
+      - run: npm ci --ignore-scripts
 
       - name: Test with coverage
         run: npm run test:coverage
