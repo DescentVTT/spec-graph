@@ -756,6 +756,39 @@ them would take 96.31 to 95.49, where it took 96.32 to 93.23. `extract.ts`'s
 447 static mutants took 3.9 to 4.3 minutes of its shard, where they had taken
 15.5 to 20.5, and the file 13.9 to 14.7; `state.ts` took 2.3 to 2.8.
 
+### 2026-10-07: vitest is held on 4
+
+**Vitest stays on 4 until Stryker's runner reads 5.** On vitest 5,
+`@stryker-mutator/vitest-runner` 10.0.0, the newest there is, runs no test
+against a mutant a test covers and scores it as survived, with every test
+green: vitest 5 matches a test's name with ` > ` between its suites, and the
+runner asks for the tests of a mutant by names joined with a space
+([stryker-js #6210](https://github.com/stryker-mutator/stryker-js/issues/6210),
+open). The evidence is spec-guard's, which met this on 2026-09-07 and pinned
+vitest then
+([its ADR-0003](https://github.com/DescentVTT/spec-guard/blob/main/docs/adr/0003-mutation-testing.md)).
+On 2026-10-06 Dependabot proposed vitest 5.0.0 across the family. The two
+repositories that sweep a pull request in full measured it: 4.00% in
+spec-core, where main reads 96.36%, and 3.83% in spec-harness, where main
+reads 98.13%. Here pull request 61 passed, at 96.31%, and that figure is
+vitest 4's: a pull request's sweep is incremental, and run 37528788750
+reused 8,381 of its 8,385 verdicts. The bump would have merged green, and
+main's full sweep would have failed after it, with a score and no reason.
+
+So `.github/dependabot.yml` proposes no major of `vitest` or of an `@vitest`
+package, and `tests/docs.test.ts` fails when `package.json` admits a vitest
+that is not a 4, with the issue and this entry in its message: a bump made
+by hand fails `npm test` before it reaches main. Minors and patches of 4
+still come, and a security update is not held back.
+
+The hold is the family's and is lifted in spec-core first, by the steps in
+[its ADR-0008](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0008-toolchain.md)
+(amended 2026-10-07), which also says what vitest 4 still receives while it
+is held. When the bump comes here, its pull request's sweep reuses vitest
+4's verdicts and measures nothing: dispatch `mutation.yml` on the branch,
+which is the full sweep, and hold it to the two conditions written there
+before merging.
+
 ## Open Questions
 
 - [x] Should the `Regex` mutator be scoped? At 57.9% it was among the weakest.

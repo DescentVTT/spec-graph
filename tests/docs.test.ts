@@ -93,6 +93,42 @@ describe('the source tree', () => {
   });
 });
 
+/**
+ * Whether a range admits a vitest 4 and nothing else, written as npm and
+ * Dependabot write one: a caret, a tilde or an exact version.
+ */
+function onTheFourLine(range: unknown): boolean {
+  return typeof range === 'string' && /^[~^]?4\.\d+\.\d+$/.test(range);
+}
+
+describe('the toolchain', () => {
+  // On vitest 5, Stryker's runner (10.0.0) runs no test against a mutant a
+  // test covers and scores it as survived, with every test green. A pull
+  // request's sweep here is incremental and reuses the verdicts vitest 4
+  // gave, so such a bump failed nothing until main's sweep. It fails here
+  // instead, with its reason.
+  const HELD = [
+    'vitest is held on 4 until a released @stryker-mutator/vitest-runner reads vitest 5.',
+    'On 5 the runner runs no test against a mutant a test covers, so every one survives and the sweep reads about 4%:',
+    'https://github.com/stryker-mutator/stryker-js/issues/6210.',
+    'docs/adr/0007-mutation-testing.md, under 2026-10-07, has the measurement and where the steps that lift this are',
+  ].join(' ');
+
+  it.each(['vitest', '@vitest/coverage-v8'])('holds %s to the 4 line, the newest Stryker\'s runner measures on (ADR-0007)', (name) => {
+    const { devDependencies } = JSON.parse(readFileSync('package.json', 'utf8')) as { devDependencies: Record<string, unknown> };
+    const range = devDependencies[name];
+    expect(onTheFourLine(range), `package.json asks for ${name} "${String(range)}". ${HELD}`).toBe(true);
+  });
+
+  it('takes a range for the 4 line only when it admits no other', () => {
+    // The minors and patches Dependabot still proposes must pass.
+    for (const range of ['^4.1.11', '^4.1.12', '^4.2.0', '~4.1.11', '4.1.11']) expect(onTheFourLine(range), range).toBe(true);
+    for (const range of ['^5.0.0', '5.0.3', '>=4.1.11', '>4', '^4.1.11 || ^5.0.0', '*', 'latest', '', undefined]) {
+      expect(onTheFourLine(range), String(range)).toBe(false);
+    }
+  });
+});
+
 describe('the documents the package ships', () => {
   const REPOSITORY = 'https://github.com/DescentVTT/spec-graph/blob/main/';
   const { files } = JSON.parse(readFileSync('package.json', 'utf8')) as { files: string[] };
