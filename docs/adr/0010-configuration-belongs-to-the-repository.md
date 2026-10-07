@@ -93,6 +93,28 @@ is still *reported* rather than ignored, for the reason it always was - a
 silently dropped `ignoreReference` is a configuration that looks applied and is
 not. Failing on it is that same argument carried to its end.
 
+**An error nothing expected is exit `2` too.** *Amended 2026-10-08.* The exit
+codes disagreed with themselves in one more place. `main()` is documented as
+never throwing, and for an error no verb expected it rejected: a write the
+stream refused, a defect in a reporter or in the parser. The launcher ends
+on `process.exitCode = await cli.main()`, so the rejection was Node's uncaught
+error, the stack and exit `1`, which CI reads as findings and the family
+contract
+([spec-core's ADR-0005](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0005-the-family-contract.md))
+as "it found something". Measured on 0.12.1 through the launcher, with a stdout
+that throws: `--version`, `--help`, `check`, `query`, `graph` and `rules` each
+exited `1`, and so did `graph --graph-format json` into a reader that closed
+the pipe, an error no promise holds.
+
+`main()` now resolves to `2` for every error it awaits that nothing expected:
+`spec-graph: unexpected error:` and the stack on stderr, so that a report of it
+says where, and nothing on stdout, where a script reads a document.
+The launcher answers what nothing awaits the same way. It owns the process,
+which `main()` does not: a caller of `main()` from the package gets `2` where it
+got a rejection, and no handler it did not ask for. `analyse()` and the rest of
+the API throw as they did, and an error `analyse()` throws inside a run is still
+its message and exit `2`.
+
 ## What this does not fix
 
 The "greedy prefix" flood is narrower than it looks, and worth stating precisely
