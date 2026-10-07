@@ -7,7 +7,8 @@
  * change do to it (`diff`).
  *
  * Exit codes are the contract with CI: `0` clean, `1` findings, `2` the tool
- * itself could not run. A usage mistake never masquerades as a passing build.
+ * itself could not run. A usage mistake never masquerades as a passing build,
+ * and an error nothing here expected never as findings.
  */
 
 import {
@@ -602,12 +603,31 @@ function parseCount(flag: string, value: string): number {
 /* Entry point                                                                */
 /* -------------------------------------------------------------------------- */
 
-/** Runs the CLI and returns the process exit code. Never throws. */
+/**
+ * Runs the CLI and returns the process exit code. Never throws.
+ *
+ * An error nothing below expected is neither a finding nor a usage mistake:
+ * the answer cannot be trusted, which is the family contract's 2 (spec-core's
+ * ADR-0005). Rejected instead, it reached the launcher as Node's uncaught
+ * error, exit 1, which CI reads as findings. The stack is what makes a report
+ * of it something to act on, and it goes to stderr alone: a script that reads
+ * a document from stdout is handed no part of one.
+ */
 export async function main(io: CliIO = {}): Promise<number> {
+  const err = io.stderr ?? ((text) => process.stderr.write(text));
+  try {
+    return await run(io, err);
+  } catch (error) {
+    err(`spec-graph: unexpected error: ${error instanceof Error ? (error.stack ?? error.message) : String(error)}\n`);
+    return EXIT_ERROR;
+  }
+}
+
+/** One run of the command line, which rejects on an error it did not expect. */
+async function run(io: CliIO, err: (text: string) => void): Promise<number> {
   const argv = io.argv ?? process.argv.slice(2);
   const cwd = io.cwd ?? process.cwd();
   const out = io.stdout ?? ((text) => process.stdout.write(text));
-  const err = io.stderr ?? ((text) => process.stderr.write(text));
   const env = io.env ?? process.env;
 
   let options: CliOptions;
