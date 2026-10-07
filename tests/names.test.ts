@@ -283,7 +283,17 @@ describe('the commands this repository writes', () => {
     expect(section).toContain('The name without the scope is not this project');
     expect(section).toContain('`npx --no-install @descent-vtt/spec-graph`');
     expect(section).toContain('`npx @descent-vtt/spec-graph`');
-    // The quick start comes first, and the names are the next thing under it.
-    expect(readme.slice(readme.indexOf('```bash')).match(/^## .*$/m)?.[0]).toBe('## Names');
+    // The quick start comes first, and the names are the next section under
+    // it. A `## ` inside a fence is an example's, not a heading.
+    let fenced = false;
+    let started = false;
+    const sections = readme.split(/\r?\n/).filter((line) => {
+      if (line.startsWith('```')) {
+        fenced = !fenced;
+        started ||= line === '```bash';
+      }
+      return started && !fenced && line.startsWith('## ');
+    });
+    expect(sections[0]).toBe('## Names');
   });
 });
