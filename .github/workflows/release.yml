@@ -18,9 +18,18 @@ on:
   push:
     tags: ['v*']
   # A rehearsal from main of the version package.json names: every job but the
-  # GitHub release, with `npm publish --dry-run` in place of the upload. The
-  # token exchange with npm is the one step it cannot try.
+  # GitHub release, with `npm stage publish --dry-run` in place of the upload.
+  # npm asks npmjs.com for its token before `--dry-run` holds anything back,
+  # so a rehearsal tries the exchange and its log says how that went. The
+  # signing and the upload are what it cannot try.
   workflow_dispatch:
+    inputs:
+      # The npm a rehearsal installs, to try the one the pin might move to
+      # without moving it. A tag has no inputs and stages with the pin.
+      npm_version:
+        description: 'A rehearsal only: one exact npm version to try, such as 12.2.0. A tag always uses the pin.'
+        type: string
+        default: '11.20.0'
 
 # Never two releases at once, and never one cancelled halfway: a publish that
 # stops after npm has the tarball is not a state anything can be rerun from.
@@ -148,17 +157,56 @@ jobs:
       # bring whatever npm published an hour ago into the one job that holds
       # the publish token, past the cooldown everything else waits out. Moving
       # it is an edit made on purpose, since Dependabot cannot see it here.
+      #
+      # A rehearsal may name another npm, and only a rehearsal: a tag installs
+      # the pin whatever this step is handed. The name is text nobody vouched
+      # for. It comes through the environment and is never written into the
+      # script, and nothing is installed unless it is one exact version, so
+      # no range, dist-tag, URL or path reaches npm for it to resolve.
       - name: An npm new enough to stage
+        env:
+          CANDIDATE: ${{ inputs.npm_version }}
         run: |
-          npm install -g npm@11.20.0
-          installed="$(npm --version)"
+          pin=11.20.0
           required=11.15.0
-          if [ "$(printf '%s\n%s\n' "$required" "$installed" | sort -V | head -1)" != "$required" ]; then
-            echo "::error::npm $installed is older than $required, which npm stage publish needs"
+          use="$pin"
+          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
+            # Each digit by name: a range is read by the runner's locale.
+            part='(0|[123456789][0123456789]*)'
+            exact="^$part\\.$part\\.$part\$"
+            if ! [[ "$CANDIDATE" =~ $exact ]]; then
+              echo "::error::npm_version must be one exact npm version, such as $pin; nothing was installed"
+              exit 1
+            fi
+            use="$CANDIDATE"
+          fi
+          if [ "$(printf '%s\n%s\n' "$required" "$use" | sort -V | head -1)" != "$required" ]; then
+            echo "::error::npm $use is older than $required, which npm stage publish needs; nothing was installed"
             exit 1
           fi
-          echo "npm $installed on node $(node --version)"
+          npm install -g "npm@$use"
+          installed="$(npm --version)"
+          if [ "$installed" != "$use" ]; then
+            echo "::error::npm $installed answers where npm $use was installed"
+            exit 1
+          fi
+          if [ "$installed" = "$pin" ]; then
+            used="npm $installed on node $(node --version), the pin"
+          else
+            used="npm $installed on node $(node --version), a candidate: a tag stages with the pin, $pin"
+          fi
+          echo "$used"
+          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
+            echo "Rehearsed with $used." >> "$GITHUB_STEP_SUMMARY"
+          fi
 
+      # A tag stages. A rehearsal hands npm the same tarball with `--dry-run`,
+      # which signs and uploads nothing, and with `--loglevel verbose`, the
+      # one level at which npm says how its exchange with npmjs.com went.
+      # Main's version is on npm more often than not, and npm then stops at a
+      # version check of its own, after it has read the tarball and tried the
+      # exchange. That refusal is where such a rehearsal ends; any other
+      # fails it.
       - name: Stage with provenance
         env:
           VERSION: ${{ needs.pack.outputs.version }}
@@ -167,12 +215,18 @@ jobs:
         run: |
           if [ "$GITHUB_EVENT_NAME" = push ]; then
             npm stage publish "./$TARBALL" --tag "$DIST_TAG" --provenance --access public --ignore-scripts
-          elif [ -n "$(npm view "@descent-vtt/spec-graph@$VERSION" version 2>/dev/null)" ]; then
-            # npm refuses even a dry run over a published version, which would
-            # say nothing about this workflow.
-            echo "::notice::$VERSION is on npm already; the rehearsal stopped short of the upload"
-          else
-            npm stage publish "./$TARBALL" --tag "$DIST_TAG" --provenance=false --access public --ignore-scripts --dry-run
+            exit 0
+          fi
+          status=0
+          out="$(npm stage publish "./$TARBALL" --tag "$DIST_TAG" --provenance=false --access public --ignore-scripts --dry-run --loglevel verbose 2>&1)" || status=$?
+          printf '%s\n' "$out"
+          if [ "$status" -ne 0 ]; then
+            case "$out" in
+              *"You cannot publish over the previously published versions: $VERSION."*)
+                echo "::notice::$VERSION is on npm already, so npm stopped at its version check; the lines above that start 'npm verbose oidc' say how its token exchange went"
+                ;;
+              *) exit "$status" ;;
+            esac
           fi
 
       - name: Say that it is staged, and how to release it
