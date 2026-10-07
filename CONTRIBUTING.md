@@ -165,7 +165,12 @@ factor: `npm stage list @descent-vtt/spec-graph`, `npm stage view <id>`,
 `npm stage approve <id>`. A prerelease (`0.9.0-rc.1`) goes out under the
 `next` dist-tag and never becomes `latest`. To try the workflow without
 publishing, run it by hand from main (Actions, Release, Run workflow): it does
-everything but the upload and the GitHub release.
+everything but the signing, the upload and the GitHub release. That rehearsal
+can try another npm than the one the release pins, without moving the pin:
+name one exact version in its `npm_version` input, as in
+`gh workflow run release.yml --ref main -f npm_version=12.2.0`. A tag stages
+with the pin whatever was rehearsed, and ADR-0021 says what a rehearsal does
+and does not show.
 
 Nobody runs `npm publish`. npmjs.com accepts a staged version from this
 repository's `release.yml`, running in the `npm` environment, and releases it
