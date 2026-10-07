@@ -11,7 +11,10 @@ the family's
 [versioning policy](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0009-versions-before-1-0.md)
 records.
 
-## Unreleased
+## 0.13.0
+
+An error spec-graph did not expect ended the run with exit 1, which reads as
+findings; it is exit 2 now, the run that could not be trusted.
 
 ### Changed
 
