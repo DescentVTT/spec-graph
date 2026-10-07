@@ -79,15 +79,32 @@ jobs:
           if [ "$GITHUB_EVENT_NAME" != push ]; then tag="v$(node -p 'require("./package.json").version')"; fi
           node scripts/release.mjs "$tag" release-notes.md
 
-      - run: npm ci
+      # No dependency's install script runs: the tree needs none, npm 12 runs
+      # none unless package.json allows the package, and the flag has npm 10 and
+      # 11 run none either (tests/npm.test.ts).
+      - run: npm ci --ignore-scripts
 
+      # The tarball's name is read off the directory npm packed into, as
+      # spec-guard reads it, and not out of `npm pack --json`: npm 12 prints an
+      # object keyed by the package's name where npm 11 and earlier print an
+      # array, so a name taken from either shape is one the next npm takes
+      # away. The directory is outside the checkout, where nothing of it can
+      # be packed, and the tarball is moved to where the jobs below look.
       - name: Build and pack
         id: pack
         run: |
           npm run clean
           npm run build
-          tarball=$(npm pack --json | node -p 'JSON.parse(require("fs").readFileSync(0, "utf8"))[0].filename')
-          echo "tarball=$tarball" >> "$GITHUB_OUTPUT"
+          packed="$RUNNER_TEMP/packed"
+          mkdir "$packed"
+          npm pack --pack-destination "$packed"
+          set -- "$packed"/*.tgz
+          if [ "$#" -ne 1 ] || [ ! -f "$1" ]; then
+            echo "::error::npm pack left something other than one tarball in $packed"
+            exit 1
+          fi
+          mv "$1" .
+          echo "tarball=${1##*/}" >> "$GITHUB_OUTPUT"
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
