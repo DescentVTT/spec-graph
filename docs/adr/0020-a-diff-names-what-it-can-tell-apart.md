@@ -59,9 +59,9 @@ checkout in the tool. CI already has both states:
 
 ```yaml
 - run: git fetch --depth 1 origin "$GITHUB_BASE_REF" && git worktree add ../base FETCH_HEAD
-- run: npx spec-graph graph --root ../base --graph-format json > base.json
-- run: npx spec-graph graph --graph-format json > head.json
-- run: npx spec-graph diff base.json head.json --format markdown >> "$GITHUB_STEP_SUMMARY"
+- run: npx --no-install @descent-vtt/spec-graph graph --root ../base --graph-format json > base.json
+- run: npx --no-install @descent-vtt/spec-graph graph --graph-format json > head.json
+- run: npx --no-install @descent-vtt/spec-graph diff base.json head.json --format markdown >> "$GITHUB_STEP_SUMMARY"
 ```
 
 Both exports come from the same binary, and the recipe says so because the
