@@ -53,22 +53,44 @@ document and obvious when you can query all of them at once.
 
 ```bash
 npm install --save-dev @descent-vtt/spec-graph
-npx spec-graph
+npx --no-install @descent-vtt/spec-graph
 ```
 
 No configuration, no annotations, no migration. It reads what your repository
 already looks like:
 
 ```bash
-npx spec-graph "docs/**/*.md"
+npx --no-install @descent-vtt/spec-graph "docs/**/*.md"
 ```
 
-**The package is scoped; the command is not.** After a local install the binary
-is plain `spec-graph`. Without one, `npx` needs the full name:
+## Names
 
-```bash
-npx @descent-vtt/spec-graph "docs/**/*.md"
-```
+The package is `@descent-vtt/spec-graph`, and the command it installs is
+`spec-graph`. The name without the scope is not this project: on npm,
+`spec-graph` belonged to nobody on 2026-10-07, and whoever registers it decides
+what it runs.
+
+`npx` fetches and runs the package of whatever name it is given when the
+project has none installed - a fresh clone, a worktree before `npm ci`, a CI job
+without the install step - and without a terminal it does not ask first. So
+give `npx` the full name:
+
+- `npx --no-install @descent-vtt/spec-graph` in a project that installed it: it
+  runs that install, the version the lockfile pins, and where there is none it
+  stops with an error that names this package.
+- `npx @descent-vtt/spec-graph`, without `--no-install`, where nothing is
+  installed: it fetches this package and runs it.
+
+<!-- bare-name: the two forms in the next sentence are shown as what not to write -->
+Never `npx spec-graph`, and not `npx --no-install spec-graph` either:
+`--no-install` stops a download, and npm still runs a copy of the bare name's
+package that an earlier fetch left in its cache. The family's
+[adopting guide](https://github.com/DescentVTT/spec-core/blob/main/docs/adopting.md#names)
+has what was measured, under npm 10, 11 and 12.
+
+Where this page writes the command alone, as in `spec-graph query ...`, it is
+what a `package.json` script holds - npm fetches nothing for a script - and what
+follows `npx --no-install @descent-vtt/` at a prompt.
 
 ## What it checks
 
@@ -630,7 +652,7 @@ gate without writing any code:
 ```yaml
 - name: No PRD may depend on a draft decision
   run: |
-    ! npx spec-graph query 'document[path^=docs/prd] -depends-on-> document[phase=draft]'
+    ! npx --no-install @descent-vtt/spec-graph query 'document[path^=docs/prd] -depends-on-> document[phase=draft]'
 ```
 
 That shell line is a rule wearing a disguise. Give it a name and a sentence and
@@ -1033,13 +1055,18 @@ loop that would justify a resident process is one line of shell, and it belongs
 to whatever the developer already uses rather than to this tool:
 
 ```bash
-npx spec-graph --format json | jq -r '.summary'
+npx --no-install @descent-vtt/spec-graph --format json | jq -r '.summary'
 ```
 
 ## In CI
 
 The exit code is the contract: `0` clean, `1` findings, `2` the tool could not
 run. That is all most pipelines need.
+
+Every job below installs the project first, with `npm ci`, and gives `npx` the
+package's [full name](#names) behind `--no-install`: a job that lost its install
+step then stops, where the command's name alone would fetch whatever package
+has that name.
 
 Beyond that, a format puts the findings where somebody will look:
 
@@ -1070,7 +1097,7 @@ steps:
     with:
       node-version: '24'
   - run: npm ci
-  - run: npx spec-graph --format sarif > spec-graph.sarif
+  - run: npx --no-install @descent-vtt/spec-graph --format sarif > spec-graph.sarif
     continue-on-error: true
   - uses: github/codeql-action/upload-sarif@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
     with:
@@ -1093,7 +1120,7 @@ command per finding, and the job's log turns each into an annotation on the
 diff, with no upload step:
 
 ```yaml
-- run: npx spec-graph --format github
+- run: npx --no-install @descent-vtt/spec-graph --format github
 ```
 
 ```text
@@ -1117,7 +1144,8 @@ resolved:
 ```yaml
 spec-graph:
   script:
-    - npx spec-graph --format gitlab > gl-code-quality-report.json
+    - npm ci
+    - npx --no-install @descent-vtt/spec-graph --format gitlab > gl-code-quality-report.json
   artifacts:
     when: always
     reports:
@@ -1148,7 +1176,7 @@ actually look:
 ```yaml
 - name: Summarise the specification graph
   if: always()
-  run: npx spec-graph --format markdown >> "$GITHUB_STEP_SUMMARY"
+  run: npx --no-install @descent-vtt/spec-graph --format markdown >> "$GITHUB_STEP_SUMMARY"
 ```
 
 It leads with the verdict, counts the corpus, gives every finding its hint, and
@@ -1163,7 +1191,7 @@ per-file detail that SARIF and Code Quality have nowhere to put.
 
 ```yaml
 - name: Check the specification graph
-  run: npx spec-graph "docs/**/*.md" --format json > spec-graph.json
+  run: npx --no-install @descent-vtt/spec-graph "docs/**/*.md" --format json > spec-graph.json
 ```
 
 The JSON report is versioned, flat, and carries start and end positions for
@@ -1199,9 +1227,9 @@ binary, so CI makes one from the base branch and one from the pull request:
 
 ```yaml
 - run: git fetch --depth 1 origin "$GITHUB_BASE_REF" && git worktree add ../base FETCH_HEAD
-- run: npx spec-graph graph --root ../base --graph-format json > base.json
-- run: npx spec-graph graph --graph-format json > head.json
-- run: npx spec-graph diff base.json head.json --format markdown >> "$GITHUB_STEP_SUMMARY"
+- run: npx --no-install @descent-vtt/spec-graph graph --root ../base --graph-format json > base.json
+- run: npx --no-install @descent-vtt/spec-graph graph --graph-format json > head.json
+- run: npx --no-install @descent-vtt/spec-graph diff base.json head.json --format markdown >> "$GITHUB_STEP_SUMMARY"
 ```
 
 It names only what it can tell apart:
