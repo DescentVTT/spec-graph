@@ -11,67 +11,37 @@ the family's
 [versioning policy](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0009-versions-before-1-0.md)
 records.
 
-## Unreleased
+## 0.12.0
+
+Names every JavaScript object answers to - `constructor`, `__proto__` - are
+read as the unknown names they are in seven places, three of which could
+leave a run that passed refusing or finding something now.
 
 ### Changed
 
-- **A node type named as something every JavaScript object answers to is
-  refused, as any unknown type is.** `constructor` was read as a node type
-  no node has: `spec-graph query 'constructor[status=draft]'` printed
-  `no matches` and exited 1 where `construct[status=draft]` is a usage error,
-  and a project rule written with it loaded and found nothing. It is now
-  `unknown node type "constructor", expected one of: document, item, * (any)`
-  with exit 2, and such a rule is a problem in the configuration, which
-  stops the check. Upgrading: write `document`, `item` or `*`.
-- **A table column headed `Constructor` declares no relation.** The header
-  was read as a relation of no kind. A table with an id column and that one
-  was a register, each row a specification, and each cell under it an edge
-  the graph export labelled `undefined`, reported as a `broken-reference`
-  wherever the cell named no document: `new Foo()` in an API table was one.
-  The column is now what any other column is, so such a table is a register
-  only by a status column or a relation column, and an identifier in the
-  cell is a citation. Upgrading: a table that was a register only by that
-  column needs a `Status` column or a relation the README lists as its
-  header, such as `Depends on`, for its rows to be specifications again.
-- **A `@spec-edge` whose `kind` names no relation is a citation.** The word
-  was taken as written, so `kind="blocks"` or `kind="Depends-On"` drew an
-  edge of a kind no rule knows, the graph export printed it, a document with
-  such an edge to itself ended the check with
-  `Cannot read properties of undefined (reading 'transfersObligation')` and
-  exit 2, and `kind="constructor"` did not. The edge is now `references`,
-  as a link with nothing said about it is, and `--verbose` lists the
-  directive as a parse problem with the relations it could have named
-  (ADR-0014). Its target is checked as it was. Upgrading: write one of
-  `references`, `relates-to`, `depends-on`, `assumes`, `delegates-to`,
-  `blocked-by`, `supersedes` or `amends`; a project rule over
-  `-references->` now sees such an edge.
+- A node type named `constructor` is refused as any unknown type is: a
+  query or a project rule written with it matched nothing in silence, and is
+  now a usage error, exit 2. Upgrading: write `document`, `item` or `*`.
+- A table column headed `Constructor` declares no relation, where it made
+  the table a register and each cell an edge of no kind. Upgrading: a table
+  that was a register only by that column needs a `Status` column or a
+  relation the README lists.
+- A `@spec-edge` whose `kind` names no relation is a `references` edge, and
+  `--verbose` lists it as a parse problem; any other word drew an edge of a
+  kind no rule knows, and one to its own document ended the check with exit
+  2 (ADR-0014). Upgrading: write one of the eight relations.
 
 ### Fixed
 
-- A front-matter key, a `state=` word and a directory named as something
-  every JavaScript object answers to - `constructor`, `__proto__` - are
-  read as the unknown names they are.
-  `spec-graph query 'document[fm.constructor]'` ended on a stack trace with
-  exit 1, and a project rule whose message held `{0.fm.constructor}` ended
-  `check` with `value is not iterable` and exit 2; the key is now found in
-  the documents that wrote it and in no other, and the placeholder is left
-  as written where none did. A list under a `__proto__` key answered
-  `fm.0`, and a scalar there was lost: it is a key like any other.
-  `<!-- @spec-item state="constructor" -->` ended the check with
-  `Cannot read properties of undefined (reading 'toLowerCase')` and exit 2,
-  and is now ignored, as `state="banana"` is. A document under
-  `docs/constructor/` or `docs/__proto__/` was named
-  `function Object() { [native code] }-0007`, and a number cited beside it
-  ended the check with `family.toLowerCase is not a function` and exit 2:
-  the directory names no family now, as `docs/notes/` names none, and the
-  document is `0007-sharding`.
+- A front-matter key, a `state=` word or a directory named `constructor` or
+  `__proto__` no longer ends a query or a check on a TypeError: the key is
+  found where it was written, the state is ignored, and a document under
+  such a directory keeps its own id.
 
 ### Documentation
 
-- The README's SARIF example pins checkout v7.0.1 and setup-node v7.0.0, the
-  commits this repository's workflows run now, and upload-sarif v4.38.2, the
-  one spec-guard's runs. A test holds checkout and setup-node to the
-  workflows, so the example moves when they do.
+- The README's SARIF example pins the actions the workflows run now, and a
+  test holds it to them.
 
 ## 0.11.1
 
