@@ -143,6 +143,58 @@ runs in CI when the build or the suite loads it, and not by being installed.
 three do not all define, which npm 12 refuses. `publish` installs npm 11.20.0
 as before.
 
+*Amended 2026-10-07.* A rehearsal can try another npm without the pin moving.
+Until now the only way to run the release under an npm other than 11.20.0 was
+to move the pin on main, for every tag after it as well. Run by hand, the
+workflow takes an input, `npm_version`, and `publish` installs that version
+where a tag installs the pin:
+
+```bash
+gh workflow run release.yml --ref main                         # the pin
+gh workflow run release.yml --ref main -f npm_version=12.2.0   # a candidate
+```
+
+The input is read by a rehearsal alone: a tag has no inputs, and the step
+installs the pin for a tag whatever its environment holds. It is text nobody
+vouched for, so it reaches the step through `env` and is never written into
+the script, and nothing is installed unless it is one exact version, three
+numbers and two dots - no range, dist-tag, address or path for npm to
+resolve - and no older than 11.15.0. The npm that then answers
+`npm --version` must be the one named, and the run says which npm it used and
+whether that is the pin. A candidate runs in the one job that can stage, so it
+is chosen as the pin is: a version that has been out long enough to trust.
+
+Two sentences above were wrong about what a rehearsal reaches. "npm refuses
+even a dry run over a version it already has, so a rehearsal of a published
+version stops before the upload": it was the workflow that stopped. It asked
+`npm view` first and ran no `npm stage publish` at all for a version on npm,
+which main's nearly always is, so a rehearsal there tried nothing of npm's
+publishing. "The exchange with npm is the one step a rehearsal cannot try":
+npm 11.20.0 and 12.2.0 both ask npmjs.com to trade the run's identity for a
+token before `--dry-run` holds anything back - `lib/commands/publish.js` calls
+the exchange ahead of its dry-run branch - and report how it went at
+`--loglevel verbose` and at no quieter level. That is read in their source; a
+rehearsal's log is where it is seen. So every rehearsal now runs
+`npm stage publish --dry-run --loglevel verbose` on the tarball `pack` built.
+Over a published version npm stops at a check of its own, `You cannot publish
+over the previously published versions`, after it has read the tarball and
+tried the exchange; the workflow takes that one refusal, naming this version,
+as where such a rehearsal ends, and fails on any other.
+
+A rehearsal under an npm shows that it installs over the one Node 24 carries,
+that it takes the command line the release passes, where npm 12 refuses a flag
+it does not define, that it reads the tarball, and, on the lines that start
+`npm verbose oidc`, whether npmjs.com gave this workflow a token. It does not
+show that a release works. `--dry-run` signs nothing and uploads nothing: no
+provenance statement is made, nothing goes to Sigstore or to the staging
+endpoint, and whether the token may stage is never asked. 0.9.0 passed every
+step before the upload and was refused there. The first tag after the pin moves
+is the first time that npm signs and uploads. `tests/npm.test.ts` runs the
+step's script, on Linux where the workflow runs it, against a stand-in for npm:
+the pin for a tag whatever the run is handed, the version a rehearsal names,
+and nothing installed for any other text; and it holds that the input is
+written into no script.
+
 ## Consequences
 
 - **A maintainer sets up npmjs.com once.** In the package's settings, add a
