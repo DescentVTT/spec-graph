@@ -1317,7 +1317,7 @@ tools share, whose code is copied into `src/vendor/` and checked by hash rather
 than installed. So the whole package is auditable in an afternoon — and nothing
 in the pipeline can take longer than its input.
 
-**Verified, not just covered.** 1,918 tests; 99.4% statement and 99.8% line
+**Verified, not just covered.** 1,995 tests; 99.4% statement and 99.8% line
 coverage. Coverage says a line ran, so the suite is also held to a mutation
 score - 96.38% over 8,539 mutants, measured by CI's full sweep, and a build
 fails under 93 - because a vocabulary entry or a boundary
