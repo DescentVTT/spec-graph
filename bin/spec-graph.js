@@ -5,6 +5,14 @@
  */
 import { pathToFileURL } from 'node:url';
 
+// main answers the errors it awaits with exit 2. What nothing awaits - a
+// stream's error, a timer's, a promise nobody holds - Node ends with exit 1,
+// which a script reads as findings: the same answer for those.
+process.on('uncaughtException', (error) => {
+  process.stderr.write(`spec-graph: unexpected error: ${error?.stack ?? error}\n`);
+  process.exit(2);
+});
+
 const entry = new URL('../dist/cli.js', import.meta.url);
 
 let cli;

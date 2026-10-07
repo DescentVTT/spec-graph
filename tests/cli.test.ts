@@ -1126,6 +1126,72 @@ describe('help and version', () => {
   });
 });
 
+describe('an error spec-graph did not expect', () => {
+  /**
+   * Runs the CLI with a stdout that throws what it is given. It stands for
+   * every error no verb expects: nothing here expects the stream to refuse a
+   * write. Left to reject, such an error reached the launcher as Node's
+   * uncaught error, exit 1, which CI reads as findings.
+   */
+  async function refusing(thrown: unknown, ...argv: string[]): Promise<{ code: number; err: string }> {
+    let err = '';
+    const code = await main({
+      argv,
+      cwd: process.cwd(),
+      stdout: () => {
+        throw thrown;
+      },
+      stderr: (text) => {
+        err += text;
+      },
+      env: { NO_COLOR: '1', SPEC_GRAPH_ASCII: '1' },
+      isTTY: false,
+    });
+    return { code, err };
+  }
+
+  it.each([
+    ['--help', ['--help']],
+    ['--version', ['--version']],
+    ['check', ['check', '--root', DEMO]],
+    ['check, as JSON', ['check', '--root', DEMO, '--format', 'json']],
+    ['query', ['query', 'document', '--root', DEMO]],
+    ['graph', ['graph', '--root', DEMO]],
+    ['rules', ['rules']],
+  ])('ends %s with exit 2 and its stack on stderr', async (_name, argv) => {
+    const result = await refusing(new Error('the stream is gone'), ...argv);
+    expect(result.code).toBe(EXIT_ERROR);
+    // The stack, so a report of it says where: the message alone names no line.
+    expect(result.err).toMatch(/^spec-graph: unexpected error: Error: the stream is gone\n {4}at /);
+    expect(result.err.endsWith('\n')).toBe(true);
+  });
+
+  it('ends diff the same way', async () => {
+    const { mkdir, rm, writeFile } = await import('node:fs/promises');
+    const dir = `tests/fixtures/.tmp/unexpected-${process.pid}`;
+    await rm(dir, { recursive: true, force: true });
+    await mkdir(dir, { recursive: true });
+    try {
+      await writeFile(`${dir}/graph.json`, (await run('graph', '--root', DEMO, '--graph-format', 'json')).out);
+      const result = await refusing(new Error('the stream is gone'), 'diff', `${dir}/graph.json`, `${dir}/graph.json`);
+      expect(result.code).toBe(EXIT_ERROR);
+      expect(result.err).toMatch(/^spec-graph: unexpected error: Error: the stream is gone\n {4}at /);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('reports the message of an error that has no stack', async () => {
+    const bare = new Error('no stack on this one');
+    delete bare.stack;
+    expect(await refusing(bare, '--version')).toEqual({ code: EXIT_ERROR, err: 'spec-graph: unexpected error: no stack on this one\n' });
+  });
+
+  it('reports a thrown value that is no Error as it reads', async () => {
+    expect(await refusing('only a string', '--version')).toEqual({ code: EXIT_ERROR, err: 'spec-graph: unexpected error: only a string\n' });
+  });
+});
+
 const LEGACY = 'tests/fixtures/legacy';
 /**
  * Copies the legacy corpus without the baselines the tests below record into it
