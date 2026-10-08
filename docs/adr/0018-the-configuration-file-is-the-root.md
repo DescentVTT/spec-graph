@@ -70,6 +70,16 @@ Naming the root is naming it. `--root` reads configuration from exactly that
 directory, which is the behaviour every existing invocation has, and is why this
 change broke no test that uses a fixture.
 
+*Amended 2026-10-09.* The directory has to be there. A `--root` that is empty,
+names nothing or names a file read no configuration and found no document, and
+said neither: `rules --root nowhere` listed the built-in rules and exited `0`,
+as if the repository declared none, and `check` said only that no specification
+matched. It stops the run by name now, `--root "nowhere" is not there`, for
+every command that reads a root. So does a configuration file the walk finds
+and cannot read, a directory of that name: passed over as absent, the walk went
+on to the directory above and the run took that one's configuration
+([ADR-0010](0010-configuration-belongs-to-the-repository.md)).
+
 ### What a flag says is relative to where it was typed
 
 The root can now move up, and a path on the command line must not move with it.

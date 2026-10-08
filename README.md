@@ -869,7 +869,8 @@ SARIF — and is 8 unless set; `0` lists none.
 
 A broken config stops the run with exit `2`, each problem named on stderr:
 invalid JSON, a value of the wrong type, an unknown key, a rule that does not
-compile. Why a mistake stops the run:
+compile, a family name no family has, a file that is there and cannot be read.
+Why a mistake stops the run:
 
 - A configuration that did not load checks a different repository than the one
   configured, and would report *that* one as consistent: a `{1.phse}` for
@@ -986,6 +987,12 @@ Every specification cites RFC 2119. In a repository that also keeps its own
 `families` is the stronger statement — *these* are the families this repository
 has — and turns every other noun-number construct back into prose.
 
+Each entry, and each `--family` or `--ignore-family`, is one family's name:
+the prefix its identifiers are written with, `ADR` for `ADR-0007`, in any case.
+A name no family has — `""`, or `"ADR,RFC"` where two entries go — stops the
+run with exit `2`: alone in `families` it allowed nothing, so every citation
+was prose and a dangling one passed.
+
 Both are consulted only after resolution has already failed, so `RFC 0001` still
 resolves to your local RFC-0001 with `RFC` on the ignore list. No configuration
 can delete an edge. See
@@ -1025,8 +1032,10 @@ spec-graph diff <before> <after>     Compare two JSON graph exports.
                         its directory is the root
 --ignore <glob>         Skip paths (repeatable)
 --ignore-ref <glob>     Do not report these reference targets (repeatable)
---family <name>         Families a bare identifier may name (repeatable)
---ignore-family <name>  Families that are never citations (repeatable)
+--family <name>         Families a bare identifier may name (repeatable, one
+                        name each time)
+--ignore-family <name>  Families that are never citations (repeatable, one
+                        name each time)
 --history <glob>        Files that log decisions rather than making them
 --baseline <file>       Accept these findings; report only what is new
 --record-baseline <f>   Write today's findings as accepted debt, exit 0
@@ -1041,7 +1050,7 @@ spec-graph diff <before> <after>     Compare two JSON graph exports.
 --max <n>               Show at most n findings
 --max-warnings <n>      Fail when warnings exceed n
 --color / --no-color    Force colour
---ascii                 ASCII glyphs only
+--ascii                 ASCII glyphs only, as SPEC_GRAPH_ASCII=1 asks too
 --verbose               Include parse problems
 ```
 
@@ -1053,6 +1062,21 @@ reported on stderr as `spec-graph: unexpected error:` with its stack. So is a
 stdout its reader closed before all of the output was written, as a pipeline
 into `head` does: the answer did not arrive, and one line on stderr says so.
 
+**An input that is set and names nothing is refused**: exit `2` and one line
+that names it, never a run that reads it as if it had not been given. An unset
+variable in `--family "$FAMILIES"` is the usual way to write one:
+
+- a `--family` or `--ignore-family` that no family is named - empty, blank,
+  or a list such as `ADR,RFC` where one name goes. Alone on the allowlist it
+  would leave every citation as prose, and a dangling one unreported;
+- a `--root` that is empty, is not there, or is a file, for every command
+  that reads one, `rules` included;
+- an empty or blank `--baseline`, `--record-baseline`, `--ignore`,
+  `--ignore-ref`, `--history` or pattern;
+- a second word after `rules`, which takes one rule id;
+- a configuration file that is there and cannot be read, a directory called
+  `.spec-graph.json` among them.
+
 **There is no `--watch`.** A full run on this repository takes 60 ms, so the
 loop that would justify a resident process is one line of shell, and it belongs
 to whatever the developer already uses rather than to this tool:
@@ -1060,6 +1084,18 @@ to whatever the developer already uses rather than to this tool:
 ```bash
 npx --no-install @descent-vtt/spec-graph --format json | jq -r '.summary'
 ```
+
+### Colour and glyphs
+
+`--color` and `--no-color` decide, then the environment, in this order:
+`NO_COLOR` set and not empty turns colour off; `FORCE_COLOR` set and not empty
+turns it on, and `0` turns it off; a `TERM` of `dumb` turns it off; otherwise
+the report is coloured when stdout is a terminal. `CI` is not read.
+
+`--ascii` draws the report in ASCII glyphs, and so does `SPEC_GRAPH_ASCII`
+set to anything but `0`, `false` or nothing. Without either, a Windows console
+that sets neither `WT_SESSION` nor `TERM_PROGRAM` gets ASCII and every other
+terminal the box-drawing characters.
 
 ## In CI
 
