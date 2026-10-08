@@ -229,6 +229,15 @@ describe('a bare --ignore name', () => {
     expect(await paths(root, ['adr/**/*.md', '*.md'], ['adr'])).toEqual(['README.md']);
     expect(await paths(root, ['adr/**/*.md', '*.md'])).toEqual(['README.md', 'adr/0001.md']);
   });
+
+  it('is a directory\'s name, and takes out no file called that: a path does', async () => {
+    // The README has a bare name prune that directory, and a path take out
+    // what it matches. Read as a path too, `--ignore README.md` would take
+    // the root's README.md out; it names no directory, and prunes nothing.
+    const root = `${ROOT}/named`;
+    expect(await paths(root, ['adr/**/*.md', '*.md'], ['README.md'])).toEqual(['README.md', 'adr/0001.md']);
+    expect(await paths(root, ['adr/**/*.md', '*.md'], ['{README.md}'])).toEqual(['adr/0001.md']);
+  });
 });
 
 describe('a ! before a bare --ignore name', () => {

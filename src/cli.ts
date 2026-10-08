@@ -821,9 +821,10 @@ async function run(io: CliIO, err: (text: string) => void): Promise<number> {
     root,
     patterns,
     // A stray entry in one of the empty fallbacks below changes a run only if
-    // it matches a path, a target or a family some corpus has, so the mutants
-    // that plant one survive every corpus but one built for them - except in
-    // `families`, where any entry is an allowlist.
+    // it matches a path or a target some corpus has, so the mutants that plant
+    // one survive every corpus but one built for them - except in the two
+    // lists of families, where what they plant is no family's name and is
+    // refused.
     ignore: [...(file.ignore ?? []), ...typed.ignore],
     ignoreReferences: [...(file.ignoreReferences ?? []), ...options.ignoreReferences],
     families: [...(file.families ?? []), ...options.families],
