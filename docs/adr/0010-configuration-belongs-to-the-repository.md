@@ -183,8 +183,9 @@ A blank counts as empty where the value is a name, a path or a pattern. For
 directory's name because a directory can be called that: the patterns to
 check, `--history` and `--ignore-ref` refuse one already, and a variable that
 is unset beside a space is the likelier writer. A name with a space in it,
-`--ignore "my drafts"`, is a name as before. A
-`--root` is checked where it is read, by `check`, `query`, `graph` and
+`--ignore "my drafts"`, is a name as before.
+
+A `--root` is checked where it is read, by `check`, `query`, `graph` and
 `rules`, and only when it was given: the directory a run starts in is not an
 option somebody typed. A configuration file is unreadable when the read fails
 for any reason but there being nothing by that name, and stops the walk
