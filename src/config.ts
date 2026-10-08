@@ -334,6 +334,9 @@ function tryRead(read: (path: string) => string, path: string): string | null {
   try {
     return withoutBom(read(path));
   } catch {
+    // package.json is the one file still read this way, and its reader
+    // passes over a text that does not parse as it does over no file: the
+    // mutant that answers nothing here is equivalent.
     return null;
   }
 }
