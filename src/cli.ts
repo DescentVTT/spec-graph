@@ -399,9 +399,8 @@ function readersOf(option: string): readonly Command[] | undefined {
     case '--max-warnings':
     case '--color':
       return ['check'];
-    default:
-      return undefined;
   }
+  return undefined;
 }
 
 /** `a`, `a or b`, `a, b or c`: one name or more in a sentence, with the word that joins the last. */
@@ -446,7 +445,11 @@ export function parseArgs(argv: readonly string[], cwd: string): CliOptions {
   let help = false;
   let version = false;
 
-  const given: string[] = [];
+  // In the order they were given, so the first that does not belong is the
+  // one named. A set keeps that order, and starts from no literal: a list
+  // seeded with a word no option is called would refuse nothing more, which
+  // is a mutant no test can tell from the code.
+  const given = new Set<string>();
   const next = (flag: string, index: number): string => {
     const value = args[index + 1];
     if (value === undefined) throw new UsageError(`${flag} needs a value`);
@@ -492,7 +495,7 @@ export function parseArgs(argv: readonly string[], cwd: string): CliOptions {
       continue;
     }
 
-    given.push(arg);
+    given.add(arg);
     switch (arg) {
       case '-h':
       case '--help':
