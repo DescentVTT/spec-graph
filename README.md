@@ -1049,7 +1049,9 @@ Exit codes: `0` clean, `1` findings, `2` the tool could not run. A mistyped flag
 never masquerades as a passing build, and neither does a pattern that matches
 nothing, a configuration file that did not load, or a `--baseline` that is not
 there. An error spec-graph did not expect is `2` as well, never findings: it is
-reported on stderr as `spec-graph: unexpected error:` with its stack.
+reported on stderr as `spec-graph: unexpected error:` with its stack. So is a
+stdout its reader closed before all of the output was written, as a pipeline
+into `head` does: the answer did not arrive, and one line on stderr says so.
 
 **There is no `--watch`.** A full run on this repository takes 60 ms, so the
 loop that would justify a resident process is one line of shell, and it belongs
