@@ -115,6 +115,32 @@ got a rejection, and no handler it did not ask for. `analyse()` and the rest of
 the API throw as they did, and an error `analyse()` throws inside a run is still
 its message and exit `2`.
 
+**A reader that closed the output is answered in a line.** *Amended again
+2026-10-08.* The amendment above made a pipe its reader closed one more error
+nothing expected. Measured on 0.13.0 through the launcher (Windows 11, Node
+24.18.1): `spec-graph --help` into a reader that had already left printed
+`spec-graph: unexpected error: Error: EPIPE: broken pipe, write` and eight
+lines of stack, exit `2`, and so did `--version`, `check`, `query`, `graph`
+and `rules`. A reader that stops reading is an everyday thing, and a stack
+sends a person looking for a defect that is not there.
+
+It is now one line on stderr and no stack,
+`spec-graph: stdout was closed before all of the output was written`, in the
+words every tool of the family uses
+([the family contract](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0005-the-family-contract.md)).
+The exit stays `2`: the answer did not arrive, and what a script was handed of
+a document is not the document. Every time, it arrived as the stream's `error`
+event, which nothing awaits, and never as an error thrown where `main()`
+awaits: so the launcher answers it, and `main()` answers in the same words
+where a write does throw it, as a caller's own stream may. It is told from
+every other error by its code, `EPIPE`: stdout and stderr are the only pipes
+spec-graph writes to. When stderr is the one that closed there is nowhere left
+to say anything: nothing is written, to stdout either, and the exit is `2`. A
+write that fails for another reason, a full disk under `> graph.json`, keeps
+`unexpected error:` and its stack. An output smaller than the pipe is written
+whole before its reader leaves, and that run ends as it would have:
+`spec-graph graph | head -c 10` on this repository, 23 KB, exits `0`.
+
 ## What this does not fix
 
 The "greedy prefix" flood is narrower than it looks, and worth stating precisely

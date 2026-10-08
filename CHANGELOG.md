@@ -11,6 +11,18 @@ the family's
 [versioning policy](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0009-versions-before-1-0.md)
 records.
 
+## Unreleased
+
+### Fixed
+
+- **A reader that closes the output is answered in one line, not a stack.**
+  `spec-graph graph | head` ended with `spec-graph: unexpected error: Error:
+  EPIPE: broken pipe, write` and a stack once `head` had left before the
+  graph was written; it now prints `spec-graph: stdout was closed before all
+  of the output was written` on stderr, from every command. The exit code is
+  2, as it was
+  ([ADR-0010](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0010-configuration-belongs-to-the-repository.md)).
+
 ## 0.13.0
 
 An error spec-graph did not expect ended the run with exit 1, which reads as
