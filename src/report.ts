@@ -93,7 +93,13 @@ export interface ColorEnvironment {
   readonly platform?: NodeJS.Platform | undefined;
 }
 
-/** Honours `NO_COLOR`, `FORCE_COLOR` and `TERM=dumb` before falling back to TTY. */
+/**
+ * Honours `NO_COLOR`, `FORCE_COLOR` and `TERM=dumb` before falling back to TTY.
+ *
+ * `CI` is not read. It says who started the run and nothing of what the
+ * stream draws: a pipeline's log that is a terminal draws colour, spec-brief
+ * and spec-guard colour there, and one that does not sets `NO_COLOR`.
+ */
 export function shouldUseColor(environment: ColorEnvironment = {}): boolean {
   const env = environment.env ?? process.env;
   if (env['NO_COLOR'] !== undefined && env['NO_COLOR'] !== '') return false;
@@ -102,14 +108,20 @@ export function shouldUseColor(environment: ColorEnvironment = {}): boolean {
   if (env['FORCE_COLOR'] === '0') return false;
   if (env['FORCE_COLOR'] !== undefined && env['FORCE_COLOR'] !== '') return true;
   if (env['TERM'] === 'dumb') return false;
-  if (env['CI'] !== undefined && env['CI'] !== '') return false;
   return environment.isTTY === true;
 }
 
-/** True when the terminal is unlikely to render box-drawing and arrows. */
+/**
+ * True when ASCII was asked for, or the terminal is unlikely to render
+ * box-drawing and arrows.
+ *
+ * `SPEC_GRAPH_ASCII` asks, and `0`, `false` and a blank do not: each is how a
+ * script writes "off", and every one of them used to turn ASCII on.
+ */
 export function shouldUseAscii(environment: ColorEnvironment = {}): boolean {
   const env = environment.env ?? process.env;
-  if (env['SPEC_GRAPH_ASCII'] !== undefined && env['SPEC_GRAPH_ASCII'] !== '') return true;
+  const asked = (env['SPEC_GRAPH_ASCII'] ?? '').trim().toLowerCase();
+  if (asked !== '' && asked !== '0' && asked !== 'false') return true;
   if ((environment.platform ?? process.platform) !== 'win32') return false;
   // Windows Terminal and modern shells set these; the legacy console does not.
   return env['WT_SESSION'] === undefined && env['TERM_PROGRAM'] === undefined;

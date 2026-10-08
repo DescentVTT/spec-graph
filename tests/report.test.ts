@@ -83,9 +83,15 @@ describe('colour detection', () => {
     expect(shouldUseColor({ isTTY: true, env: { FORCE_COLOR: '0' } })).toBe(false);
   });
 
-  it('stays plain for a dumb terminal and in CI', () => {
+  it('stays plain for a dumb terminal, which says it draws none', () => {
     expect(shouldUseColor({ isTTY: true, env: { TERM: 'dumb' } })).toBe(false);
-    expect(shouldUseColor({ isTTY: true, env: { CI: 'true' } })).toBe(false);
+  });
+
+  it('leaves a pipeline to the terminal it has, as spec-brief and spec-guard do', () => {
+    // CI says who started the run, not what the stream draws: a log that is a
+    // terminal draws colour, and one that is not gets none either way.
+    expect(shouldUseColor({ isTTY: true, env: { CI: 'true' } })).toBe(true);
+    expect(shouldUseColor({ isTTY: false, env: { CI: 'true' } })).toBe(false);
   });
 
   it('falls back to whether a TTY is attached', () => {
@@ -102,6 +108,23 @@ describe('colour detection', () => {
 
   it('treats an empty ASCII variable as unset', () => {
     expect(shouldUseAscii({ env: { SPEC_GRAPH_ASCII: '' }, platform: 'linux' })).toBe(false);
+  });
+
+  it('reads 0, false and a blank in the ASCII variable as off, and anything else as a request', () => {
+    // Each of them turned ASCII on: the variable was read for being set.
+    for (const off of ['0', 'false', 'FALSE', 'False', ' ', ' 0 ']) {
+      expect(shouldUseAscii({ env: { SPEC_GRAPH_ASCII: off }, platform: 'linux' }), JSON.stringify(off)).toBe(false);
+    }
+    for (const on of ['1', 'true', 'yes']) {
+      expect(shouldUseAscii({ env: { SPEC_GRAPH_ASCII: on }, platform: 'linux' }), on).toBe(true);
+    }
+  });
+
+  it('leaves the choice to the console when the ASCII variable is off, as when it is unset', () => {
+    // Off is not a request for glyphs: a legacy Windows console still gets
+    // ASCII, and a modern one what it can draw.
+    expect(shouldUseAscii({ env: { SPEC_GRAPH_ASCII: '0' }, platform: 'win32' })).toBe(true);
+    expect(shouldUseAscii({ env: { SPEC_GRAPH_ASCII: '0', WT_SESSION: '1' }, platform: 'win32' })).toBe(false);
   });
 
   it('assumes a capable terminal everywhere but Windows', () => {
