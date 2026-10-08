@@ -11,6 +11,63 @@ the family's
 [versioning policy](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0009-versions-before-1-0.md)
 records.
 
+## Unreleased
+
+An input that is set and names nothing - a family name no family has, a
+`--root` that is no directory, a blank value - was read as if it had not been
+given. It is refused now: exit 2 and one line that names it
+([ADR-0010](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0010-configuration-belongs-to-the-repository.md)).
+
+### Changed
+
+- **A family name no family has is refused.** `--family ""`, which an unset
+  variable leaves, and `--family ADR,RFC` allowed no family at all, so every
+  citation was prose and a check that failed on a dangling one exited 0. Each
+  is exit 2 now, `--family expects one family's name, such as ADR, got ""`,
+  and so are `--ignore-family`, `families` and `ignoreFamilies` in the
+  configuration, and `createFamilyFilter()` from the package.
+  Upgrading: give one name each time, the prefix the identifiers are written
+  with, as in `--family ADR --family RFC`, and leave the option out where
+  there is none to give.
+- **A `--root` that is no directory is refused by name.** `rules --root` given
+  a path that is not there, a file or an empty value listed the built-in rules
+  and exited 0, and `check`, `query` and `graph` exited 2 saying only that no
+  specification matched. Each ends with exit 2 and the option named: `--root
+  "<path>" is not there`, `is not a directory`, or `--root expects a
+  directory, got ""`.
+  Upgrading: name a directory that exists, or leave `--root` out and the
+  directory holding the configuration is the root.
+- **A configuration file that is there and cannot be read stops the run.** A
+  directory called `.spec-graph.json`, or a file the run may not open, was
+  passed over as absent, and the run checked on defaults or on the
+  configuration of a directory above. It is a problem in the configuration
+  now, exit 2.
+  Upgrading: remove or repair the file, or run with `--no-config`.
+- **A blank `--ignore` or `--record-baseline` is refused, as an empty one
+  was.** `--ignore " "` was a directory nothing is called and ignored
+  nothing, `"ignore": [" "]` in the configuration likewise, and
+  `--record-baseline " "` wrote a file named with a space.
+  Upgrading: pass the option only where its variable is set, as in
+  `${IGNORE:+--ignore "$IGNORE"}`.
+- **`rules` takes one rule id.** `spec-graph rules a b` listed `a` and said
+  nothing of `b`; it is exit 2 now, with both named.
+  Upgrading: one run for each rule, or no id for all of them.
+- **`CI` no longer turns colour off.** With `CI` set and stdout a terminal the
+  report was plain; it is coloured there, as spec-brief's and spec-guard's
+  are, and where stdout is no terminal it is plain as before.
+  Upgrading: set `NO_COLOR=1` or pass `--no-color` where a pipeline's
+  terminal should stay plain.
+
+### Fixed
+
+- `SPEC_GRAPH_ASCII=0`, `false` and a blank value no longer turn ASCII glyphs
+  on: the variable was read for being set. `--help` and the README name it
+  beside `--ascii`, and say how colour is decided, which was written nowhere.
+- An empty `--baseline` or `--record-baseline` is refused by the option's
+  name, `--baseline expects a file, got ""`, where the line was `cannot read
+  the baseline : EISDIR: illegal operation on a directory, read`. Exit 2, as
+  before.
+
 ## 0.13.1
 
 A reader that closed the output, as `| head` does, was answered with

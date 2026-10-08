@@ -358,6 +358,12 @@ describe('the CLI help and the README agree on the interface', () => {
     }
   });
 
+  it('names the variable that asks for ASCII beside the flag, in both places', () => {
+    // It was read and written down nowhere, so nobody could know that setting
+    // it to 0 turned it on.
+    for (const text of [HELP, README]) expect(text).toMatch(/--ascii[^\n]*SPEC_GRAPH_ASCII/);
+  });
+
   it('documents the same commands in both places', () => {
     // `check` is the default, so both texts write it as `spec-graph [check]`.
     for (const command of ['check', 'query', 'graph', 'rules']) {

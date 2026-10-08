@@ -141,6 +141,85 @@ write that fails for another reason, a full disk under `> graph.json`, keeps
 whole before its reader leaves, and that run ends as it would have:
 `spec-graph graph | head -c 10` on this repository, 23 KB, exits `0`.
 
+**An input that is set and names nothing is refused.** *Amended 2026-10-09.*
+A configuration that did not load stops the run because the run would answer
+for another repository. The command line had the same hole in smaller places:
+a value that was set, named nothing, and was read as if it had not been
+given. Measured on 0.13.1, built from 7d920ee, through the launcher (Windows
+11, Node 24.18.1), over two documents of which one cites an `ADR-0099` nobody
+wrote, so that the plain run exits `1`:
+
+| Given | 0.13.1 | Now |
+| --- | --- | --- |
+| `--family ""`, `--family ADR,RFC` | exit `0`, "consistent" | exit `2`: `--family expects one family's name, such as ADR, got ""` |
+| `"families": [""]` in the configuration | exit `0`, "consistent" | exit `2`, a problem in the configuration |
+| `--ignore-family ""` | exit `1`, as without it | exit `2`, in the words `--family` gets |
+| `rules --root nowhere` | exit `0`, the built-in rules | exit `2`: `--root "nowhere" is not there` |
+| `check --root notes.txt`, a file | exit `2`: `no specifications matched` | exit `2`: `--root "notes.txt" is not a directory` |
+| a directory called `.spec-graph.json` | a run on defaults | exit `2`: `.spec-graph.json cannot be read` |
+| `--ignore " "` | exit `1`, as without it | exit `2`: `invalid glob " ": the pattern is empty` |
+| `--record-baseline " "` | exit `0`, and a file named with a space | exit `2`: `--record-baseline expects a file, got " "` |
+| `rules broken-reference extra` | exit `0`, the first rule | exit `2`: `rules takes one rule id, got 2: broken-reference, extra` |
+
+The first row is why this is not tidiness. `families` is an allowlist, and a
+name no family has allows nothing: every family is then one the repository
+"does not have", every citation is prose, and the run that failed on a
+dangling one reports a consistent graph. `--family "$FAMILIES"` with the
+variable unset is all it takes, or a list typed where one name goes. This is
+the green build from a typo that the 2026-09-16 amendment stopped for the
+configuration file, reached from the command line.
+
+A family's name is whatever the reader of identifiers reads as one, so the
+check asks that reader instead of holding a second pattern that could drift
+from it: a name is a family's when an identifier written with it, `<name>-0`,
+is read as that family. That is a letter and then at most fifteen letters,
+digits or underscores. `--family`, `--ignore-family`, both configuration keys
+and `createFamilyFilter()` from the package refuse anything else, spaces
+around a name aside.
+
+A blank counts as empty where the value is a name, a path or a pattern. A
+`--root` is checked where it is read, by `check`, `query`, `graph` and
+`rules`, and only when it was given: the directory a run starts in is not an
+option somebody typed. A configuration file is unreadable when the read fails
+for any reason but there being nothing by that name, and stops the walk
+upward as one that does not parse does
+([ADR-0018](0018-the-configuration-file-is-the-root.md)).
+
+Each of these is input refused that was accepted, so they arrive together in
+a minor release.
+
+What is still taken, and why:
+
+- `--family RFC` where the corpus has no such family. The allowlist says
+  which families the repository has, and a name a family can have is taken
+  at its word.
+- An empty list in the configuration, `"families": []` or `"patterns": []`.
+  A list of none is what leaving the key out says, and spec-harness reads
+  `patterns` the same way when it asks whether the briefs are checked.
+- A baseline that does not parse, which is reported and ignored: a baseline
+  only suppresses, so the failure reports more and not less
+  ([ADR-0012](0012-a-baseline-is-a-ratchet.md)).
+- A comma in `--ignore`, `--ignore-ref` or `--history`. Each takes one
+  pattern, and a path or a target may hold a comma.
+- An option the command does not read, `check --graph-format json` or
+  `graph --strict`. The run writes what the command writes, whatever the
+  option.
+
+**The environment is read leniently, and one way.** No variable stops a run:
+the ones a report reads are conventions other programs set. `NO_COLOR` and
+`FORCE_COLOR` count when they are not empty, `NO_COLOR` first, and
+`FORCE_COLOR=0` turns colour off, as in spec-brief. `CI` is no longer read:
+it turned colour off on a terminal, where spec-brief and spec-guard colour,
+and it says who started the run, not what the stream draws. `TERM=dumb` still
+turns colour off, which those two do not read: it is the terminal saying it
+draws none, and Node's own `getColorDepth()` answers one bit for it.
+
+`SPEC_GRAPH_ASCII` is spec-graph's own, and was read for being set, so `0`
+and `false` turned ASCII on. It asks for ASCII unless it is empty, `0` or
+`false`, in any case, and `--help` and the README name it beside `--ascii`,
+where it was written down nowhere. Off is the same as unset: a legacy Windows
+console still gets ASCII.
+
 ## What this does not fix
 
 The "greedy prefix" flood is narrower than it looks, and worth stating precisely
