@@ -13,9 +13,10 @@ records.
 
 ## Unreleased
 
-An input that is set and names nothing - a family name no family has, a
-`--root` that is no directory, a blank value - was read as if it had not been
-given. It is refused now: exit 2 and one line that names it
+An input that is set and names nothing - a family name no family has, a list
+of families no document belongs to, a `--root` that is no directory, a blank
+value, an option of another command - was read as if it had not been given.
+It is refused now: exit 2 and one line that names it
 ([ADR-0010](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0010-configuration-belongs-to-the-repository.md)).
 
 ### Changed
@@ -57,6 +58,33 @@ given. It is refused now: exit 2 and one line that names it
   `--format sarif` was already refused there.
   Upgrading: `graph --graph-format json` writes the graph as JSON; `rules`
   has one format.
+- **A list of families that names none the documents belong to stops the
+  check.** `--family RFC` in a repository of ADRs, or `ADRS` for `ADR`,
+  allowed nothing, as `--family ""` did: `check` printed `the specification
+  graph is consistent` over a dangling citation, under `--strict` too. It is
+  exit 2 now, for `--family` and `families` alike, with the list and the
+  families the documents do belong to; a list that names such a family beside
+  one they belong to gets a line on stderr and fails nothing.
+  Upgrading: name a family whose identifiers the documents carry, `ADR` for
+  `ADR-0007`, or leave the list out until the first such document is written.
+- **An option a command does not read is refused by that command.** `query
+  --strict`, `graph --record-baseline f`, `rules --max 1`, `diff --root x` and
+  some sixty more pairings ran as if the option were absent, and `spec-graph
+  --graph-format mermaid > graph.mmd` wrote the check's report into the file.
+  Each is exit 2 with the option, the command and the commands that read it:
+  `--graph-format belongs to graph, not to check`. `--no-config`,
+  `--no-color` and `--ascii` are taken everywhere
+  ([the table](README.md#cli)).
+  Upgrading: drop the option from the command that does not read it, or move
+  what every run repeats into `.spec-graph.json`, which every command reads.
+- **A value that begins with `--` is not taken as a value.** `--ignore
+  --strict` ignored a directory called `--strict` and left the check
+  unstrict, and `--record-baseline --verbose` wrote a file of that name; each
+  option that takes a value now says `--ignore needs a value, and --strict
+  reads as an option`, and so does one followed by `-h` or `-v`.
+  Upgrading: give the value, or for a name that does begin with two dashes
+  write `./--name` for a file, `[-]-name` in a pattern and `\--name` for a
+  reference target.
 - **`CI` no longer turns colour off.** With `CI` set and stdout a terminal the
   report was plain; it is coloured there, as spec-brief's and spec-guard's
   are, and where stdout is no terminal it is plain as before.
@@ -73,6 +101,9 @@ given. It is refused now: exit 2 and one line that names it
   name, `--baseline expects a file, got ""`, where the line was `cannot read
   the baseline : EISDIR: illegal operation on a directory, read`. Exit 2, as
   before.
+- An empty name given to `diff` is refused as `diff expects a graph export on
+  each side, got "" for the first`, where the line was `cannot read : EISDIR`.
+  Exit 2, as before.
 
 ## 0.13.1
 
