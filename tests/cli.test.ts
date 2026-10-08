@@ -1126,30 +1126,30 @@ describe('help and version', () => {
   });
 });
 
-describe('an error spec-graph did not expect', () => {
-  /**
-   * Runs the CLI with a stdout that throws what it is given. It stands for
-   * every error no verb expects: nothing here expects the stream to refuse a
-   * write. Left to reject, such an error reached the launcher as Node's
-   * uncaught error, exit 1, which CI reads as findings.
-   */
-  async function refusing(thrown: unknown, ...argv: string[]): Promise<{ code: number; err: string }> {
-    let err = '';
-    const code = await main({
-      argv,
-      cwd: process.cwd(),
-      stdout: () => {
-        throw thrown;
-      },
-      stderr: (text) => {
-        err += text;
-      },
-      env: { NO_COLOR: '1', SPEC_GRAPH_ASCII: '1' },
-      isTTY: false,
-    });
-    return { code, err };
-  }
+/**
+ * Runs the CLI with a stdout that throws what it is given. It stands for
+ * every error no verb expects: nothing here expects the stream to refuse a
+ * write. Left to reject, such an error reached the launcher as Node's
+ * uncaught error, exit 1, which CI reads as findings.
+ */
+async function refusing(thrown: unknown, ...argv: string[]): Promise<{ code: number; err: string }> {
+  let err = '';
+  const code = await main({
+    argv,
+    cwd: process.cwd(),
+    stdout: () => {
+      throw thrown;
+    },
+    stderr: (text) => {
+      err += text;
+    },
+    env: { NO_COLOR: '1', SPEC_GRAPH_ASCII: '1' },
+    isTTY: false,
+  });
+  return { code, err };
+}
 
+describe('an error spec-graph did not expect', () => {
   it.each([
     ['--help', ['--help']],
     ['--version', ['--version']],
@@ -1189,6 +1189,37 @@ describe('an error spec-graph did not expect', () => {
 
   it('reports a thrown value that is no Error as it reads', async () => {
     expect(await refusing('only a string', '--version')).toEqual({ code: EXIT_ERROR, err: 'spec-graph: unexpected error: only a string\n' });
+  });
+});
+
+describe('a reader that closed the output', () => {
+  // `spec-graph graph | head`: the write fails with EPIPE once head has left.
+  // The answer was not delivered, which is still 2, and nothing in spec-graph
+  // is at fault, so no stack says a defect was found.
+  const refused = (code: string): Error => Object.assign(new Error(`${code}: the write failed`), { code, syscall: 'write' });
+
+  it.each([
+    ['--version', ['--version']],
+    ['check', ['check', '--root', DEMO]],
+    ['graph', ['graph', '--root', DEMO]],
+  ])('ends %s with exit 2 and one line that says so', async (_name, argv) => {
+    expect(await refusing(refused('EPIPE'), ...argv)).toEqual({
+      code: EXIT_ERROR,
+      err: 'spec-graph: stdout was closed before all of the output was written\n',
+    });
+  });
+
+  it('keeps the stack of a write that failed for any other reason', async () => {
+    // A disk that filled up under `> graph.json` is not a reader that left.
+    const result = await refusing(refused('ENOSPC'), '--version');
+    expect(result.code).toBe(EXIT_ERROR);
+    expect(result.err).toMatch(/^spec-graph: unexpected error: Error: ENOSPC: the write failed\n {4}at /);
+  });
+
+  it('reads the code of the error, not its words', async () => {
+    const result = await refusing(new Error('EPIPE: broken pipe, write'), '--version');
+    expect(result.code).toBe(EXIT_ERROR);
+    expect(result.err).toMatch(/^spec-graph: unexpected error: Error: EPIPE: broken pipe, write\n {4}at /);
   });
 });
 
