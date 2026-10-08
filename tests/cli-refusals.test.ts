@@ -191,6 +191,29 @@ describe('a second word given to rules', () => {
   });
 });
 
+describe('--format json asked of a command that writes none', () => {
+  it('is refused by graph and by rules, each told what it writes', () => {
+    expect(usage(['graph', '--format', 'json'])).toBe(
+      '--format json belongs to check, query or diff, not to graph: graph writes JSON with --graph-format json',
+    );
+    expect(usage(['rules', '--format', 'json'])).toBe('--format json belongs to check, query or diff, not to rules: rules lists the rules as text');
+  });
+
+  it('is taken by the three commands that write it, and the default is taken by all five', () => {
+    for (const argv of [['check'], ['query', 'document'], ['diff', 'a.json', 'b.json']]) {
+      expect(parseArgs([...argv, '--format', 'json'], '/repo').format, argv[0]).toBe('json');
+    }
+    for (const argv of [['check'], ['query', 'document'], ['graph'], ['rules'], ['diff', 'a.json', 'b.json']]) {
+      expect(parseArgs([...argv, '--format', 'human'], '/repo').format, argv[0]).toBe('human');
+    }
+  });
+
+  it('does not stand between a person and the help or the version', async () => {
+    expect(await run('graph', '--format', 'json', '--help')).toEqual({ code: EXIT_OK, out: HELP, err: '' });
+    expect((await run('rules', '--format', 'json', '--version')).code).toBe(EXIT_OK);
+  });
+});
+
 describe('a configuration file that is there and cannot be read', () => {
   // A directory where the file is named: every host refuses to read one.
   const UNREADABLE = { '.spec-graph.json/keep': '', 'docs/adr/0001-a.md': '# ADR-0001: A\n' };
