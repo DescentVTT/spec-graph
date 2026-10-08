@@ -612,13 +612,22 @@ function parseCount(flag: string, value: string): number {
  * error, exit 1, which CI reads as findings. The stack is what makes a report
  * of it something to act on, and it goes to stderr alone: a script that reads
  * a document from stdout is handed no part of one.
+ *
+ * A write its reader had closed the pipe for is not such an error: the answer
+ * was not delivered, which is still 2, and nothing in spec-graph is at fault,
+ * so it is said in a line and no stack sends a person looking for a defect.
+ * The process's own streams report it as an event, which the launcher answers
+ * in the same words; here it is a caller's stream that throws it. It is read
+ * by its code: stdout and stderr are the only pipes spec-graph writes to.
  */
 export async function main(io: CliIO = {}): Promise<number> {
   const err = io.stderr ?? ((text) => process.stderr.write(text));
   try {
     return await run(io, err);
   } catch (error) {
-    err(`spec-graph: unexpected error: ${error instanceof Error ? (error.stack ?? error.message) : String(error)}\n`);
+    if (!(error instanceof Error)) err(`spec-graph: unexpected error: ${String(error)}\n`);
+    else if ((error as { code?: unknown }).code === 'EPIPE') err('spec-graph: stdout was closed before all of the output was written\n');
+    else err(`spec-graph: unexpected error: ${error.stack ?? error.message}\n`);
     return EXIT_ERROR;
   }
 }
