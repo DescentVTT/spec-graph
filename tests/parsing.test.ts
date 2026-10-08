@@ -10,6 +10,7 @@ import {
   looksLikePath,
   normaliseRef,
   parseBareRef,
+  isFamilyName,
   parsePrefixedRef,
   splitAnchor,
   withinOneEdit,
@@ -286,6 +287,19 @@ describe('identity', () => {
     expect(parsePrefixedRef('sharding')).toBeNull();
     expect(parseBareRef('#0007')).toBe(7);
     expect(parseBareRef('ADR-7')).toBeNull();
+  });
+
+  it('knows a family\'s name by whether an identifier written with it is read as that family', () => {
+    for (const name of ['ADR', 'adr', ' RFC ', 'S3', 'A_B', 'T', 'ABCDEFGHIJKLMNOP']) {
+      expect(isFamilyName(name), name).toBe(true);
+      expect(parsePrefixedRef(`${name.trim()}-0042`), name).toEqual({ family: name.trim().toUpperCase(), number: 42 });
+    }
+    // Nothing, a list, an identifier, two names, a number first, a name that
+    // ends where the separator starts, one letter too many, and a mark that
+    // an identifier may open with and a name may not.
+    for (const name of ['', ' ', ',', 'ADR,RFC', 'ADR-0001', 'ADR RFC', '9A', 'A_', 'ABCDEFGHIJKLMNOPQ', '#ADR', '--strict']) {
+      expect(isFamilyName(name), JSON.stringify(name)).toBe(false);
+    }
   });
 
   it('recognises external targets', () => {

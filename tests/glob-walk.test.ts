@@ -246,6 +246,8 @@ describe('a ! before a bare --ignore name', () => {
     await write(`${root}/vendor/r.md`, '# R\n');
     await write(`${ROOT}/bang/!drafts/b.md`, '# B\n');
     await write(`${ROOT}/bang/drafts/d.md`, '# D\n');
+    await write(`${ROOT}/spaced/docs/a.md`, '# A\n');
+    await write(`${ROOT}/spaced/my drafts/d.md`, '# D\n');
   });
 
   it('gives back a directory an earlier bare name prunes, at any depth, and the last to name it decides', async () => {
@@ -285,6 +287,11 @@ describe('a ! before a bare --ignore name', () => {
     expect(await paths(`${ROOT}/bang`, ['**/*.md'], ['!drafts'])).toEqual(['!drafts/b.md', 'drafts/d.md']);
     expect(await paths(`${ROOT}/bang`, ['**/*.md'], ['**/{!drafts}'])).toEqual(['drafts/d.md']);
     await expect(paths(root, ['**/*.md'], ['!'])).rejects.toThrow('invalid glob "!": the pattern is empty');
+    // A blank was a directory called " ", which ignored nothing and said so
+    // nowhere. A name with a space in it is still a name.
+    await expect(paths(root, ['**/*.md'], ['  '])).rejects.toThrow('invalid glob "  ": the pattern is empty');
+    await expect(paths(root, ['**/*.md'], ['! '])).rejects.toThrow('invalid glob "! "');
+    expect(await paths(`${ROOT}/spaced`, ['**/*.md'], ['my drafts'])).toEqual(['docs/a.md']);
     await expect(paths(root, ['**/*.md'], ['!!drafts'])).rejects.toThrow('invalid glob "!!drafts": a negated pattern is a list entry');
   });
 });

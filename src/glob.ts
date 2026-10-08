@@ -413,9 +413,10 @@ export async function walkFiles(options: WalkOptions): Promise<WalkedFile[]> {
   const ignores = options.ignore ?? [];
   // The empty pattern is no directory's name, so it goes to the dialect, which
   // refuses it as it refuses an empty include: a pattern that names nothing is
-  // a typo or an unset variable, and was an ignore that ignored nothing.
+  // a typo or an unset variable, and was an ignore that ignored nothing. So
+  // does a blank one, which was read as a directory called " ".
   const plainName = (pattern: string): boolean =>
-    pattern.length > 0 && !isGlob(pattern) && !pattern.includes('/') && !pattern.startsWith('!');
+    pattern.trim().length > 0 && !isGlob(pattern) && !pattern.includes('/') && !pattern.startsWith('!');
   // A `!` before a name gives the name back, as a `.gitignore` line does, and
   // the last bare entry to name a directory decides whether it is pruned. It
   // was read as a directory called `!docs`, so `--ignore docs --ignore "!docs"`
