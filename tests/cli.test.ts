@@ -311,9 +311,18 @@ describe('family rules', () => {
     expect(result.code).toBe(EXIT_OK);
   });
 
-  it('go quiet under an allowlist that excludes it', async () => {
-    const result = await run('check', ...RFCS, '--family', 'ADR');
-    expect(result.code).toBe(EXIT_OK);
+  it('go quiet under an allowlist that excludes it, where the list names a family the documents belong to', async () => {
+    // The corpus's own ADR is what keeps the list honest: a list naming no
+    // family a document belongs to stops the check (cli-refusals.test.ts).
+    const { mkdir, writeFile } = await import('node:fs/promises');
+    await withConfigured('cli-allowlist', 'tests/fixtures/rfcs', '{}\n', async (root) => {
+      await mkdir(`${root}/docs/adr`, { recursive: true });
+      await writeFile(`${root}/docs/adr/0001-a.md`, '---\nstatus: accepted\n---\n\n# ADR-0001: A\n');
+      const plain = await run('check', 'docs/**/*.md', '--root', root);
+      expect(plain.code).toBe(EXIT_FAILED);
+      expect(plain.out).toContain('"RFC 2119"');
+      expect(await run('check', 'docs/**/*.md', '--root', root, '--family', 'ADR')).toMatchObject({ code: EXIT_OK, err: '' });
+    });
   });
 
   it('never cost a relation that resolved', async () => {

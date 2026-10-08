@@ -296,6 +296,24 @@ describe('corpus integrity', () => {
   });
 });
 
+describe('the families a corpus has', () => {
+  it('are those an identifier of some document is written with, sorted and once each', () => {
+    const { families } = resolve({
+      'docs/rfcs/0002-y.md': '# RFC-0002: Y\n',
+      'docs/adr/0001-a.md': '# ADR-0001: A\n',
+      'docs/adr/0002-b.md': '# ADR-0002: B\n',
+      'notes/buckets.md': '---\nid: S3-0012\n---\n\n# Buckets\n',
+    });
+    expect(families).toEqual(['ADR', 'RFC', 'S3']);
+  });
+
+  it('are none where no document is numbered, whatever directory it is in', () => {
+    // A directory names a family for the documents numbered in it. A page
+    // with no number is of none, so nothing in prose is a citation of one.
+    expect(resolve({ 'docs/guide.md': '# Guide\n', 'docs/adr/template.md': '# Template\n' }).families).toEqual([]);
+  });
+});
+
 describe('documentOf', () => {
   it('strips the item suffix from a node id', () => {
     expect(documentOf('ADR-0007#q.1')).toBe('ADR-0007');

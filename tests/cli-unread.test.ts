@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 
 import { describe, expect, it } from 'vitest';
 
-import { EXIT_ERROR, EXIT_OK, HELP, main, parseArgs, UsageError } from '../src/cli.js';
+import { EXIT_ERROR, EXIT_FAILED, EXIT_OK, HELP, main, parseArgs, UsageError } from '../src/cli.js';
 
 /*
  * What is given and would not be read: a list of families no document here
@@ -72,6 +72,152 @@ const ADRS = {
   'docs/adr/0001-a.md': accepted('ADR-0001', 'See ADR-0099 for the rest.'),
   'docs/adr/0002-b.md': accepted('ADR-0002', 'Builds on [ADR-0001](0001-a.md).'),
 };
+/** The same beside two RFCs, one citing a standard the repository does not hold: two errors. */
+const BOTH = {
+  ...ADRS,
+  'docs/rfcs/0001-x.md': accepted('RFC-0001', 'The key words are to be read as in RFC 2119.'),
+  'docs/rfcs/0002-y.md': accepted('RFC-0002', 'Builds on [RFC-0001](0001-x.md).'),
+};
+/** A page of no family that links, in brackets, to an ADR and an RFC nobody wrote: two errors. */
+const PAGE = { 'docs/guide.md': '# Guide\n\nSee [[ADR-0099]] and [[RFC-7]].\n' };
+
+const ADVICE = '  name a family the documents belong to, or leave the list out\n';
+
+describe('a list of families none of which a document here belongs to', () => {
+  it('stops the check that an allowlist of nothing used to pass, naming the list and the families there are', async () => {
+    await withRepo('unread-allowlist', ADRS, async (root) => {
+      const check = ['check', '--root', root, '--no-config'];
+      // The finding the list would have passed over.
+      expect((await run(...check)).code).toBe(EXIT_FAILED);
+      const refused = {
+        code: EXIT_ERROR,
+        out: '',
+        err: `spec-graph: no document here belongs to a family named by --family (RFC); the documents here belong to ADR\n${ADVICE}`,
+      };
+      expect(await run(...check, '--family', 'RFC')).toEqual(refused);
+      // Under --strict as without it, and in a format a script reads.
+      expect(await run(...check, '--family', 'RFC', '--strict')).toEqual(refused);
+      expect(await run(...check, '--family', 'rfc', '--format', 'json')).toEqual(refused);
+      // A name one letter from the family the documents belong to.
+      expect((await run(...check, '--family', 'ADRS')).err).toBe(
+        `spec-graph: no document here belongs to a family named by --family (ADRS); the documents here belong to ADR\n${ADVICE}`,
+      );
+    });
+  });
+
+  it('records no baseline of a check it did not make', async () => {
+    const { readdir } = await import('node:fs/promises');
+    await withRepo('unread-allowlist-record', ADRS, async (root) => {
+      const result = await run('check', '--root', root, '--no-config', '--family', 'RFC', '--record-baseline', 'debt.json');
+      expect(result.code).toBe(EXIT_ERROR);
+      expect(result.out).toBe('');
+      expect(await readdir(root)).toEqual(['docs']);
+    });
+  });
+
+  it('names the list where it was written: the configuration, or both', async () => {
+    await withRepo('unread-allowlist-config', { ...ADRS, '.spec-graph.json': '{ "families": ["RFC"] }\n' }, async (root) => {
+      expect(await run('check', '--root', root)).toEqual({
+        code: EXIT_ERROR,
+        out: '',
+        err: `spec-graph: no document here belongs to a family named by "families" in .spec-graph.json (RFC); the documents here belong to ADR\n${ADVICE}`,
+      });
+      // The two lists add up, and a name given twice is one name.
+      expect((await run('check', '--root', root, '--family', 'KEP', '--family', ' rfc ')).err).toBe(
+        `spec-graph: no document here belongs to a family named by --family and "families" in .spec-graph.json (RFC, KEP); the documents here belong to ADR\n${ADVICE}`,
+      );
+    });
+  });
+
+  it('names the option alone where the configuration lists none, and both in a note as in a refusal', async () => {
+    await withRepo('unread-allowlist-empty', { ...ADRS, '.spec-graph.json': '{ "families": [] }\n' }, async (root) => {
+      expect((await run('check', '--root', root, '--family', 'RFC')).err).toBe(
+        `spec-graph: no document here belongs to a family named by --family (RFC); the documents here belong to ADR\n${ADVICE}`,
+      );
+    });
+    await withRepo('unread-allowlist-note', { ...ADRS, '.spec-graph.json': '{ "families": ["ADR"] }\n' }, async (root) => {
+      const result = await run('check', '--root', root, '--family', 'KEP');
+      expect(result.code).toBe(EXIT_FAILED);
+      expect(result.err).toBe(
+        'spec-graph: no document here belongs to KEP, named by --family and "families" in .spec-graph.json; the documents here belong to ADR\n',
+      );
+    });
+  });
+
+  it('names every family the documents belong to, or says they belong to none', async () => {
+    await withRepo('unread-allowlist-two', BOTH, async (root) => {
+      expect((await run('check', '--root', root, '--no-config', '--family', 'KEP')).err).toBe(
+        `spec-graph: no document here belongs to a family named by --family (KEP); the documents here belong to ADR and RFC\n${ADVICE}`,
+      );
+    });
+    await withRepo('unread-allowlist-none', PAGE, async (root) => {
+      // Both links are passed over under a list that names neither family, so
+      // this run was clean too.
+      expect(await run('check', '--root', root, '--no-config', '--family', 'KEP')).toEqual({
+        code: EXIT_ERROR,
+        out: '',
+        err: `spec-graph: no document here belongs to a family named by --family (KEP); the documents here belong to no family\n${ADVICE}`,
+      });
+    });
+  });
+
+  it('says nothing to a repository whose list names the families its documents belong to', async () => {
+    await withRepo('unread-allowlist-right', BOTH, async (root) => {
+      const check = ['check', '--root', root, '--no-config'];
+      // The whole list, in any case and with the spaces a variable brings.
+      const whole = await run(...check, '--family', ' adr ', '--family', 'RFC');
+      expect(whole.code).toBe(EXIT_FAILED);
+      expect(whole.err).toBe('');
+      // Part of it: leaving a family the corpus has off the list is what a
+      // list is for, and its citations going quiet is the documented result.
+      const part = await run(...check, '--family', 'ADR');
+      expect(part.code).toBe(EXIT_FAILED);
+      expect(part.err).toBe('');
+      expect(part.out).toContain('"ADR-0099"');
+      expect(part.out).not.toContain('"RFC 2119"');
+    });
+  });
+
+  it('says so and fails nothing where one name has documents and another has none', async () => {
+    await withRepo('unread-allowlist-started', BOTH, async (root) => {
+      const check = ['check', '--root', root, '--no-config', '--family', 'ADR'];
+      const started = await run(...check, '--family', 'KEP');
+      expect(started.err).toBe('spec-graph: no document here belongs to KEP, named by --family; the documents here belong to ADR and RFC\n');
+      // The run is the one the list without that name makes.
+      const without = await run(...check);
+      expect({ code: started.code, out: started.out.replace(/[\d.]+ms/, '') }).toEqual({ code: without.code, out: without.out.replace(/[\d.]+ms/, '') });
+      expect(started.code).toBe(EXIT_FAILED);
+      // Two such names, and a report a script reads left whole on stdout.
+      const json = await run(...check, '--family', 'KEP', '--family', 'RCF', '--format', 'json');
+      expect(json.err).toBe('spec-graph: no document here belongs to KEP or RCF, named by --family; the documents here belong to ADR and RFC\n');
+      expect((JSON.parse(json.out) as { ok: boolean }).ok).toBe(false);
+    });
+  });
+
+  it('is a check\'s to refuse: the other commands read no list', async () => {
+    await withRepo('unread-allowlist-others', { ...ADRS, '.spec-graph.json': '{ "families": ["RFC"] }\n' }, async (root) => {
+      for (const command of [['graph'], ['query', 'document'], ['rules']]) {
+        expect(await run(...command, '--root', root), command[0]).toMatchObject({ code: EXIT_OK, err: '' });
+      }
+    });
+  });
+
+  it('asks nothing of --ignore-family, where a name no document belongs to passes over nothing', async () => {
+    await withRepo('unread-ignore-family', ADRS, async (root) => {
+      const check = ['check', '--root', root, '--no-config'];
+      // A mistyped name reports more, not less: the finding is still there.
+      for (const name of ['RFC', 'RCF']) {
+        const result = await run(...check, '--ignore-family', name);
+        expect(result.code, name).toBe(EXIT_FAILED);
+        expect(result.err, name).toBe('');
+      }
+      // And the family the documents belong to is passed over when it is the
+      // one named, which is what was asked.
+      expect(await run(...check, '--ignore-family', 'ADR')).toMatchObject({ code: EXIT_OK, err: '' });
+    });
+  });
+});
+
 describe('an option given to a command that does not read it', () => {
   const COMMANDS: Record<string, string[]> = {
     check: ['check'],

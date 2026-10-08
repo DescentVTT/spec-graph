@@ -993,6 +993,31 @@ A name no family has — `""`, or `"ADR,RFC"` where two entries go — stops the
 run with exit `2`: alone in `families` it allowed nothing, so every citation
 was prose and a dangling one passed.
 
+A name that is a family's, and that no document here belongs to, allows
+nothing either. `--family RFC` in a repository of ADRs, or `ADRS` for `ADR`,
+leaves every citation as prose, and the check would report a consistent graph
+over a citation of an ADR nobody wrote. So a list has to name a family a
+document belongs to, or the check stops with exit `2`, before it reports or
+records anything:
+
+```text
+spec-graph: no document here belongs to a family named by --family (RFC); the documents here belong to ADR
+  name a family the documents belong to, or leave the list out
+```
+
+A document belongs to a family when its identifier is written with it, as
+`ADR-0007` is with `ADR`. A list that names such a family beside one the
+documents do belong to is a family the repository means to start, or a typo in
+half the list: it is said on stderr and fails nothing.
+
+```text
+spec-graph: no document here belongs to RFC, named by --family; the documents here belong to ADR
+```
+
+A list whose every name has a document sees neither line. `ignoreFamilies`
+needs no such check: a name on it passes over citations of that family alone,
+so a mistyped one passes over nothing and the run reports more, not less.
+
 Both are consulted only after resolution has already failed, so `RFC 0001` still
 resolves to your local RFC-0001 with `RFC` on the ignore list. No configuration
 can delete an edge. See
