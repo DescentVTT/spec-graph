@@ -1067,9 +1067,10 @@ into `head` does: the answer did not arrive, and one line on stderr says so.
 that names it, never a run that reads it as if it had not been given. An unset
 variable in `--family "$FAMILIES"` is the usual way to write one:
 
-- a `--family` or `--ignore-family` that no family is named - empty, blank,
-  or a list such as `ADR,RFC` where one name goes. Alone on the allowlist it
-  would leave every citation as prose, and a dangling one unreported;
+- a `--family` or `--ignore-family` holding a name no family has - empty,
+  blank, or a list such as `ADR,RFC` where one name goes. Alone on the
+  allowlist it would leave every citation as prose, and a dangling one
+  unreported;
 - a `--root` that is empty, is not there, or is a file, for every command
   that reads one, `rules` included;
 - an empty or blank `--baseline`, `--record-baseline`, `--ignore`,

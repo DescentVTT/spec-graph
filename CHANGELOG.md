@@ -67,7 +67,8 @@ given. It is refused now: exit 2 and one line that names it
 
 - `SPEC_GRAPH_ASCII=0`, `false` and a blank value no longer turn ASCII glyphs
   on: the variable was read for being set. `--help` and the README name it
-  beside `--ascii`, and say how colour is decided, which was written nowhere.
+  beside `--ascii`, and the README says how colour is decided; neither was
+  written anywhere.
 - An empty `--baseline` or `--record-baseline` is refused by the option's
   name, `--baseline expects a file, got ""`, where the line was `cannot read
   the baseline : EISDIR: illegal operation on a directory, read`. Exit 2, as
