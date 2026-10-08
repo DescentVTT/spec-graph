@@ -1075,11 +1075,44 @@ variable in `--family "$FAMILIES"` is the usual way to write one:
   that reads one, `rules` included;
 - an empty or blank `--baseline`, `--record-baseline`, `--ignore`,
   `--ignore-ref`, `--history` or pattern;
-- a second word after `rules`, which takes one rule id;
+- a list of families, `--family` or `families`, none of which a document
+  here belongs to ([Family rules](#family-rules));
+- a second word after `rules`, which takes one rule id, and an empty name
+  given to `diff`;
 - `--format json` asked of `graph`, whose JSON is `--graph-format json`, or
   of `rules`, which has one format;
+- an option given to a command that does not read it, in the table below;
+- a value that begins with `--`, which reads as the option after one whose
+  value was forgotten: `--ignore --strict` would ignore a directory called
+  `--strict`, and `--record-baseline --verbose` write a file of that name.
+  A name that does begin so is written `./--name` for a file, `[-]-name` in
+  a pattern and `\--name` for a reference target;
 - a configuration file that is there and cannot be read, a directory called
   `.spec-graph.json` among them.
+
+An option belongs to the commands that read it. Any other command refuses it
+by name, `--strict belongs to check, not to query`, rather than run as if the
+option were absent: `query --strict` would be no stricter, `graph
+--record-baseline` would write no file, and with the command forgotten,
+`spec-graph --graph-format mermaid > graph.mmd` would write the check's report
+into the file.
+
+| Option | Read by |
+| --- | --- |
+| `--root`, `--verbose` | `check`, `query`, `graph`, `rules` |
+| `--ignore`, `--history` | `check`, `query`, `graph` |
+| `--format` | `check`, `query`, `diff` |
+| `--graph-format`, `--documents-only` | `graph` |
+| `--explain` | `rules` |
+| `--ignore-ref`, `--family`, `--ignore-family`, `--baseline`, `--record-baseline`, `--ratchet`, `--rule`, `--strict`, `--max`, `--max-warnings`, `--color` | `check` |
+| `--no-config`, `--no-color`, `--ascii`, `--help`, `--version` | every command |
+
+`--no-config`, `--no-color` and `--ascii` are taken by every command because
+each is true already of a command with nothing to read it for: only a check
+colours its report or draws a glyph, and `diff` reads no configuration. A
+script can pass them to whatever it runs. The configuration file is not an
+option: `ignoreReferences` in `.spec-graph.json` stops no `graph`, which
+draws the same graph with it as without.
 
 **There is no `--watch`.** A full run on this repository takes 60 ms, so the
 loop that would justify a resident process is one line of shell, and it belongs

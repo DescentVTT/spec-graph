@@ -213,8 +213,27 @@ OPTIONS
                           same, unless it is empty, 0 or false
   --verbose               Include parse problems, per-file detail, and every
                           reference --ignore-ref or --ignore-family silenced
+  --explain               With rules: add each rule's selector and the ADR
+                          that decided it
   -h, --help              Show this help
   -v, --version           Show the version
+
+  An option belongs to the commands that read it, and any other command
+  refuses it by name:
+
+    --root, --verbose                   check, query, graph, rules
+    --ignore, --history                 check, query, graph
+    --format                            check, query, diff
+    --graph-format, --documents-only    graph
+    --explain                           rules
+    every other option                  check
+
+  --no-config, --no-color and --ascii are taken by every command: each is
+  true already of a command with nothing to read it for.
+
+  A value that begins with -- reads as an option, so the option before it is
+  refused as missing its value. A name that does begin so is written ./--name
+  for a file, [-]-name in a pattern and \\--name for a reference target.
 
 SELECTORS
   A selector is a path through the graph.
@@ -243,7 +262,8 @@ EXIT CODES
 
   An input that is set and names nothing is a 2, named on stderr, and never
   read as if it had not been given: an empty value, a family name no family
-  has, a --root that is no directory, a second word after rules.
+  has, a list of families no document here belongs to, a --root that is no
+  directory, a second word after rules, an option of another command.
 
 CONFIGURATION
   Anything repeated on every run belongs in the repository rather than in the
@@ -329,6 +349,64 @@ EXAMPLES
 
 const SEVERITIES: readonly Severity[] = ['error', 'warn', 'info', 'off'];
 
+/**
+ * The commands that read an option, or nothing for one every command takes.
+ *
+ * Any other command refuses the option, rather than run as if it were not
+ * there: `query --strict` taking the flag and doing nothing with it would
+ * tell someone their query was strict, `graph --record-baseline` wrote no
+ * file and said so nowhere, and `spec-graph --graph-format mermaid`, the
+ * command forgotten, wrote the check's report into what was meant to hold a
+ * graph. The three options about citations are a check's alone: they pass
+ * over findings and never an edge, so a graph or a query is the same with
+ * them as without.
+ *
+ * `--no-color`, `--ascii` and `--no-config` are taken by every command.
+ * Each is true already of what the commands that do not read it write - none
+ * of them colours or draws a glyph, and `diff` reads no configuration - and
+ * a script passes them to every command it runs. `--color` is not one of
+ * them: it would promise colour that only a check prints.
+ *
+ * A function and not a table, so that none of it runs when the module loads:
+ * a mutant of a table built at import pays for the whole suite (ADR-0007).
+ */
+function readersOf(option: string): readonly Command[] | undefined {
+  switch (option) {
+    case '--root':
+    case '--verbose':
+      return ['check', 'query', 'graph', 'rules'];
+    case '--ignore':
+    case '--history':
+      return ['check', 'query', 'graph'];
+    case '--format':
+      return ['check', 'query', 'diff'];
+    case '--graph-format':
+    case '--documents-only':
+      return ['graph'];
+    case '--explain':
+      return ['rules'];
+    case '--ignore-ref':
+    case '--family':
+    case '--ignore-family':
+    case '--baseline':
+    case '--record-baseline':
+    case '--ratchet':
+    case '--rule':
+    case '--strict':
+    case '--max':
+    case '--max-warnings':
+    case '--color':
+      return ['check'];
+    default:
+      return undefined;
+  }
+}
+
+/** `a`, `a or b`, `a, b or c`: one name or more in a sentence, with the word that joins the last. */
+function listed(names: readonly string[], joint: string): string {
+  return names.length < 2 ? (names[0] as string) : `${names.slice(0, -1).join(', ')} ${joint} ${names[names.length - 1] as string}`;
+}
+
 /** Parses argv into options. Throws {@link UsageError} on anything malformed. */
 export function parseArgs(argv: readonly string[], cwd: string): CliOptions {
   const args = [...argv];
@@ -366,9 +444,19 @@ export function parseArgs(argv: readonly string[], cwd: string): CliOptions {
   let help = false;
   let version = false;
 
+  const given: string[] = [];
   const next = (flag: string, index: number): string => {
     const value = args[index + 1];
     if (value === undefined) throw new UsageError(`${flag} needs a value`);
+    // The option after one whose value was forgotten. Taken as the value,
+    // `--ignore --strict` ignored a directory called `--strict` and the check
+    // was not strict, and `--record-baseline --verbose` wrote a file of that
+    // name. A name that does begin with two dashes has another spelling
+    // wherever one can be meant: `./--x` for a file, `[-]-x` in a pattern,
+    // `\--x` for a reference target.
+    if (value.startsWith('--') || value === '-h' || value === '-v') {
+      throw new UsageError(`${flag} needs a value, and ${value} reads as an option`);
+    }
     return value;
   };
   // A blank value is what an unset variable leaves in `--root "$DIR"`. A path
@@ -402,6 +490,7 @@ export function parseArgs(argv: readonly string[], cwd: string): CliOptions {
       continue;
     }
 
+    given.push(arg);
     switch (arg) {
       case '-h':
       case '--help':
@@ -551,6 +640,15 @@ export function parseArgs(argv: readonly string[], cwd: string): CliOptions {
     throw new UsageError(`--format json belongs to check, query or diff, not to ${command}: ${instead}`);
   }
 
+  if (!help && !version) {
+    for (const option of given) {
+      const readers = readersOf(option);
+      if (readers !== undefined && !readers.includes(command)) {
+        throw new UsageError(`${option} belongs to ${listed(readers, 'or')}, not to ${command}`);
+      }
+    }
+  }
+
   // The second word given to `rules` was dropped, so `rules a b` listed `a`
   // and said nothing of `b`.
   if (command === 'rules' && patterns.length > 1 && !help && !version) {
@@ -561,6 +659,13 @@ export function parseArgs(argv: readonly string[], cwd: string): CliOptions {
     throw new UsageError(
       'diff compares two graph exports, for example:\n  spec-graph diff base.json head.json\n  (make each with spec-graph graph --graph-format json)',
     );
+  }
+
+  // An empty name resolved to the directory the run was started in, and the
+  // refusal was the read's: `cannot read : EISDIR`.
+  const blank = patterns.findIndex((path) => path.trim() === '');
+  if (command === 'diff' && blank !== -1 && !help && !version) {
+    throw new UsageError(`diff expects a graph export on each side, got "${patterns[blank] as string}" for the ${blank === 0 ? 'first' : 'second'}`);
   }
 
   if (command === 'query' && selector === null && !help && !version) {
