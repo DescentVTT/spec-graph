@@ -44,8 +44,8 @@ given. It is refused now: exit 2 and one line that names it
   now, exit 2.
   Upgrading: remove or repair the file, or run with `--no-config`.
 - **A blank `--ignore` or `--record-baseline` is refused, as an empty one
-  was.** `--ignore " "` was a directory nothing is called and ignored
-  nothing, `"ignore": [" "]` in the configuration likewise, and
+  was.** `--ignore " "` was read as a directory's name since 0.9.0 and
+  ignored nothing, `"ignore": [" "]` in the configuration likewise, and
   `--record-baseline " "` wrote a file named with a space.
   Upgrading: pass the option only where its variable is set, as in
   `${IGNORE:+--ignore "$IGNORE"}`.
