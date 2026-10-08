@@ -19,6 +19,7 @@
 
 import { existsSync, readFileSync } from 'node:fs';
 
+import { isFamilyName } from './identity.js';
 import { dirnamePosix, toPosix } from './paths.js';
 import { compileProjectRules, type ProjectRule } from './project-rules.js';
 import { RULE_IDS } from './rules.js';
@@ -105,11 +106,25 @@ const EMPTY: LoadedConfig = { config: {}, source: null, problems: [] };
  * Never throws, and never decides. Every problem is collected and handed back
  * whole, so the reader sees all of them at once rather than the first; what a
  * problem costs is the caller's to say, and the CLI stops on one.
+ *
+ * A configuration file that is there and cannot be read is a problem like one
+ * that does not parse. Passed over as absent, a directory of that name or a
+ * file the run may not open left the run on defaults, or on the configuration
+ * of a directory above, with nothing said.
  */
 export function loadConfig(root: string, read: (path: string) => string = defaultRead): LoadedConfig {
   for (const name of CONFIG_FILES) {
-    const raw = tryRead(read, `${root}/${name}`);
-    if (raw === null) continue;
+    let raw: string;
+    try {
+      raw = read(`${root}/${name}`);
+    } catch (error) {
+      // Nothing by that name: ENOENT, or ENOTDIR where a directory above is a
+      // file. A reader handed in by a caller says the same with an error that
+      // has no code.
+      const code = (error as { code?: unknown }).code;
+      if (code === undefined || code === 'ENOENT' || code === 'ENOTDIR') continue;
+      return { config: {}, source: name, problems: [`${name} cannot be read: ${(error as Error).message}`] };
+    }
     return parseConfig(raw, name);
   }
 
@@ -203,8 +218,19 @@ function readFields(raw: Record<string, unknown>, source: string): LoadedConfig 
   config.patterns = strings('patterns');
   config.ignore = strings('ignore');
   config.ignoreReferences = strings('ignoreReferences');
-  config.families = strings('families');
-  config.ignoreFamilies = strings('ignoreFamilies');
+  // A name no family has matches no citation. Alone in "families" it leaves
+  // every citation as prose, and in "ignoreFamilies" it is a line that reads
+  // as applied and does nothing.
+  const families = (key: 'families' | 'ignoreFamilies'): readonly string[] | undefined => {
+    const names = strings(key);
+    for (const name of names ?? []) {
+      if (!isFamilyName(name)) problems.push(`${source}: "${key}" must be family names, such as "ADR", and "${name}" is not one`);
+    }
+    return names;
+  };
+
+  config.families = families('families');
+  config.ignoreFamilies = families('ignoreFamilies');
   config.historyPatterns = strings('historyPatterns');
 
   if (raw['baseline'] !== undefined) {

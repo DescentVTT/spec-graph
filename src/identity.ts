@@ -252,6 +252,22 @@ export function parsePrefixedRef(value: string): { family: string; number: numbe
   return { family: (match[1] as string).toUpperCase(), number: Number.parseInt(match[2] as string, 10) };
 }
 
+/**
+ * Whether a family can have this name, spaces around it aside.
+ *
+ * Asked of the reader of identifiers itself, with a number put after the
+ * name, so the two cannot drift apart: a name is a family's when an
+ * identifier written with it is read as that family. `--family` and
+ * `families` take a name on trust and compare it to what that reader finds,
+ * so one it can never find - an empty one, `ADR,RFC`, `ADR-0001` - matched
+ * nothing, and as the only name on an allowlist it turned every citation
+ * into prose and the check off with it (ADR-0010).
+ */
+export function isFamilyName(value: string): boolean {
+  const name = value.trim();
+  return parsePrefixedRef(`${name}-0`)?.family === name.toUpperCase();
+}
+
 /** Parses a bare `7` or `#0007`, or returns `null`. */
 export function parseBareRef(value: string): number | null {
   const match = BARE_NUMBER.exec(value.trim());

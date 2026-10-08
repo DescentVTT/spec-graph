@@ -106,6 +106,22 @@ describe('parsing a configuration', () => {
     );
   });
 
+  it('reports a family name no family has, each one by the key it is under', () => {
+    // `"families": [""]` allowed no family, so every citation was prose and a
+    // dangling one passed; `"ADR,RFC"` is one name, which no family has.
+    expect(parseConfig(JSON.stringify({ families: ['', 'ADR,RFC'], ignoreFamilies: ['RFC', ' '] }), 'test').problems).toEqual([
+      'test: "families" must be family names, such as "ADR", and "" is not one',
+      'test: "families" must be family names, such as "ADR", and "ADR,RFC" is not one',
+      'test: "ignoreFamilies" must be family names, such as "ADR", and " " is not one',
+    ]);
+  });
+
+  it('takes a family name with spaces around it, and a list of none', () => {
+    const { config, problems } = parseConfig(JSON.stringify({ families: [' adr ', 'S3'], ignoreFamilies: [] }), 'test');
+    expect(problems).toEqual([]);
+    expect(config).toEqual({ families: [' adr ', 'S3'], ignoreFamilies: [] });
+  });
+
   it('tolerates $schema, so an editor can be pointed at one', () => {
     expect(parseConfig(JSON.stringify({ $schema: 'https://example.com/s.json' }), 'test').problems).toEqual([]);
   });
@@ -175,6 +191,42 @@ describe('finding a configuration', () => {
 
     expect(parseConfig(mark + '{"strict":true}', 'x.json').problems).toEqual([]);
     expect(parseConfig('{"ratchet":"yes"}', 'x.json').problems).toEqual(['x.json: "ratchet" must be true or false']);
+  });
+
+  /** A reader of one directory: text for a file, and an error with a code for anything else it is asked for. */
+  const reader =
+    (files: Readonly<Record<string, string>>, code: string | undefined) =>
+    (path: string): string => {
+      const text = files[path];
+      if (text !== undefined) return text;
+      throw Object.assign(new Error(`${code ?? 'gone'}: ${path}`), code === undefined ? {} : { code });
+    };
+
+  it('reports a configuration file that is there and cannot be read, by its name', () => {
+    // A directory of that name, or a file the run may not open. Passed over as
+    // absent, the run went on to the next name, to package.json, or to the
+    // directory above, and checked on a configuration nobody wrote.
+    const second = { [`/repo/${CONFIG_FILES[1] as string}`]: '{"strict":true}' };
+    for (const code of ['EISDIR', 'EACCES', 'EPERM']) {
+      expect(loadConfig('/repo', reader(second, code)), code).toEqual({
+        config: {},
+        source: CONFIG_FILES[0],
+        problems: [`${CONFIG_FILES[0] as string} cannot be read: ${code}: /repo/${CONFIG_FILES[0] as string}`],
+      });
+    }
+  });
+
+  it('passes over a name nothing has, however the reader says so', () => {
+    // ENOENT, ENOTDIR where a directory above is a file, and a caller's reader
+    // that throws an error with no code.
+    const second = { [`/repo/${CONFIG_FILES[1] as string}`]: '{"strict":true}' };
+    for (const code of ['ENOENT', 'ENOTDIR', undefined]) {
+      expect(loadConfig('/repo', reader(second, code)), String(code)).toEqual({
+        config: { strict: true },
+        source: CONFIG_FILES[1],
+        problems: [],
+      });
+    }
   });
 
   it('falls back to the package.json key', async () => {
@@ -279,6 +331,20 @@ describe('discovering a configuration upward', () => {
     const found = discoverConfig('/home/repo/docs', io);
     expect(found.source).toBeNull();
     expect(found.root).toBe('/home/repo/docs');
+  });
+
+  it('stops at a configuration file it cannot read, and reads none above it', () => {
+    const above = { [`/repo/${CONFIG}`]: '{"strict":true}', '/repo/.git': '' };
+    const read = (path: string): string => {
+      if (path === `/repo/packages/auth/${CONFIG}`) throw Object.assign(new Error('EISDIR: illegal operation on a directory, read'), { code: 'EISDIR' });
+      return tree(above).read(path);
+    };
+    expect(discoverConfig('/repo/packages/auth/docs', { read, exists: tree(above).exists })).toEqual({
+      config: {},
+      source: CONFIG,
+      problems: [`${CONFIG} cannot be read: EISDIR: illegal operation on a directory, read`],
+      root: '/repo/packages/auth',
+    });
   });
 
   it('gives back the starting directory when there is nothing to find', () => {
@@ -391,6 +457,13 @@ describe('the family filter', () => {
     const filter = createFamilyFilter(['ADR', 'RFC'], ['RFC']);
     expect(filter?.('ADR')).toBe(false);
     expect(filter?.('RFC')).toBe(true);
+  });
+
+  it('refuses a name no family has, in either list', () => {
+    // An allowlist of one such name allowed nothing: every family was denied.
+    expect(() => createFamilyFilter([''], undefined)).toThrow('"" is not a family\'s name, such as ADR');
+    expect(() => createFamilyFilter(['ADR', 'ADR,RFC'], undefined)).toThrow('"ADR,RFC" is not a family\'s name, such as ADR');
+    expect(() => createFamilyFilter(undefined, ['RFC', ' '])).toThrow('" " is not a family\'s name, such as ADR');
   });
 
   it('trims what it is given', () => {

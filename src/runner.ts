@@ -13,6 +13,7 @@ import { readFile } from 'node:fs/promises';
 import { extractSpecifications, type ExtractedDocument } from './extract.js';
 import { createGlobMatcher, createReferenceFilter, walkFiles, type WalkedFile } from './glob.js';
 import { buildGraph, type SpecGraph } from './graph.js';
+import { isFamilyName } from './identity.js';
 import { toPosix } from './paths.js';
 import { resolveCorpus, type ResolvedCorpus } from './resolve.js';
 import type { ProjectRule } from './project-rules.js';
@@ -151,11 +152,18 @@ export function createHistoryMatcher(patterns: readonly string[] | undefined): (
  * prose. A denylist handles the narrower case where the corpus genuinely owns a
  * family but some of its numbers belong to somebody else, which is exactly
  * `RFC 2119` in a repository of local RFCs.
+ *
+ * Throws for a name no family has, as a pattern that is no glob throws: an
+ * allowlist holding only `''` or `'ADR,RFC'` allowed nothing, and every
+ * dangling citation went unreported.
  */
 export function createFamilyFilter(
   families: readonly string[] | undefined,
   ignoreFamilies: readonly string[] | undefined,
 ): ((family: string) => boolean) | undefined {
+  for (const name of [...(families ?? []), ...(ignoreFamilies ?? [])]) {
+    if (!isFamilyName(name)) throw new Error(`"${name}" is not a family's name, such as ADR`);
+  }
   const allowed = families && families.length > 0 ? new Set(families.map((f) => f.trim().toUpperCase())) : null;
   const denied = new Set((ignoreFamilies ?? []).map((f) => f.trim().toUpperCase()));
   if (allowed === null && denied.size === 0) return undefined;

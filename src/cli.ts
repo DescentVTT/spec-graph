@@ -30,6 +30,7 @@ import {
   type GraphExport,
 } from './diff.js';
 import { isGlob, rebasePattern, underRoot } from './glob.js';
+import { isFamilyName } from './identity.js';
 import { analyse, DEFAULT_PATTERNS, withDiagnostics, type AnalyseOptions, type AnalysisResult } from './runner.js';
 import {
   formatGithub,
@@ -162,16 +163,20 @@ OPTIONS
                           and the directory holding it becomes the root - so a
                           run from a subdirectory reports what a run from the
                           top reports. Paths typed on the command line stay
-                          relative to where they were typed.
+                          relative to where they were typed. It has to be a
+                          directory that is there.
   --ignore <glob>         Skip paths. Repeatable.
   --ignore-ref <glob>     Do not report these reference targets when they fail
                           to resolve, for repositories where [[...]] tags a
                           concept rather than naming a file. Repeatable.
                           Suppresses findings only, never edges.
   --family <name>         Families a bare identifier in prose may name. When
-                          given, everything else stays prose. Repeatable.
+                          given, everything else stays prose. Repeatable: one
+                          name each time, the prefix its identifiers are
+                          written with, ADR for ADR-0007.
   --ignore-family <name>  Families that are never citations - RFC when the repo
-                          cites RFC 2119 and keeps its own RFCs. Repeatable.
+                          cites RFC 2119 and keeps its own RFCs. Repeatable,
+                          one name each time.
   --history <glob>        Files that log what was decided rather than deciding
                           it - journals, changelogs, minutes. Their links are
                           still checked; their obligations are not. Repeatable.
@@ -203,7 +208,8 @@ OPTIONS
   --strict                Raise every warning to an error. An explicit --rule
                           still wins, so --strict --rule x=warn exempts x.
   --color / --no-color    Force colour on or off
-  --ascii                 Use ASCII glyphs only
+  --ascii                 Use ASCII glyphs only. SPEC_GRAPH_ASCII asks for the
+                          same, unless it is empty, 0 or false
   --verbose               Include parse problems, per-file detail, and every
                           reference --ignore-ref or --ignore-family silenced
   -h, --help              Show this help
@@ -234,6 +240,10 @@ EXIT CODES
   1  findings at error severity (or over --max-warnings)
   2  the tool could not run
 
+  An input that is set and names nothing is a 2, named on stderr, and never
+  read as if it had not been given: an empty value, a family name no family
+  has, a --root that is no directory, a second word after rules.
+
 CONFIGURATION
   Anything repeated on every run belongs in the repository rather than in the
   command. spec-graph reads the first of these that exists:
@@ -255,9 +265,10 @@ CONFIGURATION
   finding lists, 8 unless set, and 0 lists none.
 
   A problem in that file stops the run with exit 2, named on stderr: invalid
-  JSON, an unknown key, a rule that does not compile. A configuration that did
-  not load checks a different repository than the one configured, and would
-  report that one as consistent. --no-config runs on defaults instead.
+  JSON, an unknown key, a rule that does not compile, a file that is there and
+  cannot be read. A configuration that did not load checks a different
+  repository than the one configured, and would report that one as consistent.
+  --no-config runs on defaults instead.
 
 PROJECT RULES
   A convention spec-graph never anticipated is a selector plus a sentence, and
@@ -359,6 +370,22 @@ export function parseArgs(argv: readonly string[], cwd: string): CliOptions {
     if (value === undefined) throw new UsageError(`${flag} needs a value`);
     return value;
   };
+  // A blank value is what an unset variable leaves in `--root "$DIR"`. A path
+  // made of it names the directory beside it or a file called " ", and the run
+  // then answered for a place nobody named.
+  const filled = (flag: string, index: number, what: string): string => {
+    const value = next(flag, index);
+    if (value.trim() === '') throw new UsageError(`${flag} expects ${what}, got "${value}"`);
+    return value;
+  };
+  // A family is taken once per option. A blank, `ADR,RFC` or the option typed
+  // after it is a name no family has: alone on the allowlist it left every
+  // citation as prose, and the check passed over the ones that dangle.
+  const family = (flag: string, index: number): string => {
+    const value = next(flag, index);
+    if (!isFamilyName(value)) throw new UsageError(`${flag} expects one family's name, such as ADR, got "${value}"`);
+    return value;
+  };
 
   for (let i = 0; i < args.length; i += 1) {
     const arg = args[i] as string;
@@ -408,7 +435,7 @@ export function parseArgs(argv: readonly string[], cwd: string): CliOptions {
         verbose = true;
         break;
       case '--root':
-        root = next(arg, i);
+        root = filled(arg, i, 'a directory');
         rootExplicit = true;
         i += 1;
         break;
@@ -421,11 +448,11 @@ export function parseArgs(argv: readonly string[], cwd: string): CliOptions {
         i += 1;
         break;
       case '--family':
-        families.push(next(arg, i));
+        families.push(family(arg, i));
         i += 1;
         break;
       case '--ignore-family':
-        ignoreFamilies.push(next(arg, i));
+        ignoreFamilies.push(family(arg, i));
         i += 1;
         break;
       case '--history':
@@ -433,11 +460,11 @@ export function parseArgs(argv: readonly string[], cwd: string): CliOptions {
         i += 1;
         break;
       case '--baseline':
-        baseline = next(arg, i);
+        baseline = filled(arg, i, 'a file');
         i += 1;
         break;
       case '--record-baseline':
-        recordBaseline = next(arg, i);
+        recordBaseline = filled(arg, i, 'a file');
         i += 1;
         break;
       case '--no-config':
@@ -513,6 +540,12 @@ export function parseArgs(argv: readonly string[], cwd: string): CliOptions {
   }
   if (format === 'markdown' && command !== 'check' && command !== 'diff' && !help && !version) {
     throw new UsageError(`--format markdown is a report for a pull request, so it belongs to check or diff, not to ${command}`);
+  }
+
+  // The second word given to `rules` was dropped, so `rules a b` listed `a`
+  // and said nothing of `b`.
+  if (command === 'rules' && patterns.length > 1 && !help && !version) {
+    throw new UsageError(`rules takes one rule id, got ${patterns.length}: ${patterns.join(', ')}`);
   }
 
   if (command === 'diff' && patterns.length !== 2 && !help && !version) {
@@ -664,6 +697,21 @@ async function run(io: CliIO, err: (text: string) => void): Promise<number> {
   // A diff reads two files and nothing else: no configuration and no corpus, so
   // it can compare exports from a checkout it is not running in.
   if (options.command === 'diff') return runDiff(options.patterns as readonly [string, string], cwd, options.format, out, err);
+
+  // A root that was named is a directory, for every command that reads one.
+  // `rules --root` with a path that is not there listed the built-in rules and
+  // exited 0, as if the repository declared none, and the others said only
+  // that no specification matched under it.
+  if (options.rootExplicit) {
+    const { stat } = await import('node:fs/promises');
+    // A path that cannot be reached reads as one that is not there: either
+    // way there is nothing under it to read.
+    const found = await stat(options.root).catch(() => null);
+    if (found === null || !found.isDirectory()) {
+      err(`spec-graph: --root "${options.root}" is not ${found === null ? 'there' : 'a directory'}\n`);
+      return EXIT_ERROR;
+    }
+  }
 
   const color = options.color ?? shouldUseColor({ isTTY: io.isTTY, env });
   const ascii = options.ascii ?? shouldUseAscii({ env });
