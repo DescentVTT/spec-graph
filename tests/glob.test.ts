@@ -833,7 +833,10 @@ describe('walking', () => {
     const empty = 'invalid glob "": the pattern is empty';
     await expect(walkFiles({ root: ROOT, patterns: ['docs/**/*.md', ''] })).rejects.toThrow(empty);
     await expect(walkFiles({ root: ROOT, patterns: ['docs/**/*.md'], ignore: ['drafts', ''] })).rejects.toThrow(empty);
-    // A name of spaces is still a name: a directory can be called that.
-    expect(await paths(['docs/**/*.md'], ['  '])).toContain('docs/drafts/0003.md');
+    // A pattern of spaces is empty too. It was read as a name, since a
+    // directory can be called that, which left --ignore the one list taking
+    // what the others refuse. A name with a space in it is still a name
+    // (glob-walk.test.ts).
+    await expect(paths(['docs/**/*.md'], ['  '])).rejects.toThrow('invalid glob "  ": the pattern is empty');
   });
 });
