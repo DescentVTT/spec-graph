@@ -61,6 +61,20 @@ async function withConfig(name: string, config: string, body: (root: string) => 
   }
 }
 
+/** A copy of a committed corpus with a configuration beside it, under a path named for this process, removed after. */
+async function withConfigured(name: string, corpus: string, config: string, body: (root: string) => Promise<void>): Promise<void> {
+  const { cp, rm, writeFile } = await import('node:fs/promises');
+  const root = `tests/fixtures/.tmp/${name}-${process.pid}`;
+  await rm(root, { recursive: true, force: true });
+  await cp(corpus, root, { recursive: true });
+  await writeFile(`${root}/.spec-graph.json`, config);
+  try {
+    await body(root);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}
+
 /* -------------------------------------------------------------------------- */
 
 describe('argument parsing', () => {
@@ -256,11 +270,19 @@ describe('--ignore-ref', () => {
   });
 
   it('leaves the graph itself untouched', async () => {
-    // The filter suppresses findings, never edges. Exporting the graph with a
-    // pattern that matches everything must still show every relation.
-    const plain = await run('graph', '--root', CONCEPTS, '--graph-format', 'json');
-    const filtered = await run('graph', '--root', CONCEPTS, '--graph-format', 'json', '--ignore-ref', '*');
-    expect(filtered.out).toBe(plain.out);
+    // The filter suppresses findings, never edges. Exporting the graph under
+    // a pattern that matches everything must still show every relation. The
+    // pattern is the configuration's: the option is a check's, since a graph
+    // is the same with it as without, and `graph` refuses it.
+    await withConfigured('cli-ignore-ref-graph', CONCEPTS, '{ "ignoreReferences": ["*"] }\n', async (root) => {
+      const plain = await run('graph', '--root', root, '--graph-format', 'json', '--no-config');
+      const filtered = await run('graph', '--root', root, '--graph-format', 'json');
+      expect(filtered.code).toBe(EXIT_OK);
+      expect(filtered.out).toBe(plain.out);
+      // And it does pass over the findings, so the two runs differ in that.
+      expect((await run('check', '--root', root, '--no-config')).code).toBe(EXIT_FAILED);
+      expect((await run('check', '--root', root)).code).toBe(EXIT_OK);
+    });
   });
 });
 
@@ -295,9 +317,11 @@ describe('family rules', () => {
   });
 
   it('never cost a relation that resolved', async () => {
-    const result = await run('graph', ...RFCS, '--graph-format', 'json', '--ignore-family', 'RFC');
-    const parsed: { edges: { from: string; to: string }[] } = JSON.parse(result.out);
-    expect(parsed.edges.some((e) => e.from === 'RFC-0002' && e.to === 'RFC-0001')).toBe(true);
+    await withConfigured('cli-ignore-family-graph', 'tests/fixtures/rfcs', '{ "ignoreFamilies": ["RFC"] }\n', async (root) => {
+      const result = await run('graph', 'docs/**/*.md', '--root', root, '--graph-format', 'json');
+      const parsed: { edges: { from: string; to: string }[] } = JSON.parse(result.out);
+      expect(parsed.edges.some((e) => e.from === 'RFC-0002' && e.to === 'RFC-0001')).toBe(true);
+    });
   });
 });
 

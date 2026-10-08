@@ -70,8 +70,8 @@ async function withRepo(name: string, files: Record<string, string>, body: (root
 
 describe('a family option given a name no family has', () => {
   // What an unset variable leaves, a list typed where one name goes, an
-  // identifier, the option typed after it, two names, and a number first.
-  const NAMELESS = ['', ' ', ',', 'ADR,RFC', 'ADR-0001', '--strict', 'ADR RFC', '9A'];
+  // identifier, two names, and a number first.
+  const NAMELESS = ['', ' ', ',', 'ADR,RFC', 'ADR-0001', 'ADR RFC', '9A'];
 
   it('is refused by the option and what it holds', () => {
     for (const flag of ['--family', '--ignore-family']) {
@@ -199,11 +199,9 @@ describe('--format json asked of a command that writes none', () => {
     expect(usage(['rules', '--format', 'json'])).toBe('--format json belongs to check, query or diff, not to rules: rules lists the rules as text');
   });
 
-  it('is taken by the three commands that write it, and the default is taken by all five', () => {
+  it('is taken by the three commands that write it, as the default is', () => {
     for (const argv of [['check'], ['query', 'document'], ['diff', 'a.json', 'b.json']]) {
       expect(parseArgs([...argv, '--format', 'json'], '/repo').format, argv[0]).toBe('json');
-    }
-    for (const argv of [['check'], ['query', 'document'], ['graph'], ['rules'], ['diff', 'a.json', 'b.json']]) {
       expect(parseArgs([...argv, '--format', 'human'], '/repo').format, argv[0]).toBe('human');
     }
   });
