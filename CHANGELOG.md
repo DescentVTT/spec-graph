@@ -11,7 +11,7 @@ the family's
 [versioning policy](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0009-versions-before-1-0.md)
 records.
 
-## Unreleased
+## 0.14.0
 
 An input that is set and names nothing - a family name no family has, a list
 of families no document belongs to, a `--root` that is no directory, a blank
