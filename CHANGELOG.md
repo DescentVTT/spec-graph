@@ -52,6 +52,11 @@ given. It is refused now: exit 2 and one line that names it
 - **`rules` takes one rule id.** `spec-graph rules a b` listed `a` and said
   nothing of `b`; it is exit 2 now, with both named.
   Upgrading: one run for each rule, or no id for all of them.
+- **`--format json` is refused by `graph` and `rules`.** `graph --format
+  json` wrote DOT and `rules --format json` its list, each with exit 0, as
+  `--format sarif` was already refused there.
+  Upgrading: `graph --graph-format json` writes the graph as JSON; `rules`
+  has one format.
 - **`CI` no longer turns colour off.** With `CI` set and stdout a terminal the
   report was plain; it is coloured there, as spec-brief's and spec-guard's
   are, and where stdout is no terminal it is plain as before.

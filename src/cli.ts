@@ -190,14 +190,15 @@ OPTIONS
   --ratchet               Also fail when a baseline entry no longer occurs, so
                           a paid-off exemption cannot outlive the defect.
   --no-config             Ignore .spec-graph.json and the package.json key.
-  --format <fmt>          human, json, sarif, github, gitlab or markdown. sarif
-                          is the interchange format GitHub code scanning and
-                          editors already read, github the workflow commands a
-                          GitHub Actions log turns into annotations, and gitlab
-                          the Code Quality report a GitLab merge request reads,
-                          all three for check; markdown is a table for a
-                          pull-request comment or $GITHUB_STEP_SUMMARY, for
-                          check or diff (default: human)
+  --format <fmt>          human, json, sarif, github, gitlab or markdown. json
+                          is for check, query or diff. sarif is the interchange
+                          format GitHub code scanning and editors already read,
+                          github the workflow commands a GitHub Actions log
+                          turns into annotations, and gitlab the Code Quality
+                          report a GitLab merge request reads, all three for
+                          check; markdown is a table for a pull-request comment
+                          or $GITHUB_STEP_SUMMARY, for check or diff (default:
+                          human)
   --graph-format <fmt>    dot, mermaid or json (default: dot)
   --documents-only        Leave items out of the exported graph
   --rule <id>=<severity>  Override one rule: error, warn, info or off. A project
@@ -540,6 +541,14 @@ export function parseArgs(argv: readonly string[], cwd: string): CliOptions {
   }
   if (format === 'markdown' && command !== 'check' && command !== 'diff' && !help && !version) {
     throw new UsageError(`--format markdown is a report for a pull request, so it belongs to check or diff, not to ${command}`);
+  }
+
+  // JSON is refused where the other reports are, and for the reason above:
+  // `graph --format json` wrote DOT and `rules --format json` a list, each
+  // with exit 0, to whatever was waiting for JSON.
+  if (format === 'json' && (command === 'graph' || command === 'rules') && !help && !version) {
+    const instead = command === 'graph' ? 'graph writes JSON with --graph-format json' : 'rules lists the rules as text';
+    throw new UsageError(`--format json belongs to check, query or diff, not to ${command}: ${instead}`);
   }
 
   // The second word given to `rules` was dropped, so `rules a b` listed `a`

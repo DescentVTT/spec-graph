@@ -1041,8 +1041,9 @@ spec-graph diff <before> <after>     Compare two JSON graph exports.
 --record-baseline <f>   Write today's findings as accepted debt, exit 0
 --ratchet               Also fail when a baseline entry no longer occurs
 --no-config             Ignore .spec-graph.json and the package.json key
---format <fmt>          human | json | sarif (check) | github (check)
-                        | gitlab (check) | markdown (check, diff)
+--format <fmt>          human | json (check, query, diff) | sarif (check)
+                        | github (check) | gitlab (check)
+                        | markdown (check, diff)
 --graph-format <fmt>    dot | mermaid | json
 --documents-only        Hide items; their relations lift onto their documents
 --rule <id>=<severity>  error | warn | info | off (repeatable)
@@ -1074,6 +1075,8 @@ variable in `--family "$FAMILIES"` is the usual way to write one:
 - an empty or blank `--baseline`, `--record-baseline`, `--ignore`,
   `--ignore-ref`, `--history` or pattern;
 - a second word after `rules`, which takes one rule id;
+- `--format json` asked of `graph`, whose JSON is `--graph-format json`, or
+  of `rules`, which has one format;
 - a configuration file that is there and cannot be read, a directory called
   `.spec-graph.json` among them.
 

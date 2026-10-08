@@ -160,6 +160,7 @@ wrote, so that the plain run exits `1`:
 | `--ignore " "` | exit `1`, as without it | exit `2`: `invalid glob " ": the pattern is empty` |
 | `--record-baseline " "` | exit `0`, and a file named with a space | exit `2`: `--record-baseline expects a file, got " "` |
 | `rules broken-reference extra` | exit `0`, the first rule | exit `2`: `rules takes one rule id, got 2: broken-reference, extra` |
+| `graph --format json` | exit `0`, DOT | exit `2`: `--format json belongs to check, query or diff, not to graph` |
 
 The first row is why this is not tidiness. `families` is an allowlist, and a
 name no family has allows nothing: every family is then one the repository
@@ -203,7 +204,9 @@ What is still taken, and why:
   pattern, and a path or a target may hold a comma.
 - An option the command does not read, `check --graph-format json` or
   `graph --strict`. The run writes what the command writes, whatever the
-  option.
+  option. `--format json` on `graph` and `rules` is the exception, because
+  `--format sarif` was already refused there for the reason that holds for
+  JSON: the file handed to whatever waits for it is DOT.
 
 **The environment is read leniently, and one way.** No variable stops a run:
 the ones a report reads are conventions other programs set. `NO_COLOR` and
