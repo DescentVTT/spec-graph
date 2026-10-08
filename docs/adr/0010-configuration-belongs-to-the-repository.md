@@ -229,6 +229,107 @@ and `false` turned ASCII on. It asks for ASCII unless it is empty, `0` or
 where it was written down nowhere. Off is the same as unset: a legacy Windows
 console still gets ASCII.
 
+**A list of families is held against the documents.** *Amended again
+2026-10-09.* The amendment above refused a name no family can have and kept
+`--family RFC` where the corpus has no such family: "a name a family can have
+is taken at its word". Measured on main at dac6031, over the same two
+ADRs: `check --family RFC`, `--family RFC --strict` and `--family ADRS` each
+print `the specification graph is consistent` and exit `0`, where the plain
+run exits `1`, and `--record-baseline` records no finding. It is the run the
+table's first row describes, reached by a name that is one. A page of no
+family that links to an ADR and an RFC nobody wrote goes the same way under
+`--family KEP`: the list passes over every identifier of a family that is not
+on it, written in brackets or in prose.
+
+The family contract has a line for this: nothing measured is not clean
+([spec-core's ADR-0005](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0005-the-family-contract.md)).
+So where a list is in force, `--family` or `families`, and no document of the
+corpus belongs to a family on it, a check ends with exit `2` before it reports
+or records anything:
+
+```text
+spec-graph: no document here belongs to a family named by --family (RFC); the documents here belong to ADR
+  name a family the documents belong to, or leave the list out
+```
+
+A document belongs to a family when its identifier is written with it, which
+is the witness [ADR-0004](0004-reference-resolution.md) asks for before it
+reads a citation in prose. Where one name on the list has documents and
+another has none, the run says so on stderr and fails nothing:
+
+```text
+spec-graph: no document here belongs to RFC, named by --family; the documents here belong to ADR
+```
+
+That is a family the repository means to start, or a typo in half the list,
+and the line is what tells the two apart for whoever reads it. A list whose
+every name has a document sees no new line, which is the half
+[ADR-0006](0006-false-positives-cost-more.md) cares about. A repository with
+a list and no numbered document yet is refused with the rest: the list passes
+over what it passes over there too, and it is left out until the first such
+document is written.
+
+`--ignore-family` gets no such rule. A name on it passes over citations of
+that one family, so a mistyped name passes over nothing and the run reports
+more: `--ignore-family RCF` over those two ADRs exits `1`, as the plain run
+does. A name that is right, and covers every family the corpus has, is what
+was asked for by name.
+
+**An option belongs to the commands that read it.** *Amended again
+2026-10-09.* The same amendment kept "an option the command does not read",
+since "the run writes what the command writes, whatever the option". Measured
+on main at dac6031, twenty-three options against the five commands: of 115
+pairings 2 were refused, and 64 pair a command with an option it never reads,
+each of which ran exactly as without the option. `query --strict` was no
+stricter, `graph --record-baseline new.json` wrote no file and said nothing,
+and with the command forgotten, `spec-graph --graph-format mermaid` wrote the
+check's report into whatever was to hold the graph. spec-guard refuses such an
+option for the reason that holds here: taking the flag and doing nothing with
+it tells someone their query was strict. Those 64 are refused now, by the
+command, naming the option and the commands that do read it: `--graph-format
+belongs to graph, not to check`.
+
+| Option | Read by |
+| --- | --- |
+| `--root`, `--verbose` | `check`, `query`, `graph`, `rules` |
+| `--ignore`, `--history` | `check`, `query`, `graph` |
+| `--format` | `check`, `query`, `diff` |
+| `--graph-format`, `--documents-only` | `graph` |
+| `--explain` | `rules` |
+| `--ignore-ref`, `--family`, `--ignore-family`, `--baseline`, `--record-baseline`, `--ratchet`, `--rule`, `--strict`, `--max`, `--max-warnings`, `--color` | `check` |
+| `--no-config`, `--no-color`, `--ascii` | every command |
+
+The last row is not leniency. Each of the three is true already of a command
+with nothing to read it for - only a check's report has colour or glyphs, and
+`diff` reads no configuration - and a script passes them to every command it
+runs. `--color` is not among them: it would promise colour. The three options
+about citations are a check's alone, because they pass over findings and never
+an edge ([ADR-0008](0008-wiki-links-carry-no-path.md)): a graph and a query
+are the same with them as without. The tests that held that by exporting a
+graph under `--ignore-ref "*"` hold it now through the configuration file,
+which is no option, and which every command reads as it did.
+
+What a *format* does not read is still taken: `check --format json --max 3`,
+or `--no-color` beside `--format sarif`. That pairs an option with an option,
+and a caller that asks for JSON passes `--no-color` beside it, as spec-harness
+does of spec-brief.
+
+**A value that begins with `--` is the next option.** *Amended again
+2026-10-09.* `--ignore --strict` ignored a directory called `--strict` and
+left the check unstrict, `--history --verbose` took a file of that name for a
+journal, and `--record-baseline --verbose` wrote one. The amendment above
+caught this for `--family` and `--root` by what each checks; every option that
+takes a value now refuses it in the same words, `--ignore needs a value, and
+--strict reads as an option`, and so for `-h` and `-v`. No option needs such a
+value: a name that does begin with two dashes is written `./--name` for a
+file, `[-]-name` in a pattern and `\--name` for a reference target, each
+measured to name what it should. One dash is left alone: `--max -1` has its
+own line, and `-drafts` is a name.
+
+An empty name given to `diff` resolved to the directory the run was started
+in, and the refusal was the read's, `cannot read : EISDIR`. It is `diff
+expects a graph export on each side, got "" for the first`.
+
 ## What this does not fix
 
 The "greedy prefix" flood is narrower than it looks, and worth stating precisely
