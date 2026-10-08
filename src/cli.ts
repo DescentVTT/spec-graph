@@ -173,7 +173,9 @@ OPTIONS
   --family <name>         Families a bare identifier in prose may name. When
                           given, everything else stays prose. Repeatable: one
                           name each time, the prefix its identifiers are
-                          written with, ADR for ADR-0007.
+                          written with, ADR for ADR-0007. A document here has
+                          to belong to one of them, or the check stops: a list
+                          that names none allows nothing.
   --ignore-family <name>  Families that are never citations - RFC when the repo
                           cites RFC 2119 and keeps its own RFCs. Repeatable,
                           one name each time.
@@ -922,17 +924,19 @@ async function run(io: CliIO, err: (text: string) => void): Promise<number> {
     projectRules,
   );
 
+  // The list the check is held against, once it has read the documents.
+  const families = [...(file.families ?? []), ...options.families];
   const analyseOptions: AnalyseOptions = {
     root,
     patterns,
-    // A stray entry in one of the empty fallbacks below changes a run only if
+    // A stray entry in one of the empty fallbacks here changes a run only if
     // it matches a path or a target some corpus has, so the mutants that plant
     // one survive every corpus but one built for them - except in the two
     // lists of families, where what they plant is no family's name and is
     // refused.
     ignore: [...(file.ignore ?? []), ...typed.ignore],
     ignoreReferences: [...(file.ignoreReferences ?? []), ...options.ignoreReferences],
-    families: [...(file.families ?? []), ...options.families],
+    families,
     ignoreFamilies: [...(file.ignoreFamilies ?? []), ...options.ignoreFamilies],
     historyPatterns: [...(file.historyPatterns ?? []), ...typed.history],
     severities,
@@ -1007,6 +1011,31 @@ async function run(io: CliIO, err: (text: string) => void): Promise<number> {
     }
 
     default: {
+      // An allowlist is held against the corpus it was written for. One that
+      // names no family a document here belongs to allows nothing the corpus
+      // has: every citation is then prose, and the run that failed on a
+      // dangling one reported a consistent graph - for `--family ADRS` as it
+      // did for `--family ""`. Nothing was measured, which is not clean
+      // (spec-core's ADR-0005), so the run stops before it says anything. A
+      // list that names such a family beside one the corpus has is a family
+      // the repository means to start, or a typo in half of it: said, and
+      // nothing fails.
+      const allowed = [...new Set(families.map((family) => family.trim().toUpperCase()))];
+      const absent = allowed.filter((family) => !result.corpus.families.includes(family));
+      if (absent.length > 0) {
+        const lists: string[] = [];
+        if (options.families.length > 0) lists.push('--family');
+        if (file.families !== undefined && file.families.length > 0) lists.push(`"families" in ${loaded.source}`);
+        const here = `the documents here belong to ${result.corpus.families.length > 0 ? listed(result.corpus.families, 'and') : 'no family'}`;
+        if (absent.length === allowed.length) {
+          err(
+            `spec-graph: no document here belongs to a family named by ${lists.join(' and ')} (${allowed.join(', ')}); ${here}\n  name a family the documents belong to, or leave the list out\n`,
+          );
+          return EXIT_ERROR;
+        }
+        err(`spec-graph: no document here belongs to ${listed(absent, 'or')}, named by ${lists.join(' and ')}; ${here}\n`);
+      }
+
       // Recording is not checking. It writes down what is wrong today so that
       // tomorrow can be compared against it, and says nothing about whether
       // today is acceptable - so it reports what it wrote and exits clean.

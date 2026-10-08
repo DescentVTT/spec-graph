@@ -93,6 +93,15 @@ export interface ResolvedCorpus {
    * the two settings that can silence one. See ADR-0008.
    */
   readonly suppressed: readonly SuppressedRef[];
+  /**
+   * The families a document here belongs to, sorted: those an identifier of
+   * some document names, as `ADR` is named by `ADR-0007`.
+   *
+   * What a citation in prose is witnessed by (ADR-0004), and what an
+   * allowlist of families is held against: one that names none of these
+   * allows nothing the corpus has (ADR-0010).
+   */
+  readonly families: readonly string[];
 }
 
 /**
@@ -238,7 +247,7 @@ export function resolveCorpus(
     }
   }
 
-  return { nodes, documents, items, edges, dangling, problems, misreadKeys, suppressed };
+  return { nodes, documents, items, edges, dangling, problems, misreadKeys, suppressed, families: [...index.families].sort() };
 }
 
 /* -------------------------------------------------------------------------- */
