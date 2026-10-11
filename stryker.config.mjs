@@ -26,6 +26,8 @@ export default {
   // that reaches a file other than through an import would drop out of one shard
   // and not out of a run over everything. Off, every shard runs every test, and
   // perTest coverage still narrows each mutant to the tests that reach it.
+  // vitest.mutation.config.ts says which two files the sweep leaves out, and
+  // why a mutant's quickest test files run first.
   vitest: { configFile: 'vitest.mutation.config.ts', related: false },
 
   // perTest is what makes this practical: only the handful of tests that

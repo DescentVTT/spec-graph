@@ -12,13 +12,25 @@ import { BaseSequencer, type TestSpecification } from 'vitest/node';
  * the first test that fails: every file for a static mutant, the files of the
  * tests that cover it for any other. What a mutant costs is the files that
  * run before the one that kills it. Vitest's order suits a run that reports
- * every failure and wants the long files started early.
+ * every failure and wants the long files started early. Here fourteen files
+ * cover a mutant that is not static, and the longest of all,
+ * `tests/cli.test.ts`, twice as long as any other, covers seven such mutants
+ * in ten. In the three sweeps before this order one mutant in seven was
+ * killed only after tests of another file had completed: 135 such tests for
+ * a mutant that is not static, and 50 in the first sweep in this order
+ * (ADR-0007, 2026-10-11).
  *
  * No test leaves the run and none is added: a mutant survives when every
- * file has passed, in any order.
+ * file has passed, in any order. That sweep read the score of the three
+ * before it, 96.50% over 8,832 mutants with the same 293 survivors, and its
+ * mutants that are not static took 33 minutes of the four shards where they
+ * had taken 41 to 43. The static ones took the 13 they had taken: one killed
+ * late had 700 tests ahead of its killer in either order.
  *
  * A file the worker has not run yet has no time to go by. It runs after
- * those that have, the smaller first, and has a time from then on.
+ * those that have, the smaller first, and has a time from then on. The time
+ * is the file's last run in that worker, which for a mutant that is not
+ * static is the tests that cover it and no others.
  */
 export class QuickestFirst extends BaseSequencer {
   override async sort(files: TestSpecification[]): Promise<TestSpecification[]> {

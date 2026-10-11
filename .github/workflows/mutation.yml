@@ -19,9 +19,10 @@ name: Mutation
 #
 # Both tiers run in shards. The sweep took 166 to 171 minutes on one runner, on
 # identical source, three times. Each shard mutates its own files
-# (scripts/mutation-shards.mjs) with every test, and a final job merges the
-# reports, refuses anything that is not exactly one sweep, and applies the gate
-# to the merged score. ADR-0019 has the measurements.
+# (scripts/mutation-shards.mjs) with every test, a mutant's quickest test files
+# first (vitest.mutation.config.ts), and a final job merges the reports,
+# refuses anything that is not exactly one sweep, and applies the gate to the
+# merged score. ADR-0019 has the measurements.
 on:
   # A push to a branch with an open pull request would otherwise run twice, once
   # per event. Filtering the push the way ci.yml does leaves one run.
