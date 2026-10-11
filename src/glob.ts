@@ -326,7 +326,7 @@ export function createReferenceFilter(patterns: readonly string[]): (target: str
  * itself starts at each.
  */
 export function globBase(pattern: string): string {
-  const { glob } = pathList([pattern]).entries[0] as { readonly glob: Glob };
+  const { glob } = pathList([pattern]).entries[0]!;
   const bases = glob.bases.map((base) => base.split('/'));
   const shared = bases[0] as string[];
   let length = shared.length;
