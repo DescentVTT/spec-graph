@@ -476,7 +476,7 @@ describe("the order a mutant's test files run in", () => {
     expect(new Set(ours.asked)).toEqual(new Set(Object.keys(TIMED)));
   });
 
-  it("is the sweep's alone, over the suite `npm test` runs less the two files no mutant reaches", () => {
+  it("is the sweep's alone, over the suite `npm test` runs less the three files no mutant reaches", () => {
     const unit = unitSuite.test!;
     const { exclude, sequence, ...sweep } = mutationSuite.test!;
     expect(sequence).toEqual({ sequencer: QuickestFirst });
@@ -489,7 +489,7 @@ describe("the order a mutant's test files run in", () => {
       testTimeout: unit.testTimeout,
       hookTimeout: unit.hookTimeout,
     });
-    expect(exclude).toEqual(['tests/mutation-shards.test.ts', 'tests/bin.test.ts', '**/node_modules/**']);
+    expect(exclude).toEqual(['tests/mutation-shards.test.ts', 'tests/mutation-unmeasured.test.ts', 'tests/bin.test.ts', '**/node_modules/**']);
   });
 });
 

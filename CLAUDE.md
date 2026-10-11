@@ -171,6 +171,13 @@ assertions that restate the implementation is worse than a lower number.
 Read the survivor list, not just the score. It is the more useful output:
 `reports/mutation/index.html` after a run.
 
+**Nothing a mutant could change stands under an `as`.** Stryker passes over the
+whole of a cast, so no test is held to what is written there. Hoist the value
+and cast the name, write `!` for an index read, `satisfies` for a tuple or a
+table. `tests/mutation-unmeasured.test.ts` and the sweep's score job fail on
+a site left under one (`scripts/mutation-unmeasured.mjs`; ADR-0007,
+2026-10-12).
+
 **A test that writes to disk writes to a path named for its process**, and never
 changes a shared fixture. Stryker runs the same test file in several workers at
 once, in one sandbox, and a fixed path is one they write and delete under each
