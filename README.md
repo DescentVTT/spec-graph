@@ -1150,14 +1150,16 @@ npx --no-install @descent-vtt/spec-graph --format json | jq -r '.summary'
 ### Colour and glyphs
 
 `--color` and `--no-color` decide, then the environment, in this order:
-`NO_COLOR` set and not empty turns colour off; `FORCE_COLOR` set and not empty
-turns it on, and `0` turns it off; a `TERM` of `dumb` turns it off; otherwise
+`NO_COLOR` set and not empty turns colour off; `FORCE_COLOR` set to exactly
+`0` or exactly `false` turns it off, on a terminal too, and set to anything
+else that is not empty turns it on; a `TERM` of `dumb` turns it off; otherwise
 the report is coloured when stdout is a terminal. `CI` is not read.
 
 `--ascii` draws the report in ASCII glyphs, and so does `SPEC_GRAPH_ASCII`
 set to anything but `0`, `false` or nothing. Without either, a Windows console
-that sets neither `WT_SESSION` nor `TERM_PROGRAM` gets ASCII and every other
-terminal the box-drawing characters.
+that sets neither `WT_SESSION` nor `TERM_PROGRAM`, or sets them to nothing,
+gets ASCII and every other terminal the Unicode glyphs, `✖`, `⚠`, `↳` and
+the like.
 
 ## In CI
 

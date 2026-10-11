@@ -229,6 +229,19 @@ and `false` turned ASCII on. It asks for ASCII unless it is empty, `0` or
 where it was written down nowhere. Off is the same as unset: a legacy Windows
 console still gets ASCII.
 
+*Amended 2026-10-11.* Two readings above were not the family's. Measured on
+main at ebdae4c, through the launcher into a pipe: `FORCE_COLOR=false`
+coloured the report, where Node and `supports-color` read `false` as off, and
+on Windows a console with `WT_SESSION=` was sent the Unicode glyphs, where
+one that leaves the variable unset gets ASCII. `FORCE_COLOR` is off now for
+exactly `0` or exactly `false`, on a terminal too, and on for any other value
+that is not empty, as it was, `true`, `1` and `FALSE` among them
+([spec-core's ADR-0005](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0005-the-family-contract.md)).
+`WT_SESSION` and `TERM_PROGRAM` set to nothing are unset, as `NO_COLOR` and
+`FORCE_COLOR` are and as spec-guard reads them: each was read for being set,
+the fault `SPEC_GRAPH_ASCII` had. One of the two cleared beside one that names
+a terminal is still a terminal named.
+
 **A list of families is held against the documents.** *Amended again
 2026-10-09.* The amendment above refused a name no family can have and kept
 `--family RFC` where the corpus has no such family: "a name a family can have
