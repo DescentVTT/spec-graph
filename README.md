@@ -1006,15 +1006,34 @@ spec-graph: no document here belongs to a family named by --family (RFC); the do
 ```
 
 A document belongs to a family when its identifier is written with it, as
-`ADR-0007` is with `ADR`. A list that names such a family beside one the
-documents do belong to is a family the repository means to start, or a typo in
-half the list: it is said on stderr and fails nothing.
+`ADR-0007` is with `ADR`. One name with no document, beside names that have
+them, stops the check where the list also leaves out a family the documents do
+belong to. `--family ADR --family RFCS`, in a repository of ADRs and RFCs,
+passes over every citation of an RFC, and the check that fails without the
+list would report a consistent graph. One name is most likely meant for the
+other, so the line names both, and the exit is `2`:
+
+```text
+spec-graph: no document here belongs to RFCS, named by --family; the documents here belong to ADR and RFC, and the list leaves out RFC
+  name each family as its documents do, or leave it off the list until its first document is written
+```
+
+Where every family the documents belong to is on the list, a further name with
+no document is a family the repository means to start, or one whose documents
+this run does not read. The list then passes over nothing the run would have
+read without it, so the name is said on stderr and fails nothing:
 
 ```text
 spec-graph: no document here belongs to RFC, named by --family; the documents here belong to ADR
 ```
 
-A list whose every name has a document sees neither line. `ignoreFamilies`
+A family on `ignoreFamilies` was taken out on purpose and is not one the list
+leaves out. A list that is narrower on purpose, `--family ADR` over ADRs and
+RFCs, has no name without a document and sees no line; where it also names a
+family not started yet, `ignoreFamilies` is how it says which family it leaves
+out on purpose.
+
+A list whose every name has a document sees none of them. `ignoreFamilies`
 needs no such check: a name on it passes over citations of that family alone,
 so a mistyped one passes over nothing and the run reports more, not less.
 
@@ -1101,7 +1120,8 @@ variable in `--family "$FAMILIES"` is the usual way to write one:
 - an empty or blank `--baseline`, `--record-baseline`, `--ignore`,
   `--ignore-ref`, `--history` or pattern;
 - a list of families, `--family` or `families`, none of which a document
-  here belongs to ([Family rules](#family-rules));
+  here belongs to, or one that names a family with no document and leaves
+  out a family the documents do belong to ([Family rules](#family-rules));
 - a second word after `rules`, which takes one rule id, and an empty name
   given to `diff`;
 - `--format json` asked of `graph`, whose JSON is `--graph-format json`, or

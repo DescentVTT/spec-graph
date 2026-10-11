@@ -327,6 +327,80 @@ a list and no numbered document yet is refused with the rest: the list passes
 over what it passes over there too, and it is left out until the first such
 document is written.
 
+*Amended 2026-10-12.* One name with no document, beside names that have
+them, was a line on stderr whatever else the list did, and nobody had
+measured whether what cites such a family is reported. Measured on main at
+11e2895, through the launcher, over two or three ADRs and an RFC written for
+it, where an ADR cites an RFC in prose:
+
+| The corpus | The list | The citation | The run |
+| --- | --- | --- | --- |
+| ADRs, no RFC | none | `RFC-0001` | exit `0`, consistent |
+| ADRs, no RFC | `ADR`, `RFC` | `RFC-0001` | exit `0`, consistent, and the line |
+| ADRs and RFC-0001 | none, or `ADR`, `RFC` | `RFC-0099` | exit `1`, `broken-reference` |
+| ADRs and RFC-0001 | `ADR`, `RFCS` | `RFC-0099` | exit `0`, consistent, and the line |
+| The same, the RFCs ignored, outside the patterns, or moved away | `ADR`, `RFC` | `RFC-0099` | exit `0`, consistent, and the line |
+| The same, the RFCs ignored | none | `RFC-0099` | exit `0`, consistent, no line |
+
+`--strict` changes none of those rows, the JSON report of each passing one
+has `"ok": true` and nothing of the line, and `--record-baseline` records no
+finding. Under the mistyped list `--verbose` and the report's `suppressed`
+show the citation as one of an ignored family; in the other passing rows
+nothing names it. A reference made on purpose fares better, except under the
+mistyped list. A path, a wiki link and a front-matter field that name RFCs
+nobody wrote are each `broken-reference` where the list is `ADR`, `RFC`,
+with the RFCs read or ignored; under `ADR`, `RFCS` only the path is, since a
+list passes over every identifier of a family that is not on it, in brackets
+and in front matter as in prose. Of four such references, one of them in
+prose, the mistyped list reports one.
+
+So a citation in prose of a family no document here belongs to is not
+reported, and row against row the list is the cause of that once. With the
+RFCs absent, ignored, outside the patterns or moved away, `ADR`, `RFC` and no
+list at all give the same answer: the family is not one the corpus has, its
+citations are prose either way, and the name costs the run nothing. The
+fourth row is the one the list costs a finding: exit `1` without it, exit `0`
+with it. What differs there is not that a name has no document. It is that
+a family the documents do belong to has been left off the list, by a name
+that stands where its own should.
+
+So the check stops, exit `2` before anything is reported or recorded, where
+the list names a family no document here belongs to and leaves out a family
+the documents do belong to. The line names both, since one is most likely
+meant for the other:
+
+```text
+spec-graph: no document here belongs to RFCS, named by --family; the documents here belong to ADR and RFC, and the list leaves out RFC
+  name each family as its documents do, or leave it off the list until its first document is written
+```
+
+Where every family the corpus has is on the list, a further name with no
+document is said as it was, and fails nothing: the run reads what it would
+read without the list.
+
+```text
+spec-graph: no document here belongs to RFC, named by --family; the documents here belong to ADR
+```
+
+The wider rule, every name with no document refused, was built first and
+not taken. It stops a repository that lists a family before its first
+document, and a run over part of a repository whose configuration lists the
+families of all of it. Neither loses a finding to the list, and a check that
+stops a correct run is the one
+[ADR-0006](0006-false-positives-cost-more.md) is about. A list no document
+belongs to at all is refused as it was: there nothing is read.
+
+The rule was held against two neighbours. A family on `--ignore-family` or
+`ignoreFamilies` was taken out on purpose and is not one the list leaves
+out: `--ignore-family RFC` beside `ADR`, `RFCS` passes over what it passes
+over with no list, exit `0` both ways and the same report, and is said and
+not refused. A list that is narrower on purpose, `--family ADR` over ADRs
+and RFCs, has no name without a document, so there is nothing to refuse and
+no line. Where such a list also names a family not started yet, `ADR`, `RFC`
+and `PRD` over ADRs, RFCs and KEPs, the run cannot tell `PRD` from a name
+meant for `KEP` and stops; `--ignore-family KEP` says the KEPs are out on
+purpose, and the name is then said and fails nothing.
+
 `--ignore-family` gets no such rule. A name on it passes over citations of
 that one family, so a mistyped name passes over nothing and the run reports
 more: `--ignore-family RCF` over those two ADRs exits `1`, as the plain run
