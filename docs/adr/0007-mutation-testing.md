@@ -909,6 +909,137 @@ sequencer reads its times by, and `npm test` left with vitest's order.
 file's minutes, static and not, so the next measurement reads them off a
 report.
 
+### 2026-10-12: what a sweep does not see
+
+**Stryker makes no mutant of anything under a TypeScript `as`.** Read from
+the source of 10.0.0: `shouldSkip` in its instrumenter's
+`transformers/babel-transformer.js` passes over a node `isTypeNode` accepts,
+and that list, in `util/syntax-helpers.js`, holds `'TSAsExpression'`. The
+whole subtree goes unread: the `i - 1` of `lines[i - 1] as string`, every
+entry of a table written `{ ... } as const`. No test is held to what stands
+there, and the score says nothing of it. `satisfies` and `!` are not on that
+list, and neither is a name.
+
+**Before.** `scripts/mutation-unmeasured.mjs` counts, under every outermost
+`as` of the files a sweep mutates, the nodes one of Stryker's mutators
+applies to. A site is a place a mutator applies, not a mutant. Over the three
+sweeps of the source 0.14.1 was released from, runs 38118353890 on ec232ac and 38119760391 and
+38130734856 on 11e2895, each of 8,841 mutants:
+
+| | |
+| --- | ---: |
+| Files mutated | 22 |
+| Outermost `as` expressions | 150 |
+| With a site under them | 19 |
+| Sites under them | 23 |
+| Mutants a report has inside one | 0 |
+
+Eight of the 19 read the last entry of a list, `xs[xs.length - 1] as T`,
+and one the only entry of a list made from `[pattern]`; six are tuples
+written `[a, b] as const`, five of them in what a diff reports and one the
+entry of the verb table, built when `extract.ts` loads; two slice the two halves of `--rule`; one is `'front-matter' as
+const`; and one, `(match?.[0] ?? '') as string` in the selector's
+`parseValue`, holds three sites.
+
+Two things in the counting are worth keeping. The parser at the top of
+`node_modules` is not Stryker's: `@babel/parser` 7 is there for vitest's
+coverage provider, and the instrumenter loads its own 8 from beneath
+itself, which is the one the script asks for. Both count 23 under 19 here.
+And Stryker 10 has a mutator named `CallExpression` that drops a call
+statement or a `throw new`, but only where no other mutant stands under the
+statement: so a cast inside such a statement, once rewritten, gives its own
+mutants and takes the statement's away. None of the 19 stood in one.
+
+**The rewrite.** Each of the 19 is written so that what stood under the
+cast is read, with the types the compiler sees as they were:
+
+| Rewrite | Casts | Sites |
+| --- | ---: | ---: |
+| `!`, where the cast only dropped `undefined` from an index read | 9 | 9 |
+| `!` on a search that cannot miss, its fallback deleted | 1 | 3 |
+| The value hoisted to a constant, the cast on the name | 2 | 3 |
+| `satisfies`, with the type the tuple is held to | 6 | 7 |
+| The cast dropped: the declared type already held the literal | 1 | 1 |
+| A function with a `const` type parameter | 0 | 0 |
+| Left under an `as`, with a comment | 0 | 0 |
+
+The search is `/^[^\]\s]*/` in `parseValue`: a starred class matches the
+empty string where the search starts, so `exec` never returns `null`, and the
+`?.` and the `?? ''` after it decided nothing. They go with the cast, as
+code that decides nothing went in the passes of 2026-09-27. No table here
+needed `as const` for its literal types, so no helper is added.
+
+The declarations `tsc` emits are byte for byte what they were, all of
+them. The JavaScript differs in two places: the two constants `--rule` now
+has, and that fallback.
+
+**After.** The sweep of the change, dispatched on its branch, beside main's
+last:
+
+| | Main, 11e2895, run 38119760391 | The branch, ba8d7c7, run 38158750946 |
+| --- | ---: | ---: |
+| Mutants | 8,841 | 8,861 |
+| Killed | 8,462 | 8,485 |
+| Timed out | 70 | 67 |
+| Survived | 293 | 293 |
+| No coverage | 16 | 16 |
+| Score | 96.50% | 96.51% |
+| With every timeout lost | 95.71% | 95.76% |
+| Static | 1,415 | 1,417 |
+| Sites under an `as` | 23 | 0 |
+
+Mutant for mutant, by file, the text replaced and the replacement, with the
+19 places spelled as they were: every mutant of main's sweep is in the
+branch's, and the branch has 20 more, one for each site but the three of
+the deleted fallback. All 20 are killed:
+
+- `cli.ts`, 5: `names.length + 1` in the list a refusal names its commands
+  with; `value` for each slice of `--rule`, and `equals - 1`;
+  `match.nodes.length + 1` where a query prints its matches.
+- `diff.ts`, 6: `[]` for each of the five pairs a change is reported as,
+  and `parts.length + 1` in the verdict.
+- `extract.ts`, 5: `[]` and `{}` for an entry of the verb table, both
+  static; `""` for the origin of a relation a table declares;
+  `section.length + 1` and `path.length + 1`.
+- `directives.ts`, `glob.ts`, `graph.ts` and `select.ts`, one each:
+  `open.length + 1`, `pathList([])`, `work.length + 1` and
+  `match.nodes.length + 1`.
+
+The survivors are main's 293 and the mutants without coverage main's 16,
+the same mutants. Three mutants of the two searches in `graph.ts` read
+killed where main's sweep had them timed out: `edge.to === id`, and the
+two `stack.push` statements dropped. Each has read both ways before, on
+this source and the one before it: all three killed in run 38111076929,
+the first killed and the other two timed out in 38114717761 and again, the
+other way round, in the tag's 38130734856. They are the loops the entry
+above describes, detected either way.
+
+Each of the 20 had been written into the source by hand before the sweep
+ran, and the suite the sweep runs run against it: all 20 failed a test.
+The emptied entry of the verb table throws while `extract.ts` loads, so 49
+test files fail to load, which Stryker's runner counts as no failure, and
+`tests/extract-loading.test.ts`, which imports the module inside a test for
+that reason, is what kills it.
+
+The 20 cost no minutes that a runner does not move further. The shards took
+12m50s, 14m07s, 8m16s and 14m08s on runners whose initial runs took 20, 20,
+11 and 20 seconds, which is 10.9, 12.0, 12.8 and 12.0 minutes on the
+17-second runner [ADR-0019](0019-the-sweep-runs-in-shards.md) scales to;
+main's sweep took 7m49s, 14m12s, 15m16s and 14m06s on runners of 12, 21, 20
+and 20 seconds, 11.1, 11.5, 13.0 and 12.0. The two static mutants are in
+shard 1, which now holds 449 of them.
+
+**What holds it.** The script records the number of sites left under an
+`as`, which is none, and fails on more. `tests/mutation-unmeasured.test.ts`
+holds the repository's sources to that number in `npm test`, and the
+script to sources small enough to count by hand, one line for each of
+Stryker's mutators and each thing a mutator leaves alone. The sweep's
+score job runs the script on the report its merge wrote, each source as the
+sweep read it, after the incremental file is published: the verdicts a
+sweep did reach are true whatever it could not see. A cast that has to
+stay, because no rewrite keeps its types, is recorded in the script with
+the reason in a comment beside the code. The `break` stays 93.
+
 ## Open Questions
 
 - [x] Should the `Regex` mutator be scoped? At 57.9% it was among the weakest.
