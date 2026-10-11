@@ -32,41 +32,46 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { minimatch } from 'minimatch';
 import { calculateMutationTestMetrics } from 'mutation-testing-metrics';
 
-// Minutes each file took in the sweeps of 2d02aac and c6c7d00 (runs
-// 36724681688 and 36729888575), read shard by shard off their logs with
-// scripts/mutation-timeline.mjs, the slower of the two:
+// Minutes each file took in the sweep of 0cddd48 (run 38111409073), the first
+// with a mutant's quickest test files run first (vitest.mutation.config.ts),
+// read shard by shard off its logs with scripts/mutation-timeline.mjs. A
+// shard's minutes follow its runner: the suite's initial run took 12 to 21
+// seconds across four sweeps of this source, and each shard's time went with
+// it. So these are minutes on a runner whose initial run takes 17 seconds, a
+// file's own minutes times 17 over its shard's initial run:
 //
-//   extract 14.4   identity 7.0   resolve 4.3   rules 4.1   select 3.7
-//   state 2.8   sections 2.6   cli 2.5   report 2.4   graph 2.1   lifecycle 1.9
-//   glob 1.7   yaml 1.7   directives 1.6   the other eight 5.4 between them
+//   extract 10.1   rules 4.3   identity 3.6   cli 3.4   resolve 2.9   select 2.7
+//   sections 2.6   state 2.3   report 1.9   glob 1.9   lifecycle 1.6   graph 1.4
+//   runner 1.0   the other nine 5.2 between them
 //
 // A file cannot be split, because a line range loses the mutants that cross
-// it (ADR-0019), so no shard finishes before extract.ts, which has one to
-// itself. Its minutes and state.ts's were mostly static mutants that timed
-// out, 102 and 84 of them, each on a clock of 29 to 36 seconds, until the
-// scans stepped past an empty match: extract.ts took 22.5 to 31.0 minutes and
-// state.ts 13.3 to 16.8 in the sweeps before. A file is slower in a shard that
-// instruments more files, whose suite and overhead are slower: glob.ts, yaml.ts
-// and paths.ts took half as long again in the last shard as beside state.ts.
+// it (ADR-0019), and extract.ts has a shard to itself. It was the floor at 12
+// to 14 such minutes in vitest's order, the longest file first, and is under
+// the others' share now: the three shards beside it hold 35 minutes. A file
+// is slower in a shard that instruments more files, whose suite and overhead
+// are slower: glob.ts, yaml.ts and paths.ts once took half as long again in
+// the last shard as beside state.ts.
 //
-// The other files hold 44 minutes. Three shards beside extract.ts put 14.4 to
-// 14.8 in each, level with it; two would put 22. A fifth shard would take a
-// minute or so off a slow runner's sweep, from one more job, where CI's ten
-// jobs already run beside these.
+// The order gave back a quarter of extract.ts, two fifths of identity.ts and
+// a fifth of state.ts and resolve.ts, and nothing of the last shard, whose
+// mutants cli.test.ts kills: the longest file, which now runs last. So the
+// table that was level in vitest's order, 12 to 15 minutes a shard, read 10.1,
+// 9.0, 12.1 and 13.9, and report.ts and baseline.ts moved from the last shard
+// to the second. Still four: a fifth shard would take a minute off a slow
+// runner's sweep, from one more job, where CI's thirteen jobs already run
+// beside these.
 //
 // The first shards are listed. The last mutates everything else the base
 // configuration mutates, so a file added later is still mutated without anyone
 // remembering to list it here; the price is that new files all land in one
 // shard. When a shard passes the others by more than runner variance, re-measure
 // and move files or add a shard, and add it to the workflow's matrix, which a
-// test checks. Minutes, file by file and summed, the slower of the two
-// sweeps; the sweep of this table (run 36732850656) took 14.7, 12.8, 16.3 and
-// 10.7, runner by runner:
+// test checks. Minutes on that 17-second runner, file by file and summed:
 export const ASSIGNED = [
-  ['src/extract.ts'], // 14.4
-  ['src/identity.ts', 'src/select.ts', 'src/state.ts', 'src/paths.ts'], // 14.4
-  ['src/resolve.ts', 'src/rules.ts', 'src/sections.ts', 'src/graph.ts', 'src/yaml.ts'], // 14.8
-]; // and the rest: 14.6
+  ['src/extract.ts'], // 10.1
+  ['src/identity.ts', 'src/select.ts', 'src/state.ts', 'src/paths.ts', 'src/report.ts', 'src/baseline.ts'], // 11.3
+  ['src/resolve.ts', 'src/rules.ts', 'src/sections.ts', 'src/graph.ts', 'src/yaml.ts'], // 12.1
+]; // and the rest: 11.6
 
 export const SHARD_COUNT = ASSIGNED.length + 1;
 
