@@ -56,10 +56,11 @@ Two thresholds are regression guards, set below the last measurement. They move
 **up** when the measurement moves further than the noise, and **never** down to
 accommodate a regression:
 
-- **Mutation score >= 93** (`break` in `stryker.config.mjs`). **96.51% on the
-  hosted runner** governs - it is where the build fails - measured over 8,861
-  mutants once nothing a mutator reads stood under an `as` (run 38158750946;
-  ADR-0007, 2026-10-12), 96.50% over 8,841 on ec232ac before that, and
+- **Mutation score >= 93** (`break` in `stryker.config.mjs`). **96.53% on the
+  hosted runner** governs - it is where the build fails - measured over 8,895
+  mutants on 73b6334 (run 38168801706), 96.51% over 8,861 once nothing a
+  mutator reads stood under an `as` (run 38158750946; ADR-0007, 2026-10-12),
+  96.50% over 8,841 on ec232ac before that, and
   96.28% on d5f9abd after two passes over the survivors of every module killed
   1,492 of them and found thirteen defects (ADR-0007). Before them, 73.41% governed, measured
   once the tests stopped racing each other on disk. Every earlier hosted figure, 76.83%
@@ -78,7 +79,7 @@ accommodate a regression:
   timeout on 58a5389, and 67 to 70 since the scans stepped past an empty match
   (ADR-0007, 2026-10-01): 186 of those 259 were an emptied phrase or table
   that never ended, and now fail an assertion. Losing every timeout left
-  would take 96.51 to 95.76, where it took 96.32 to 93.23. The 283 of 8f5e6e8
+  would take 96.53 to 95.77, where it took 96.32 to 93.23. The 283 of 8f5e6e8
   were replayed by hand (ADR-0007, 2026-09-30): two are killed by an
   assertion, and 281 never ended, so no runner, however fast, turns one into a
   survivor. A mutant a test catches only by being slow is a reason to

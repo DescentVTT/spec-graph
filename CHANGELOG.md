@@ -11,7 +11,12 @@ the family's
 [versioning policy](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0009-versions-before-1-0.md)
 records.
 
-## Unreleased
+## 0.15.0
+
+A list of families that names one no document belongs to, and leaves out
+one the documents do belong to, stops the check, exit 2: `RFCS` written
+for `RFC` took every citation of an RFC out of the check, which reported a
+consistent graph. And `--no-ascii` asks for the Unicode glyphs outright.
 
 ### Added
 
