@@ -1076,7 +1076,7 @@ spec-graph diff <before> <after>     Compare two JSON graph exports.
 --max <n>               Show at most n findings
 --max-warnings <n>      Fail when warnings exceed n
 --color / --no-color    Force colour
---ascii                 ASCII glyphs only, as SPEC_GRAPH_ASCII=1 asks too
+--ascii / --no-ascii    ASCII glyphs or Unicode ones; SPEC_GRAPH_ASCII=1 asks for ASCII
 --verbose               Include parse problems
 ```
 
@@ -1107,6 +1107,7 @@ variable in `--family "$FAMILIES"` is the usual way to write one:
 - `--format json` asked of `graph`, whose JSON is `--graph-format json`, or
   of `rules`, which has one format;
 - an option given to a command that does not read it, in the table below;
+- `--ascii` beside `--no-ascii`, of which one would go unread;
 - a value that begins with `--`, which reads as the option after one whose
   value was forgotten: `--ignore --strict` would ignore a directory called
   `--strict`, and `--record-baseline --verbose` write a file of that name.
@@ -1130,12 +1131,13 @@ into the file.
 | `--graph-format`, `--documents-only` | `graph` |
 | `--explain` | `rules` |
 | `--ignore-ref`, `--family`, `--ignore-family`, `--baseline`, `--record-baseline`, `--ratchet`, `--rule`, `--strict`, `--max`, `--max-warnings`, `--color` | `check` |
-| `--no-config`, `--no-color`, `--ascii`, `--help`, `--version` | every command |
+| `--no-config`, `--no-color`, `--ascii`, `--no-ascii`, `--help`, `--version` | every command |
 
 `--no-config`, `--no-color` and `--ascii` are taken by every command because
 each is true already of a command with nothing to read it for: only a check
-colours its report or draws a glyph, and `diff` reads no configuration. A
-script can pass them to whatever it runs. The configuration file is not an
+colours its report or draws a glyph, and `diff` reads no configuration.
+`--no-ascii` is taken with `--ascii`: the two say in which characters a glyph
+is drawn, not that one is. A script can pass them to whatever it runs. The configuration file is not an
 option: `ignoreReferences` in `.spec-graph.json` stops no `graph`, which
 draws the same graph with it as without.
 
@@ -1155,11 +1157,15 @@ npx --no-install @descent-vtt/spec-graph --format json | jq -r '.summary'
 else that is not empty turns it on; a `TERM` of `dumb` turns it off; otherwise
 the report is coloured when stdout is a terminal. `CI` is not read.
 
-`--ascii` draws the report in ASCII glyphs, and so does `SPEC_GRAPH_ASCII`
-set to anything but `0`, `false` or nothing. Without either, a Windows console
-that sets neither `WT_SESSION` nor `TERM_PROGRAM`, or sets them to nothing,
-gets ASCII and every other terminal the Unicode glyphs, `✖`, `⚠`, `↳` and
-the like.
+`--ascii` draws the report in ASCII glyphs and `--no-ascii` in the Unicode
+ones, `✖`, `⚠`, `↳` and the like, on any platform and whatever the
+environment says. Given together they are refused, exit `2`: one of the two
+would go unread. Without either, `SPEC_GRAPH_ASCII` set to anything but `0`,
+`false` or nothing asks for ASCII; and without that, a Windows console that
+sets neither `WT_SESSION` nor `TERM_PROGRAM`, or sets them to nothing, gets
+ASCII and every other terminal the Unicode glyphs. Where those two variables
+say nothing of the terminal that draws the report, `--no-ascii` asks for the
+Unicode glyphs outright.
 
 ## In CI
 

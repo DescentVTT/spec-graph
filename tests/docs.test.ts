@@ -348,6 +348,7 @@ describe('the CLI help and the README agree on the interface', () => {
     '--max-warnings',
     '--no-color',
     '--ascii',
+    '--no-ascii',
     '--verbose',
   ];
 

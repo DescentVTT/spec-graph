@@ -211,8 +211,10 @@ OPTIONS
   --strict                Raise every warning to an error. An explicit --rule
                           still wins, so --strict --rule x=warn exempts x.
   --color / --no-color    Force colour on or off
-  --ascii                 Use ASCII glyphs only. SPEC_GRAPH_ASCII asks for the
-                          same, unless it is empty, 0 or false
+  --ascii / --no-ascii    ASCII glyphs or Unicode ones. SPEC_GRAPH_ASCII asks
+                          for ASCII, unless it is empty, 0 or false. Either
+                          option wins over it, and over what the terminal is
+                          taken for. The two together are refused
   --verbose               Include parse problems, per-file detail, and every
                           reference --ignore-ref or --ignore-family silenced
   --explain               With rules: add each rule's selector and the ADR
@@ -231,7 +233,8 @@ OPTIONS
     every other option                  check
 
   --no-config, --no-color and --ascii are taken by every command: each is
-  true already of a command with nothing to read it for.
+  true already of a command with nothing to read it for. --no-ascii is taken
+  with --ascii: the two say how a glyph is drawn, not that one is.
 
   A value that begins with -- reads as an option, so the option before it is
   refused as missing its value. A name that does begin so is written ./--name
@@ -367,7 +370,10 @@ const SEVERITIES: readonly Severity[] = ['error', 'warn', 'info', 'off'];
  * Each is true already of what the commands that do not read it write - none
  * of them colours or draws a glyph, and `diff` reads no configuration - and
  * a script passes them to every command it runs. `--color` is not one of
- * them: it would promise colour that only a check prints.
+ * them: it would promise colour that only a check prints. `--no-ascii` is
+ * taken with `--ascii`: the pair says how a glyph is drawn, in which
+ * characters, and not that one is, so a command that draws none has nothing
+ * to get wrong by either.
  *
  * A function and not a table, so that none of it runs when the module loads:
  * a mutant of a table built at import pays for the whole suite (ADR-0007).
@@ -517,6 +523,9 @@ export function parseArgs(argv: readonly string[], cwd: string): CliOptions {
       case '--ascii':
         ascii = true;
         break;
+      case '--no-ascii':
+        ascii = false;
+        break;
       case '--documents-only':
         documentsOnly = true;
         break;
@@ -652,6 +661,13 @@ export function parseArgs(argv: readonly string[], cwd: string): CliOptions {
         throw new UsageError(`${option} belongs to ${listed(readers, 'or')}, not to ${command}`);
       }
     }
+  }
+
+  // The later of the two would decide and the earlier go unread: a script
+  // that adds `--no-ascii` to a line already holding `--ascii` would be told
+  // nothing of which it got.
+  if (given.has('--ascii') && given.has('--no-ascii') && !help && !version) {
+    throw new UsageError('--ascii is given beside --no-ascii, and the glyphs are drawn one way: give one of the two');
   }
 
   // The second word given to `rules` was dropped, so `rules a b` listed `a`

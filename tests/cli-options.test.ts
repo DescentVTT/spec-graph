@@ -71,11 +71,28 @@ describe('reading the command line', () => {
     ]);
   });
 
-  it('reads --color, --no-color and --ascii, and leaves each to the environment when it is absent', () => {
+  it('reads --color, --no-color, --ascii and --no-ascii, and leaves each to the environment when it is absent', () => {
     expect(parseArgs([], '/repo')).toMatchObject({ color: null, ascii: null });
     expect(parseArgs(['--color'], '/repo').color).toBe(true);
     expect(parseArgs(['--no-color'], '/repo').color).toBe(false);
     expect(parseArgs(['--ascii'], '/repo').ascii).toBe(true);
+    expect(parseArgs(['--no-ascii'], '/repo')).toMatchObject({ ascii: false, documentsOnly: false });
+  });
+
+  it('refuses --ascii beside --no-ascii, whichever comes first, and takes either alone', () => {
+    const refusal = '--ascii is given beside --no-ascii, and the glyphs are drawn one way: give one of the two';
+    expect(usage(['--ascii', '--no-ascii']).message).toBe(refusal);
+    expect(usage(['--no-ascii', '--ascii']).message).toBe(refusal);
+    // By every command, since every command takes the two.
+    expect(usage(['query', 'document', '--no-ascii', '--verbose', '--ascii']).message).toBe(refusal);
+    expect(usage(['diff', 'a.json', 'b.json', '--ascii', '--no-ascii']).message).toBe(refusal);
+    // One of them twice is one of them.
+    expect(parseArgs(['--ascii', '--ascii'], '/repo').ascii).toBe(true);
+    expect(parseArgs(['--no-ascii', '--no-ascii'], '/repo').ascii).toBe(false);
+    // Help and the version are answered whatever else is on the line, as
+    // they are beside an option of another command.
+    expect(parseArgs(['--ascii', '--no-ascii', '--help'], '/repo').help).toBe(true);
+    expect(parseArgs(['--no-ascii', '--ascii', '-v'], '/repo').version).toBe(true);
   });
 
   it('takes each graph format by name and refuses any other, naming the ones there are', () => {
@@ -142,6 +159,32 @@ describe('what the flags do to a run', () => {
     expect(rich((await runWith({ ...modern, SPEC_GRAPH_ASCII: '1' }, false, ...report)).out)).toBe(false);
     expect(rich((await runWith(modern, false, ...report)).out)).toBe(true);
     expect(rich((await runWith(modern, false, ...report, '--ascii')).out)).toBe(false);
+    // An option wins over the variable, each way.
+    expect(rich((await runWith({ ...modern, SPEC_GRAPH_ASCII: '0' }, false, ...report, '--ascii')).out)).toBe(false);
+    expect(rich((await runWith({ ...modern, SPEC_GRAPH_ASCII: '1' }, false, ...report, '--no-ascii')).out)).toBe(true);
+  });
+
+  it('draws the rich glyphs when --no-ascii asks, where the environment names no terminal and where it asks for ASCII', async () => {
+    const report = ['check', '--root', DEMO];
+    const rich = (text: string): boolean => text.includes('✖');
+    // No WT_SESSION and no TERM_PROGRAM: on Windows that is the console that
+    // gets ASCII, and the option is how a person there asks for the rest.
+    expect(rich((await runWith({}, false, ...report, '--no-ascii')).out)).toBe(true);
+    expect(rich((await runWith({ SPEC_GRAPH_ASCII: '1' }, false, ...report, '--no-ascii')).out)).toBe(true);
+    expect(rich((await runWith({ SPEC_GRAPH_ASCII: '1' }, false, ...report)).out)).toBe(false);
+    // The report is the one the environment would have asked for, glyph for glyph.
+    const asked = await runWith({ WT_SESSION: '1' }, false, ...report);
+    const told = await runWith({ SPEC_GRAPH_ASCII: '1' }, false, ...report, '--no-ascii');
+    expect(told.out.replace(/[\d.]+ms/, '')).toBe(asked.out.replace(/[\d.]+ms/, ''));
+    expect(told.code).toBe(asked.code);
+  });
+
+  it('refuses a run given --ascii beside --no-ascii, and writes no report', async () => {
+    expect(await run('check', '--root', DEMO, '--no-ascii', '--ascii')).toEqual({
+      code: EXIT_ERROR,
+      out: '',
+      err: 'spec-graph: --ascii is given beside --no-ascii, and the glyphs are drawn one way: give one of the two\n',
+    });
   });
 
   it('fails on warnings only when there are more than --max-warnings allows', async () => {

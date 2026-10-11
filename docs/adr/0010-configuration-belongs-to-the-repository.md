@@ -242,6 +242,42 @@ that is not empty, as it was, `true`, `1` and `FALSE` among them
 the fault `SPEC_GRAPH_ASCII` had. One of the two cleared beside one that names
 a terminal is still a terminal named.
 
+*Amended 2026-10-12.* The glyphs could be asked for one way. `--ascii` and
+`SPEC_GRAPH_ASCII` ask for ASCII, and nothing asked for the Unicode ones.
+Measured on main at 11e2895, through the launcher on Windows with neither
+`WT_SESSION` nor `TERM_PROGRAM` set: the report is in ASCII, and
+`--no-ascii` is `unknown option "--no-ascii"`, exit `2`. A person whose
+terminal draws the glyphs and whose console does not say so had no option
+to give.
+
+`--no-ascii` draws the Unicode glyphs, on any platform. An option wins over
+the environment both ways: `--no-ascii` over `SPEC_GRAPH_ASCII=1` and over a
+console that names no terminal, `--ascii` over `SPEC_GRAPH_ASCII=0` and over
+a terminal that names itself. The variable is as it was: it asks for ASCII
+unless it is empty, `0` or `false`, and off is the same as unset, so there
+is still no value of it that asks for Unicode.
+
+Given together the two are refused, whichever comes first, exit `2`:
+
+```text
+spec-graph: --ascii is given beside --no-ascii, and the glyphs are drawn one way: give one of the two
+```
+
+The later of the two would decide and the earlier go unread, and two things
+of which one would go unread are refused together
+([spec-core's ADR-0005](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0005-the-family-contract.md),
+2026-10-11). `--color` beside `--no-color` is still taken, the later
+deciding: that pair is not this amendment's, and is left as it is.
+`--help` and `--version` are answered first, as they are beside an option of
+another command.
+
+Every command takes `--no-ascii`, as every command takes `--ascii`, and it
+joins the last row of the table below. Only a check's report draws a
+glyph. `--ascii` is true already of a command that draws none, and
+`--no-ascii` is taken with it because the pair says in which characters a
+glyph is drawn, not that one is: `--color`, which is refused there, would
+promise colour.
+
 **A list of families is held against the documents.** *Amended again
 2026-10-09.* The amendment above refused a name no family can have and kept
 `--family RFC` where the corpus has no such family: "a name a family can have
