@@ -173,10 +173,12 @@ OPTIONS
   --family <name>         Families a bare identifier in prose may name. When
                           given, everything else stays prose. Repeatable: one
                           name each time, the prefix its identifiers are
-                          written with, ADR for ADR-0007. Each has to be the
-                          family of a document here, or the check stops: a
-                          name with no document allows nothing, and what
-                          cites that family goes unread.
+                          written with, ADR for ADR-0007. A document here has
+                          to belong to one of them, or the check stops: a list
+                          that names none allows nothing. It stops too where
+                          a name has no document and the list leaves out a
+                          family the documents do belong to, as RFCS for RFC
+                          does: one is most likely meant for the other.
   --ignore-family <name>  Families that are never citations - RFC when the repo
                           cites RFC 2119 and keeps its own RFCs. Repeatable,
                           one name each time.
@@ -265,8 +267,8 @@ EXIT CODES
 
   An input that is set and names nothing is a 2, named on stderr, and never
   read as if it had not been given: an empty value, a family name no family
-  has, a family on a list that no document here belongs to, a --root that is
-  no directory, a second word after rules, an option of another command.
+  has, a list of families no document here belongs to, a --root that is no
+  directory, a second word after rules, an option of another command.
 
 CONFIGURATION
   Anything repeated on every run belongs in the repository rather than in the
@@ -930,8 +932,10 @@ async function run(io: CliIO, err: (text: string) => void): Promise<number> {
     projectRules,
   );
 
-  // The list the check is held against, once it has read the documents.
+  // The list the check is held against, once it has read the documents, and
+  // the families taken out on purpose, which that list is not held to.
   const families = [...(file.families ?? []), ...options.families];
+  const ignoreFamilies = [...(file.ignoreFamilies ?? []), ...options.ignoreFamilies];
   const analyseOptions: AnalyseOptions = {
     root,
     patterns,
@@ -943,7 +947,7 @@ async function run(io: CliIO, err: (text: string) => void): Promise<number> {
     ignore: [...(file.ignore ?? []), ...typed.ignore],
     ignoreReferences: [...(file.ignoreReferences ?? []), ...options.ignoreReferences],
     families,
-    ignoreFamilies: [...(file.ignoreFamilies ?? []), ...options.ignoreFamilies],
+    ignoreFamilies,
     historyPatterns: [...(file.historyPatterns ?? []), ...typed.history],
     severities,
     projectRules,
@@ -1017,20 +1021,24 @@ async function run(io: CliIO, err: (text: string) => void): Promise<number> {
     }
 
     default: {
-      // An allowlist is held against the corpus it was written for, name by
-      // name. One that names no family a document here belongs to allows
-      // nothing the corpus has: every citation is then prose, and the run
-      // that failed on a dangling one reported a consistent graph - for
-      // `--family ADRS` as it did for `--family ""`. Nothing was measured,
-      // which is not clean (spec-core's ADR-0005), so the run stops before it
-      // says anything. One such name beside a family the corpus has was said
-      // and failed nothing, as a family the repository means to start. Its
-      // citations went unread all the same, under `--strict` too: `RFC-0001`
-      // in an ADR with no RFC written, `RFC-0099` once the RFCs had moved out
-      // of what the run reads, and every citation of an RFC under `RFCS`,
-      // the typo that takes the family the documents do belong to off the
-      // list. So each name is held to what the list is (ADR-0010,
-      // 2026-10-12).
+      // An allowlist is held against the corpus it was written for. One that
+      // names no family a document here belongs to allows nothing the corpus
+      // has: every citation is then prose, and the run that failed on a
+      // dangling one reported a consistent graph - for `--family ADRS` as it
+      // did for `--family ""`. Nothing was measured, which is not clean
+      // (spec-core's ADR-0005), so the run stops before it says anything.
+      //
+      // One such name beside names that have documents costs the run a
+      // finding only where the list also leaves out a family the documents
+      // do belong to: `ADR` and `RFCS` over ADRs and RFCs pass over every
+      // citation of an RFC, and the run that fails without the list reports
+      // a consistent graph. One name is most likely meant for the other, and
+      // the run stops there too. Where every family the corpus has is on the
+      // list, the name is a family the repository means to start, or one
+      // whose documents this run does not read; the list passes over nothing
+      // the run would have read without it, so it is said, and nothing
+      // fails. A family on `--ignore-family` was taken out on purpose, and
+      // is not one the list leaves out (ADR-0010, 2026-10-12).
       const allowed = [...new Set(families.map((family) => family.trim().toUpperCase()))];
       const absent = allowed.filter((family) => !result.corpus.families.includes(family));
       if (absent.length > 0) {
@@ -1039,12 +1047,22 @@ async function run(io: CliIO, err: (text: string) => void): Promise<number> {
         if (file.families !== undefined && file.families.length > 0) lists.push(`"families" in ${loaded.source}`);
         const here = `the documents here belong to ${result.corpus.families.length > 0 ? listed(result.corpus.families, 'and') : 'no family'}`;
         const named = lists.join(' and ');
-        err(
-          absent.length === allowed.length
-            ? `spec-graph: no document here belongs to a family named by ${named} (${allowed.join(', ')}); ${here}\n  name a family the documents belong to, or leave the list out\n`
-            : `spec-graph: no document here belongs to ${listed(absent, 'or')}, named by ${named}; ${here}\n  name each family as its documents do, or leave it off the list until its first document is written\n`,
-        );
-        return EXIT_ERROR;
+        if (absent.length === allowed.length) {
+          err(
+            `spec-graph: no document here belongs to a family named by ${named} (${allowed.join(', ')}); ${here}\n  name a family the documents belong to, or leave the list out\n`,
+          );
+          return EXIT_ERROR;
+        }
+        const ignored = ignoreFamilies.map((family) => family.trim().toUpperCase());
+        const left = result.corpus.families.filter((family) => !allowed.includes(family) && !ignored.includes(family));
+        const said = `spec-graph: no document here belongs to ${listed(absent, 'or')}, named by ${named}; ${here}`;
+        if (left.length > 0) {
+          err(
+            `${said}, and the list leaves out ${listed(left, 'and')}\n  name each family as its documents do, or leave it off the list until its first document is written\n`,
+          );
+          return EXIT_ERROR;
+        }
+        err(`${said}\n`);
       }
 
       // Recording is not checking. It writes down what is wrong today so that

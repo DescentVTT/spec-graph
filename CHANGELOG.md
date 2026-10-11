@@ -15,23 +15,23 @@ records.
 
 ### Changed
 
-- **A family on a list that no document here belongs to stops the check,
-  beside families that have documents too.** Since 0.14.0 a list none of
-  whose names has a document is exit `2`, and one such name beside names
-  that have documents was a line on stderr. What cites that family went
-  unread all the same: `--family ADR --family RFCS`, in a repository of ADRs
-  and RFCs, took the RFCs' family off the list, and `check` printed `the
-  specification graph is consistent` over a citation of an RFC nobody
-  wrote, under `--strict` too; `--family ADR --family RFC` did the same once
-  the RFCs were ignored or outside the patterns. Each such name is exit `2`
-  now, for `--family` and `families` alike, with the line it had and what to
-  do under it
+- **A list of families that mistypes one of them stops the check.**
+  `--family ADR --family RFCS`, in a repository of ADRs and RFCs, left the
+  RFCs' own family off the list, so every citation of an RFC was prose:
+  `check` printed `the specification graph is consistent` over a citation of
+  an RFC nobody wrote, under `--strict` too, where the run without the list
+  exits `1`, and all that said so was a line on stderr. Where a list names a
+  family no document here belongs to and leaves out a family the documents
+  do belong to, the check is exit `2` now, for `--family` and `families`
+  alike, and the line names both. A name with no document on a list that
+  leaves no such family out is said on stderr and fails nothing, as before:
+  a family listed before its first document, or one whose documents the run
+  does not read
   ([ADR-0010](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0010-configuration-belongs-to-the-repository.md)).
-  Upgrading: write each name as its documents carry it, `RFC` for
-  `RFC-0007`, and leave a family off the list until its first document is
-  written. A run over part of a repository, whose patterns leave a listed
-  family out, takes the whole corpus, or `--no-config` and a `--family` for
-  each family it does read.
+  Upgrading: write the name as the documents carry it, `RFC` for
+  `RFC-0007`. Where the family is left out on purpose and the other name is
+  one not started yet, say so with `--ignore-family` or `ignoreFamilies`, or
+  leave the new name off the list until its first document is written.
 
 ## 0.14.1
 

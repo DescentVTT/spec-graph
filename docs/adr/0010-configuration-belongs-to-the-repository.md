@@ -283,10 +283,10 @@ over what it passes over there too, and it is left out until the first such
 document is written.
 
 *Amended 2026-10-12.* One name with no document, beside names that have
-them, is refused as the whole list is. The paragraph above kept it as a line
-on stderr, and nobody had measured whether what cites such a family is
-reported. Measured on main at 11e2895, through the launcher, over two or
-three ADRs and an RFC written for it, where an ADR cites an RFC in prose:
+them, was a line on stderr whatever else the list did, and nobody had
+measured whether what cites such a family is reported. Measured on main at
+11e2895, through the launcher, over two or three ADRs and an RFC written for
+it, where an ADR cites an RFC in prose:
 
 | The corpus | The list | The citation | The run |
 | --- | --- | --- | --- |
@@ -309,32 +309,52 @@ list passes over every identifier of a family that is not on it, in brackets
 and in front matter as in prose. Of four such references, one of them in
 prose, the mistyped list reports one.
 
-So the name costs the check nothing it would have had without the list: a
-citation in prose of a family no document belongs to is prose either way.
-But the fourth and fifth rows are checks that failed and pass. A mistyped
-half takes the family the documents do belong to off the list, and documents
-that go out of what the run reads take their family with them; in each the
-list says that citations of an RFC are read, none is, and what says so is
-one line on stderr beside an exit of `0`. That is the run the amendment
-above refuses for a whole list, reached by half of one, and nothing measured
-is not clean. Each name is held to what the list is held to, exit `2` before
-anything is reported or recorded:
+So a citation in prose of a family no document here belongs to is not
+reported, and row against row the list is the cause of that once. With the
+RFCs absent, ignored, outside the patterns or moved away, `ADR`, `RFC` and no
+list at all give the same answer: the family is not one the corpus has, its
+citations are prose either way, and the name costs the run nothing. The
+fourth row is the one the list costs a finding: exit `1` without it, exit `0`
+with it. What differs there is not that a name has no document. It is that
+a family the documents do belong to has been left off the list, by a name
+that stands where its own should.
+
+So the check stops, exit `2` before anything is reported or recorded, where
+the list names a family no document here belongs to and leaves out a family
+the documents do belong to. The line names both, since one is most likely
+meant for the other:
 
 ```text
-spec-graph: no document here belongs to RFC, named by --family; the documents here belong to ADR
+spec-graph: no document here belongs to RFCS, named by --family; the documents here belong to ADR and RFC, and the list leaves out RFC
   name each family as its documents do, or leave it off the list until its first document is written
 ```
 
-The first line is the one the note had. A family the repository means to
-start is refused with the rest, as a repository with a list and no numbered
-document was: until its first document is written the list reads nothing for
-it, and the name waits until then. A run over part of a repository whose
-configuration lists the families of all of it is refused as well, since what
-that part cites of the others goes unread; it is given the whole corpus, or
-`--no-config` and the families it does read. A list whose every name has a
-document sees no line, and a run with no list is as it was: nothing there
-says the family is one, and that miss is
-[ADR-0006](0006-false-positives-cost-more.md)'s.
+Where every family the corpus has is on the list, a further name with no
+document is said as it was, and fails nothing: the run reads what it would
+read without the list.
+
+```text
+spec-graph: no document here belongs to RFC, named by --family; the documents here belong to ADR
+```
+
+The wider rule, every name with no document refused, was built first and
+not taken. It stops a repository that lists a family before its first
+document, and a run over part of a repository whose configuration lists the
+families of all of it. Neither loses a finding to the list, and a check that
+stops a correct run is the one
+[ADR-0006](0006-false-positives-cost-more.md) is about. A list no document
+belongs to at all is refused as it was: there nothing is read.
+
+The rule was held against two neighbours. A family on `--ignore-family` or
+`ignoreFamilies` was taken out on purpose and is not one the list leaves
+out: `--ignore-family RFC` beside `ADR`, `RFCS` passes over what it passes
+over with no list, exit `0` both ways and the same report, and is said and
+not refused. A list that is narrower on purpose, `--family ADR` over ADRs
+and RFCs, has no name without a document, so there is nothing to refuse and
+no line. Where such a list also names a family not started yet, `ADR`, `RFC`
+and `PRD` over ADRs, RFCs and KEPs, the run cannot tell `PRD` from a name
+meant for `KEP` and stops; `--ignore-family KEP` says the KEPs are out on
+purpose, and the name is then said and fails nothing.
 
 `--ignore-family` gets no such rule. A name on it passes over citations of
 that one family, so a mistyped name passes over nothing and the run reports
