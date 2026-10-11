@@ -213,7 +213,7 @@ export function bindItemDirectives(
   // `<=` read alike in every comparison of offsets below.
   const open: ListItem[] = [];
   const close = (offset: number): void => {
-    while (open.length > 0 && (open[open.length - 1] as ListItem).end <= offset) open.pop();
+    while (open.length > 0 && open[open.length - 1]!.end <= offset) open.pop();
   };
   let next = 0;
   for (const directive of wanted) {

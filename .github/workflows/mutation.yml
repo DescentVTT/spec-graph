@@ -185,6 +185,15 @@ jobs:
           path: reports/stryker-incremental.json
           key: stryker-sweep-${{ github.run_id }}-${{ github.run_attempt }}
 
+      # Stryker makes no mutant of anything under a TypeScript `as`, so the
+      # score above says nothing of what stands there. This counts those
+      # places in the report the merge wrote, each source as the sweep read
+      # it, and fails on more than the script records as left (ADR-0007,
+      # 2026-10-12). After the publish: the verdicts the sweep did reach are
+      # true either way, and a pull request has to be able to start from them.
+      - name: Count what the sweep could not see
+        run: node scripts/mutation-unmeasured.mjs reports/mutation/mutation.json
+
       - name: Say which tier ran
         if: always()
         run: |

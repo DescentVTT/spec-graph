@@ -135,6 +135,15 @@ shards by their minutes over each one's initial run of the suite, which its
 log states: the same shard took 12 and 17 minutes on runners whose initial
 runs took 15 and 20 seconds.
 
+Stryker makes no mutant of anything under a TypeScript `as`, so nothing a test
+should hold may stand under one: not the `i - 1` of `lines[i - 1] as string`,
+not the entries of a table written `{ ... } as const`. Hoist the value to a
+constant and cast the name, write `!` where the cast only drops `undefined`
+from an index read, and `satisfies` where a tuple or a table has a type to be
+held to. `node scripts/mutation-unmeasured.mjs --sources` counts what is left;
+`tests/mutation-unmeasured.test.ts` fails on any, and so does the sweep's score
+job, which counts in the report it merged (ADR-0007, 2026-10-12).
+
 **Where an oracle exists, use it.** The matcher behind `~=` replaces a built-in
 engine, so its tests - in spec-core now, beside it - do not assert what its
 author believed about regular expressions — they run both engines over the same

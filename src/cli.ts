@@ -411,7 +411,7 @@ function readersOf(option: string): readonly Command[] | undefined {
 
 /** `a`, `a or b`, `a, b or c`: one name or more in a sentence, with the word that joins the last. */
 function listed(names: readonly string[], joint: string): string {
-  return names.length < 2 ? (names[0] as string) : `${names.slice(0, -1).join(', ')} ${joint} ${names[names.length - 1] as string}`;
+  return names.length < 2 ? (names[0] as string) : `${names.slice(0, -1).join(', ')} ${joint} ${names[names.length - 1]!}`;
 }
 
 /** Parses argv into options. Throws {@link UsageError} on anything malformed. */
@@ -603,8 +603,10 @@ export function parseArgs(argv: readonly string[], cwd: string): CliOptions {
         const value = next(arg, i);
         const equals = value.indexOf('=');
         if (equals === -1) throw new UsageError(`--rule expects <id>=<severity>, got "${value}"`);
-        const id = value.slice(0, equals) as AnyRuleId;
-        const level = value.slice(equals + 1) as Severity;
+        const before = value.slice(0, equals);
+        const after = value.slice(equals + 1);
+        const id = before as AnyRuleId;
+        const level = after as Severity;
         // A project rule is taken on its namespace here and checked for real
         // once the configuration defining it has been read: arguments are
         // parsed before any file is opened, and a flag has to be usable on that
@@ -1331,7 +1333,7 @@ function renderMatches(matches: readonly Match[], format: 'human' | 'json', tota
   const lines: string[] = [];
   for (const match of matches) {
     const head = match.nodes[0] as SpecNode;
-    const tail = match.nodes[match.nodes.length - 1] as SpecNode;
+    const tail = match.nodes[match.nodes.length - 1]!;
     lines.push(renderMatch(match));
     lines.push(`  ${formatRef(head.at)}${match.nodes.length > 1 ? `  ${formatRef(tail.at)}` : ''}`);
   }

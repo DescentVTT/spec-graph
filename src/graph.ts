@@ -209,7 +209,7 @@ function tarjan(ids: readonly string[], successors: (id: string) => string[]): s
     onStack.add(root);
 
     while (work.length > 0) {
-      const frame = work[work.length - 1] as { id: string; next: number; children: string[] };
+      const frame = work[work.length - 1]!;
       // `<=` reads one child past the end: `undefined`, a node with no
       // successors that is settled on its own at once and is in no cycle. That
       // mutant is equivalent.

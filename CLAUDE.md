@@ -56,8 +56,10 @@ Two thresholds are regression guards, set below the last measurement. They move
 **up** when the measurement moves further than the noise, and **never** down to
 accommodate a regression:
 
-- **Mutation score >= 93** (`break` in `stryker.config.mjs`). **96.50% on the
-  hosted runner** governs - it is where the build fails - measured on ec232ac,
+- **Mutation score >= 93** (`break` in `stryker.config.mjs`). **96.51% on the
+  hosted runner** governs - it is where the build fails - measured over 8,861
+  mutants once nothing a mutator reads stood under an `as` (run 38158750946;
+  ADR-0007, 2026-10-12), 96.50% over 8,841 on ec232ac before that, and
   96.28% on d5f9abd after two passes over the survivors of every module killed
   1,492 of them and found thirteen defects (ADR-0007). Before them, 73.41% governed, measured
   once the tests stopped racing each other on disk. Every earlier hosted figure, 76.83%
@@ -73,10 +75,10 @@ accommodate a regression:
   0.5.0. Its cost varies as much - 110 minutes when a broad change left nothing
   to reuse, 64 when half the corpus was reused. See ADR-0007. The guard moved
   from 70 to 90 and then 93 with those passes. 259 mutants were detected by
-  timeout on 58a5389, and 70 on ec232ac, since the scans stepped past an empty match
+  timeout on 58a5389, and 67 to 70 since the scans stepped past an empty match
   (ADR-0007, 2026-10-01): 186 of those 259 were an emptied phrase or table
   that never ended, and now fail an assertion. Losing every timeout left
-  would take 96.50 to 95.71, where it took 96.32 to 93.23. The 283 of 8f5e6e8
+  would take 96.51 to 95.76, where it took 96.32 to 93.23. The 283 of 8f5e6e8
   were replayed by hand (ADR-0007, 2026-09-30): two are killed by an
   assertion, and 281 never ended, so no runner, however fast, turns one into a
   survivor. A mutant a test catches only by being slow is a reason to
@@ -93,7 +95,7 @@ accommodate a regression:
   runner that takes 17 seconds for that run, and 9 to 15 as the runners went
   in the sweep of the table.
   The time is the work: a static mutant runs the whole suite, so a slow test can
-  cost its duration once for each of them. There are 1,415, most of them
+  cost its duration once for each of them. There are 1,417, most of them
   vocabulary tables built at import. A test that analyses a corpus in a
   `describe` body or at module scope turns everything that corpus reaches static
   too - analyse inside the test (ADR-0007). Check the headroom before adding one.
@@ -170,6 +172,13 @@ assertions that restate the implementation is worse than a lower number.
 
 Read the survivor list, not just the score. It is the more useful output:
 `reports/mutation/index.html` after a run.
+
+**Nothing a mutant could change stands under an `as`.** Stryker passes over the
+whole of a cast, so no test is held to what is written there. Hoist the value
+and cast the name, write `!` for an index read, `satisfies` for a tuple or a
+table. `tests/mutation-unmeasured.test.ts` and the sweep's score job fail on
+a site left under one (`scripts/mutation-unmeasured.mjs`; ADR-0007,
+2026-10-12).
 
 **A test that writes to disk writes to a path named for its process**, and never
 changes a shared fixture. Stryker runs the same test file in several workers at

@@ -222,9 +222,10 @@ class Parser {
       return out;
     }
     // The anchor decides nothing, since a starred class matches the empty
-    // string where the search starts; it says where the value begins.
-    const match = /^[^\]\s]*/.exec(this.source.slice(this.position));
-    const value = (match?.[0] ?? '') as string;
+    // string where the search starts; it says where the value begins. For the
+    // same reason the search never misses, and there is nothing to fall back
+    // from.
+    const value = /^[^\]\s]*/.exec(this.source.slice(this.position))![0];
     this.position += value.length;
     return value;
   }
@@ -502,7 +503,7 @@ export function execute(graph: SpecGraph, spec: QuerySpec, options: ExecuteOptio
     const seen = new Set<string>();
 
     for (const match of frontier) {
-      const tail = match.nodes[match.nodes.length - 1] as SpecNode;
+      const tail = match.nodes[match.nodes.length - 1]!;
       for (const { node, path } of expand(graph, tail, step, allowReflexive)) {
         if (!matches(node, step.node, graph)) continue;
         const key = `${match.nodes.map((n) => n.id).join('>')}>${node.id}`;
