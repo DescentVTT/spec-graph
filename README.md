@@ -1158,7 +1158,8 @@ the report is coloured when stdout is a terminal. `CI` is not read.
 `--ascii` draws the report in ASCII glyphs, and so does `SPEC_GRAPH_ASCII`
 set to anything but `0`, `false` or nothing. Without either, a Windows console
 that sets neither `WT_SESSION` nor `TERM_PROGRAM`, or sets them to nothing,
-gets ASCII and every other terminal the box-drawing characters.
+gets ASCII and every other terminal the Unicode glyphs, `✖`, `⚠`, `↳` and
+the like.
 
 ## In CI
 

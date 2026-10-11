@@ -232,7 +232,7 @@ console still gets ASCII.
 *Amended 2026-10-11.* Two readings above were not the family's. Measured on
 main at ebdae4c, through the launcher into a pipe: `FORCE_COLOR=false`
 coloured the report, where Node and `supports-color` read `false` as off, and
-on Windows a console with `WT_SESSION=` was sent box-drawing characters, where
+on Windows a console with `WT_SESSION=` was sent the Unicode glyphs, where
 one that leaves the variable unset gets ASCII. `FORCE_COLOR` is off now for
 exactly `0` or exactly `false`, on a terminal too, and on for any other value
 that is not empty, as it was, `true`, `1` and `FALSE` among them

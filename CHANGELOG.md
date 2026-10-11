@@ -20,7 +20,7 @@ records.
   empty still forces colour on, `true`, `1` and `FALSE` among them.
 - On Windows, `WT_SESSION` or `TERM_PROGRAM` set to nothing is read as unset,
   as `NO_COLOR` and `FORCE_COLOR` are: a console with `WT_SESSION=` was taken
-  for Windows Terminal and sent box-drawing characters, and gets ASCII glyphs
+  for Windows Terminal and sent the Unicode glyphs, and gets the ASCII ones
   now unless the other variable names a terminal.
 
 ## 0.14.0
