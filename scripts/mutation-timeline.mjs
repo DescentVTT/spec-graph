@@ -19,6 +19,14 @@
  *
  * Works on one shard's log and report as well as on a whole sweep's.
  *
+ * A mutant's test files run one after another until a test fails: every file
+ * for a static mutant, the files of the tests that cover it for any other. So
+ * what a mutant costs is the files that ran before the one that killed it. The
+ * last columns count, of each file's mutants that are not static and of those
+ * that are, the ones killed only after tests of another file had completed,
+ * the ones that survived and the ones that timed out: the three that wait for
+ * more than one file (ADR-0007, 2026-10-11).
+ *
  *   gh run view <run> --job <job> --log > sweep.log
  *   node scripts/mutation-timeline.mjs <report: mutation.json or index.html> sweep.log
  *
@@ -62,6 +70,29 @@ function readReport(file) {
 }
 
 const report = readReport(reportFile);
+
+// A test's file and its place there. A mutant was killed late when more tests
+// had completed than those of the killer's own file up to the killer: all of
+// them for a static mutant, the ones that cover it for any other.
+const fileOf = new Map();
+const placeOf = new Map();
+for (const [file, entry] of Object.entries(report.testFiles ?? {})) {
+  entry.tests.forEach((test, index) => {
+    fileOf.set(test.id, file);
+    placeOf.set(test.id, index + 1);
+  });
+}
+function killedLate(m) {
+  const killer = m.killedBy?.[0];
+  if (m.status !== 'Killed' || !placeOf.has(killer)) return false;
+  const own = m.static
+    ? placeOf.get(killer)
+    : (m.coveredBy ?? []).filter((id) => fileOf.get(id) === fileOf.get(killer) && placeOf.get(id) <= placeOf.get(killer)).length;
+  return m.testsCompleted > own;
+}
+const waited = (mutants) =>
+  `${mutants.length}: ${mutants.filter(killedLate).length} / ${mutants.filter((m) => m.status === 'Survived').length} / ${mutants.filter((m) => m.status === 'Timeout').length}`;
+
 const files = Object.keys(report.files)
   .sort()
   .map((name) => {
@@ -73,6 +104,7 @@ const files = Object.keys(report.files)
       runtime: tested.filter((m) => !m.static).length,
       static: tested.filter((m) => m.static).length,
       timeouts: mutants.filter((m) => m.status === 'Timeout').length,
+      waited: `${waited(tested.filter((m) => !m.static)).padEnd(22)}${waited(tested.filter((m) => m.static))}`,
     };
   });
 
@@ -125,6 +157,7 @@ const rows = files.map((file) => {
     runtime: span(runtimeCursor, runtimeCursor + file.runtime, 'seconds'),
     static: span(staticCursor, staticCursor + file.static, 'seconds'),
     timeouts: file.timeouts,
+    waited: file.waited,
     counted: (span(runtimeCursor, runtimeCursor + file.runtime, 'timeouts') ?? 0) + (span(staticCursor, staticCursor + file.static, 'timeouts') ?? 0),
   };
   runtimeCursor += file.runtime;
@@ -134,12 +167,15 @@ const rows = files.map((file) => {
 
 const minutes = (seconds) => (seconds === undefined ? '?' : (seconds / 60).toFixed(1));
 const width = Math.max(4, ...rows.map((row) => row.name.length));
-console.log(`${'file'.padEnd(width)}  mutants  minutes (runtime + static)  timeouts: report / counted`);
+console.log(
+  `${'file'.padEnd(width)}  mutants  minutes (runtime + static)  timeouts: report / counted  killed late / survived / timed out, of those not static and of the static`,
+);
 for (const row of rows) {
   const sum = row.runtime === undefined || row.static === undefined ? undefined : row.runtime + row.static;
   console.log(
     `${row.name.padEnd(width)}  ${String(row.mutants).padStart(7)}  ${minutes(sum).padStart(5)} (${minutes(row.runtime)} + ${minutes(row.static)})`.padEnd(width + 38) +
-      `${String(row.timeouts).padStart(4)} / ${row.counted}`,
+      `${String(row.timeouts).padStart(4)} / ${row.counted}`.padEnd(29) +
+      row.waited,
   );
 }
 console.log(`\nthe whole sweep: ${minutes(points.at(-1).seconds - points[0].seconds)} minutes from the first progress line`);
