@@ -11,6 +11,18 @@ the family's
 [versioning policy](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0009-versions-before-1-0.md)
 records.
 
+## Unreleased
+
+### Fixed
+
+- `FORCE_COLOR=false` turns colour off, as `FORCE_COLOR=0` does and as Node
+  reads it; it forced colour on, into a pipe too. Any other value that is not
+  empty still forces colour on, `true`, `1` and `FALSE` among them.
+- On Windows, `WT_SESSION` or `TERM_PROGRAM` set to nothing is read as unset,
+  as `NO_COLOR` and `FORCE_COLOR` are: a console with `WT_SESSION=` was taken
+  for Windows Terminal and sent box-drawing characters, and gets ASCII glyphs
+  now unless the other variable names a terminal.
+
 ## 0.14.0
 
 An input that is set and names nothing - a family name no family has, a list
