@@ -13,6 +13,19 @@ records.
 
 ## Unreleased
 
+### Added
+
+- **`--no-ascii` asks for the Unicode glyphs outright.** `--ascii` and
+  `SPEC_GRAPH_ASCII` ask for ASCII, and nothing asked for the other set: on
+  Windows a console that sets neither `WT_SESSION` nor `TERM_PROGRAM` got
+  ASCII whatever was to draw the report. `--no-ascii` draws the Unicode
+  glyphs on any platform and wins over the variable and over the console,
+  as `--ascii` wins the other way. It is a check's option, as `--color` is:
+  the other commands draw no glyph and refuse it by name, `--no-ascii
+  belongs to check, not to query`, and take `--ascii` as before. The two
+  given together are refused, exit `2`
+  ([ADR-0010](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0010-configuration-belongs-to-the-repository.md)).
+
 ### Changed
 
 - **A list of families that mistypes one of them stops the check.**
