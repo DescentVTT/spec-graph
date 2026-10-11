@@ -189,6 +189,73 @@ Five sweeps of 58a5389's source took 30m38s to 32m12s; the three since take 17
 to 20 minutes. What sets the floor is still `extract.ts`, now its runtime
 mutants, 10.0 to 10.5 of its minutes.
 
+*Amended 2026-10-11.* The sweep runs a mutant's quickest test files first now
+([ADR-0007](0007-mutation-testing.md), 2026-10-11), and the shards that were
+level came apart.
+
+A shard's minutes follow its runner, more than they follow its files. The
+suite's initial run took 12 to 21 seconds across the five sweeps read here,
+and the shard that took 12m12s on a runner whose initial run took 15 seconds
+took 16m53s on one whose initial run took 20. So minutes below are scaled to
+a runner whose initial run takes 17 seconds, a shard's own times 17 over its
+initial run, which its log states. By that scale the three sweeps of 0.14.0's
+source in vitest's order (runs 37837800195, 37840088558 and 38111076929) add
+up to 54.5, 54.8 and 54.9 minutes, where they took 56m13s to 58m41s. The
+layout above, in those three and in the first sweep in the new order (run
+38111409073):
+
+| shard | vitest's order | the quickest first |
+| --- | ---: | ---: |
+| 1 | 12.6 to 14.4 | 10.6 |
+| 2 | 12.7 to 13.2 | 9.5 |
+| 3 | 13.4 to 15.8 | 12.4 |
+| 4 | 13.6 to 14.4 | 14.4 |
+
+The order gave back a fifth of the first shard, a quarter of the second, a
+tenth of the third and nothing of the last. The last holds the command
+line's mutants, which `tests/cli.test.ts` kills, and that is the longest
+test file: the one the new order runs after the others.
+
+**`extract.ts` is not the floor any more.** Its 10 minutes on that runner are
+under the others' share: the files beside it hold 35, which is 11.6 in each
+of three shards. It keeps a shard to itself all the same. `yaml.ts` beside
+it would bring the four within a minute of one another, and a runner moves a
+shard by four minutes.
+
+**The layout.** `report.ts` and `baseline.ts` moved from the last shard to
+the second: 2.3 minutes between them, nearly all of it mutants that are not
+static, whose minutes are the steadiest. Files' minutes on the 17-second
+runner, as the first sweep in the new order had them and as the sweep of
+this layout measured them (run 38114717761, on e8a6c7c):
+
+| shard | files | mutants | from run 38111409073 | in run 38114717761 | as that shard ran |
+| --- | --- | ---: | ---: | ---: | --- |
+| 1 | `extract.ts` | 1,302 | 10.1 | 9.9 | 9m09s, initial run 15 s |
+| 2 | `identity.ts`, `select.ts`, `state.ts`, `paths.ts`, `report.ts`, `baseline.ts` | 2,436 | 11.3 | 11.2 | 13m48s, 20 s |
+| 3 | `resolve.ts`, `rules.ts`, `sections.ts`, `graph.ts`, `yaml.ts` | 1,857 | 12.1 | 12.1 | 14m43s, 20 s |
+| 4 | everything else the configuration mutates: `cli.ts`, `diff.ts`, `glob.ts`, `lifecycle.ts`, `config.ts`, `directives.ts`, `runner.ts`, `project-rules.ts`, `markdown.ts`, `source.ts` | 3,237 | 11.6 | 11.1 | 13m41s, 20 s |
+
+`report.ts` took 1.9 of those minutes in either shard. **Still four.** The
+files hold 44 to 45 minutes on that runner, 11 a shard. Three shards would
+put 15 in each, and a fifth would stop at `extract.ts`'s 10, a minute or two
+under what four give, from one more job, where a push already runs CI's
+thirteen jobs beside these.
+
+| sweep | score | killed | timeout | survived | shards | slowest, and its runner's initial run |
+| --- | ---: | ---: | ---: | ---: | --- | --- |
+| main, ebdae4c: vitest's order, the layout above | 96.50 | 8,453 | 70 | 293 | 12m37s, 11m23s, 18m37s, 13m36s | 18m37s, 20 s |
+| tag v0.14.0, ebdae4c | 96.50 | 8,457 | 66 | 293 | 12m12s, 14m42s, 12m40s, 17m24s | 17m24s, 21 s |
+| main, 9a7c5aa | 96.50 | 8,456 | 67 | 293 | 16m53s, 15m43s, 13m24s, 12m41s | 16m53s, 20 s |
+| dispatch, 0cddd48: the quickest first, the layout above | 96.50 | 8,456 | 67 | 293 | 7m28s, 8m25s, 14m38s, 16m59s | 16m59s, 20 s |
+| dispatch, e8a6c7c: this layout | 96.50 | 8,454 | 69 | 293 | 9m09s, 13m48s, 14m43s, 13m41s | 14m43s, 20 s |
+
+The same source throughout, 8,832 mutants with 16 uncovered, and the same 293
+survivors. The time from the first shard starting to the merged score is
+left out of this table: on the day of the two dispatched sweeps a shard
+waited up to 35 minutes for a runner, and the score job 21. On runners that
+take 20 seconds for the initial run, the slowest shard took 14m43s where it
+had taken 16m53s to 18m37s, and one that takes 15 would have it at 11.
+
 ### Not splitting `extract.ts`
 
 Stryker's `mutate` takes line ranges, and splitting `extract.ts` and
@@ -314,14 +381,17 @@ and it buys a governing figure for every push, not every tag. With CI's seven
 jobs a push runs about a dozen at once, under the twenty a free account gets.
 *Amended 2026-10-01:* one of 23 to 32 minutes, `extract.ts`'s, and three of
 15 to 22 beside it. *Amended again the same day:* four of 11 to 17 minutes,
-with CI's ten jobs beside them.
+with CI's ten jobs beside them. *Amended 2026-10-11:* four of 9 to 15
+minutes as their runners go, with CI's thirteen jobs beside them.
 
 **The sweep's figure and a pull request's figure are labelled apart** in the
 job summary. The shard checks are not the gate; the score job is.
 
 **A new source file lands in the last shard** until someone re-measures, which
 `scripts/mutation-timeline.mjs` does from any sweep's log and report, one shard
-at a time.
+at a time. *Amended 2026-10-11:* and compares on one runner's scale, each
+shard's minutes over its own initial run, since the runner moves a shard
+further than a file does.
 
 **`npm run test:mutation` is unchanged.** A developer machine runs the sweep as
 one process, and its figure is still the local one ADR-0007 describes.

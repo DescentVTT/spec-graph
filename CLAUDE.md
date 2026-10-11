@@ -82,13 +82,18 @@ accommodate a regression:
   survivor. A mutant a test catches only by being slow is a reason to
   strengthen tests, never to move the floor. One runner took 166 to
   171 minutes for the sweep. CI splits it into four shards, and the gate is
-  applied to their merged report, never to a shard (ADR-0019). `extract.ts` has
-  a shard to itself and takes 14 to 15 minutes; a file cannot be split, so that
-  is the floor, and the other three shards are balanced level with it on the
-  minutes `scripts/mutation-timeline.mjs` reads off a sweep's log, shard by
-  shard. The sweep takes 17 to 20 minutes.
+  applied to their merged report, never to a shard (ADR-0019). A mutant's test
+  files run the quickest first there (`vitest.mutation.config.ts`), which took
+  a seventh off the sweep, all of it from the mutants that are not static
+  (ADR-0007, 2026-10-11). `extract.ts` has a shard to itself, since a file
+  cannot be split, and is no longer the floor. A shard's minutes follow its
+  runner, so the shards are balanced on the minutes
+  `scripts/mutation-timeline.mjs` reads off a sweep's log, shard by shard,
+  each over its own initial run of the suite: 10 to 13 minutes a shard on a
+  runner that takes 17 seconds for that run, and 9 to 15 as the runners went
+  in the sweep of the table.
   The time is the work: a static mutant runs the whole suite, so a slow test can
-  cost its duration once for each of them. There are 1,282, most of them
+  cost its duration once for each of them. There are 1,415, most of them
   vocabulary tables built at import. A test that analyses a corpus in a
   `describe` body or at module scope turns everything that corpus reaches static
   too - analyse inside the test (ADR-0007). Check the headroom before adding one.

@@ -36,7 +36,7 @@ import { calculateMutationTestMetrics } from 'mutation-testing-metrics';
 // with a mutant's quickest test files run first (vitest.mutation.config.ts),
 // read shard by shard off its logs with scripts/mutation-timeline.mjs. A
 // shard's minutes follow its runner: the suite's initial run took 12 to 21
-// seconds across four sweeps of this source, and each shard's time went with
+// seconds across five sweeps of this source, and each shard's time went with
 // it. So these are minutes on a runner whose initial run takes 17 seconds, a
 // file's own minutes times 17 over its shard's initial run:
 //
@@ -46,27 +46,31 @@ import { calculateMutationTestMetrics } from 'mutation-testing-metrics';
 //
 // A file cannot be split, because a line range loses the mutants that cross
 // it (ADR-0019), and extract.ts has a shard to itself. It was the floor at 12
-// to 14 such minutes in vitest's order, the longest file first, and is under
-// the others' share now: the three shards beside it hold 35 minutes. A file
-// is slower in a shard that instruments more files, whose suite and overhead
-// are slower: glob.ts, yaml.ts and paths.ts once took half as long again in
-// the last shard as beside state.ts.
+// to 14 such minutes in vitest's order, and is under the others' share now:
+// the three shards beside it hold 35 minutes. A file is slower in a shard
+// that instruments more files, whose suite and overhead are slower: glob.ts,
+// yaml.ts and paths.ts once took half as long again in the last shard as
+// beside state.ts.
 //
 // The order gave back a quarter of extract.ts, two fifths of identity.ts and
 // a fifth of state.ts and resolve.ts, and nothing of the last shard, whose
-// mutants cli.test.ts kills: the longest file, which now runs last. So the
-// table that was level in vitest's order, 12 to 15 minutes a shard, read 10.1,
-// 9.0, 12.1 and 13.9, and report.ts and baseline.ts moved from the last shard
-// to the second. Still four: a fifth shard would take a minute off a slow
-// runner's sweep, from one more job, where CI's thirteen jobs already run
-// beside these.
+// mutants cli.test.ts kills: the longest test file, which now runs after the
+// others. So the table that was level in vitest's order, 13 to 16 minutes a
+// shard, read 10.1, 9.0, 12.1 and 13.9, and report.ts and baseline.ts moved
+// from the last shard to the second. Still four: a fifth shard would stop at
+// extract.ts's 10, a minute or two under what four give, from one more job,
+// where CI's thirteen jobs already run beside these.
 //
 // The first shards are listed. The last mutates everything else the base
 // configuration mutates, so a file added later is still mutated without anyone
 // remembering to list it here; the price is that new files all land in one
-// shard. When a shard passes the others by more than runner variance, re-measure
-// and move files or add a shard, and add it to the workflow's matrix, which a
-// test checks. Minutes on that 17-second runner, file by file and summed:
+// shard. When a shard passes the next by more than two minutes on one
+// runner's scale, re-measure and move files or add a shard, and add it to the
+// workflow's matrix, which a test checks. Minutes on that 17-second runner,
+// file by file and summed; the sweep of this table (run 38114717761) had its
+// files at 9.9, 11.2, 12.1 and 11.1 of them, and its shards took 9m09s,
+// 13m48s, 14m43s and 13m41s on runners whose initial runs took 15, 20, 20 and
+// 20 seconds:
 export const ASSIGNED = [
   ['src/extract.ts'], // 10.1
   ['src/identity.ts', 'src/select.ts', 'src/state.ts', 'src/paths.ts', 'src/report.ts', 'src/baseline.ts'], // 11.3

@@ -845,50 +845,62 @@ seconds across these sweeps, and the three in vitest's order, 56m13s to
 58m41s between their shards, come to 54.5, 54.8 and 54.9 minutes once each
 shard is scaled to a runner whose initial run takes 17 seconds. Those are the
 figures in brackets. Run 38111409073 is ebdae4c's source and table with the
-order alone changed:
+order alone changed, on 0cddd48; run 38114717761 is the same order on
+9a7c5aa's source, on e8a6c7c, with the table
+[ADR-0019](0019-the-sweep-runs-in-shards.md) now has:
 
-| | Vitest's order, three sweeps | The quickest first, run 38111409073 |
-| --- | ---: | ---: |
-| `extract.ts` | 12m12s to 16m53s (12.6 to 14.4) | 7m28s (10.6) |
-| `identity.ts`, `select.ts`, `state.ts`, `paths.ts` | 11m23s to 15m43s (12.7 to 13.2) | 8m25s (9.5) |
-| `resolve.ts`, `rules.ts`, `sections.ts`, `graph.ts`, `yaml.ts` | 12m40s to 18m37s (13.4 to 15.8) | 14m38s (12.4) |
-| the rest | 12m41s to 17m24s (13.6 to 14.4) | 16m59s (14.4) |
-| The four shards | 56m13s to 58m41s (54.5 to 54.9) | 47m30s (47.0) |
-| The four jobs | 57m04s to 59m35s | 48m25s |
-| Mutants not static | 41.4 to 43.0 min (39.8 to 40.5) | 32.7 min (31.9) |
-| Static mutants | 12.8 to 13.6 min (12.4 to 12.7) | 12.7 min (13.1) |
-| Not static, killed late | 1,035 to 1,083 | 968 |
-| Tests of other files completed first, each | 134 to 137 | 50 |
-| Static, killed late | 178 to 185 | 197 |
-| Tests of other files completed first, each | 691 to 735 | 679 |
-| Score | 96.50% over 8,832 | 96.50% over 8,832 |
-| Killed, timed out, survived, no coverage | 8,453 to 8,457, 66 to 70, 293, 16 | 8,456, 67, 293, 16 |
+| | Vitest's order, three sweeps | The quickest first, run 38111409073 | Run 38114717761 |
+| --- | ---: | ---: | ---: |
+| The four shards | 56m13s to 58m41s (54.5 to 54.9) | 47m30s (47.0) | 51m21s (46.2) |
+| The four jobs | 57m04s to 59m35s | 48m25s | 52m21s |
+| Their initial runs, added up | 69 to 73 s | 67 s | 75 s |
+| Mutants not static | 41.4 to 43.0 min (39.8 to 40.5) | 32.7 min (31.9) | 35.9 min (32.1) |
+| Static mutants | 12.8 to 13.6 min (12.4 to 12.7) | 12.7 min (13.1) | 13.3 min (12.2) |
+| Not static, killed late | 1,035 to 1,083 | 968 | 973 |
+| Tests of other files completed first, each | 134 to 137 | 50 | 54 |
+| Static, killed late | 178 to 185 | 197 | 203 |
+| Tests of other files completed first, each | 691 to 735 | 679 | 613 |
+| Slowest shard | 16m53s to 18m37s | 16m59s | 14m43s |
+| Score | 96.50% over 8,832 | 96.50% over 8,832 | 96.50% over 8,832 |
+| Killed, timed out, survived, no coverage | 8,453 to 8,457, 66 to 70, 293, 16 | 8,456, 67, 293, 16 | 8,454, 69, 293, 16 |
 
-The survivors are the same 293. Three to five mutants moved between killed
-and timed out against each of the three sweeps, all of them in the two
-searches of `graph.ts` and at one line of `extract.ts`, where those three
-differ among themselves in one to four; with every timeout lost the sweep
-would read 95.74%, and the `break` stays 93.
+The survivors are the same 293 in all five, mutant for mutant. Six mutants
+moved between killed and timed out across them, all in the two searches of
+`graph.ts` and at one line of `extract.ts`: three to five between a sweep
+in this order and one in vitest's, where the three in vitest's order differ
+among themselves in one to four. One of the six, in the cycle search, was
+killed in all three sweeps in vitest's order, by `Invalid array length` in
+the first test that ran, and timed out in both in this one. It is a loop that
+does not end: it fails a test when it fills an array first and runs out the
+clock when it does not, and which test runs first is the order's. Either way
+it is detected. With every timeout lost the two sweeps would read 95.74% and
+95.72%, and the `break` stays 93.
 
 **What the order gives, and what it does not.** The mutants that are not
-static took a fifth less: a mutant killed late had 50 tests of other files
+static took a fifth less: one killed late had 50 to 54 tests of other files
 ahead of its killer where it had 135. The static ones took what they had
-taken: one killed late has some 700 tests ahead of its killer in either
-order. File by file, on the 17-second runner, `extract.ts` took 10.1 minutes
-where it had taken 12.1 to 13.9, `identity.ts` 3.6 for 6.0 to 6.3, `state.ts`
-2.3 for 2.8 to 2.9 and `resolve.ts` 2.9 for 3.5 to 3.7. Three took more:
-`cli.ts` 3.4 for 2.9 to 3.2, `glob.ts` 1.9 for 1.2 to 1.4 and `rules.ts` 4.3
-for 3.4 to 4.1. `tests/cli.test.ts` was the recorded killer of 951 to 963
-mutants that are not static in vitest's order and of 428 in this one: where
-a quicker file kills too, the mutant no longer waits for it, and where it
-alone kills, the quicker files that cover the mutant run ahead of it.
+taken: one killed late had 613 and 679 tests ahead of its killer, for 691 to
+735 before. File by file, on the 17-second runner and in the two sweeps,
+`extract.ts` took 9.9 and 10.1 minutes where it had taken 12.1 to 13.9,
+`identity.ts` 3.6 and 3.9 for 6.0 to 6.3, `state.ts` 2.2 and 2.3 for 2.8 to
+2.9 and `resolve.ts` 2.9 and 3.0 for 3.5 to 3.7. Two took more, `glob.ts`
+1.6 and 1.9 for 1.2 to 1.4 and `project-rules.ts` 0.7 and 0.8 for 0.5 to
+0.6, and `cli.ts` and `rules.ts` took the most they had taken or a little
+over it, 3.2 and 3.4 for 2.9 to 3.2 and 4.0 and 4.3 for 3.4 to 4.1.
+`tests/cli.test.ts` was the recorded killer of 951 to 963 mutants that are
+not static in vitest's order and of 428 and 416 in this one: where a quicker
+file kills too, the mutant no longer waits for it, and where it alone kills,
+the quicker files that cover the mutant run ahead of it.
 
-So the four jobs take nine to eleven minutes less between them, and the
-sweep's own time, which is its slowest shard's, did not move: the last
-shard, whose mutants are the command line's, took the 17 minutes a slow
-runner had taken it before. The shards that were level had come apart, and
+So the four jobs took five to eleven minutes less between them as their
+runners went, and eight on one runner's scale, a seventh of the sweep. Its
+own time is its slowest shard's, and the order alone did not move that: in
+the first sweep the last shard, whose mutants are the command line's, took
+the 17 minutes a slow runner had taken it before, while the first two took
+seven and eight. The shards that were level had come apart.
 [ADR-0019](0019-the-sweep-runs-in-shards.md) (2026-10-11) has the table that
-levels them again.
+levels them again, and in its sweep the slowest shard took 14m43s on a
+runner whose initial run took 20 seconds.
 
 `tests/mutation-shards.test.ts` holds the order: the failed file first, the
 quickest after it, a file never run after those, the keys vitest's own

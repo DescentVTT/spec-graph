@@ -25,7 +25,7 @@ import { BaseSequencer, type TestSpecification } from 'vitest/node';
  * before it, 96.50% over 8,832 mutants with the same 293 survivors, and its
  * mutants that are not static took 33 minutes of the four shards where they
  * had taken 41 to 43. The static ones took the 13 they had taken: one killed
- * late had 700 tests ahead of its killer in either order.
+ * late had 680 tests ahead of its killer, for 690 to 735 before.
  *
  * A file the worker has not run yet has no time to go by. It runs after
  * those that have, the smaller first, and has a time from then on. The time
