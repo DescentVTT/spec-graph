@@ -19,9 +19,10 @@ name: Mutation
 #
 # Both tiers run in shards. The sweep took 166 to 171 minutes on one runner, on
 # identical source, three times. Each shard mutates its own files
-# (scripts/mutation-shards.mjs) with every test, and a final job merges the
-# reports, refuses anything that is not exactly one sweep, and applies the gate
-# to the merged score. ADR-0019 has the measurements.
+# (scripts/mutation-shards.mjs) with every test, a mutant's quickest test files
+# first (vitest.mutation.config.ts), and a final job merges the reports,
+# refuses anything that is not exactly one sweep, and applies the gate to the
+# merged score. ADR-0019 has the measurements.
 on:
   # A push to a branch with an open pull request would otherwise run twice, once
   # per event. Filtering the push the way ci.yml does leaves one run.
@@ -61,11 +62,13 @@ jobs:
     # Another image is another measurement: spec-core's ADR-0008 says what
     # moving takes.
     runs-on: ubuntu-24.04
-    # Headroom for a bad runner, not a budget. The first two sharded sweeps took
-    # 26 to 36 minutes a shard, and the same shard moved by up to six minutes
-    # between runners on identical work. A shard that keeps passing 45 means the
-    # table in scripts/mutation-shards.mjs needs re-measuring, not this number
-    # raising.
+    # Headroom for a bad runner, not a budget. The shards took 9 to 15 minutes
+    # in the sweep of the table (run 38114717761; ADR-0019, amended
+    # 2026-10-11), and the same shard has taken 12 and 17 on runners whose
+    # initial run of the suite took 15 and 20 seconds. A shard that keeps
+    # passing 20 means the table in scripts/mutation-shards.mjs needs
+    # re-measuring, or that the suite has grown, which every static mutant
+    # that survives runs whole: not this number raising.
     timeout-minutes: 60
 
     strategy:

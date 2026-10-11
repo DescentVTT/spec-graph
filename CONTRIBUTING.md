@@ -130,7 +130,10 @@ CI runs the same sweep in four shards and merges them into one report and one
 score (`scripts/mutation-shards.mjs`, ADR-0019). A new file under `src/` lands
 in the last shard. When the shards' times drift apart,
 `node scripts/mutation-timeline.mjs <report> <log>` reads per-file minutes off a
-sweep's log to rebalance them.
+sweep's log to rebalance them. A shard's time follows its runner, so compare
+shards by their minutes over each one's initial run of the suite, which its
+log states: the same shard took 12 and 17 minutes on runners whose initial
+runs took 15 and 20 seconds.
 
 **Where an oracle exists, use it.** The matcher behind `~=` replaces a built-in
 engine, so its tests - in spec-core now, beside it - do not assert what its
