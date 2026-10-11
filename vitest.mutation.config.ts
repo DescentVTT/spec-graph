@@ -59,17 +59,19 @@ export class QuickestFirst extends BaseSequencer {
  * `node bin/spec-graph.js`, so unlike a subprocess end-to-end suite they load
  * the mutated source and can genuinely kill mutants. They stay.
  *
- * Two files are excluded. mutation-shards.test.ts tests the CI script that
+ * Three files are excluded. mutation-shards.test.ts tests the CI script that
  * splits and merges the sweep, and the order above, which reaches nothing under
  * src/, so it cannot kill a mutant - and a static mutant runs the whole suite,
- * so it would run thousands of times for nothing. bin.test.ts is the one test
+ * so it would run thousands of times for nothing. mutation-unmeasured.test.ts
+ * is left out for the same reason: it holds the script that counts what the
+ * sweep cannot see, and reads src/ as text. bin.test.ts is the one test
  * that does spawn the launcher, for the exit code only a process has: it runs
  * what was compiled into dist/, which no mutant is.
  */
 export default defineConfig({
   test: {
     include: ['tests/**/*.test.ts'],
-    exclude: ['tests/mutation-shards.test.ts', 'tests/bin.test.ts', '**/node_modules/**'],
+    exclude: ['tests/mutation-shards.test.ts', 'tests/mutation-unmeasured.test.ts', 'tests/bin.test.ts', '**/node_modules/**'],
     environment: 'node',
     testTimeout: 30_000,
     hookTimeout: 30_000,

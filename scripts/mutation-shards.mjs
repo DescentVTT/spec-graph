@@ -85,7 +85,7 @@ export class ShardError extends Error {
 
 // Stryker's reading of `mutate`: patterns in order, a `!` pattern taking back
 // what an earlier one matched.
-function mutates(patterns, file) {
+export function mutates(patterns, file) {
   let included = false;
   for (const pattern of patterns) {
     if (pattern.startsWith('!')) {
