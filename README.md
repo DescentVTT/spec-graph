@@ -996,9 +996,9 @@ was prose and a dangling one passed.
 A name that is a family's, and that no document here belongs to, allows
 nothing either. `--family RFC` in a repository of ADRs, or `ADRS` for `ADR`,
 leaves every citation as prose, and the check would report a consistent graph
-over a citation of an ADR nobody wrote. So a list has to name a family a
-document belongs to, or the check stops with exit `2`, before it reports or
-records anything:
+over a citation of an ADR nobody wrote. So every name on a list has to be a
+family a document belongs to, or the check stops with exit `2`, before it
+reports or records anything:
 
 ```text
 spec-graph: no document here belongs to a family named by --family (RFC); the documents here belong to ADR
@@ -1006,13 +1006,22 @@ spec-graph: no document here belongs to a family named by --family (RFC); the do
 ```
 
 A document belongs to a family when its identifier is written with it, as
-`ADR-0007` is with `ADR`. A list that names such a family beside one the
-documents do belong to is a family the repository means to start, or a typo in
-half the list: it is said on stderr and fails nothing.
+`ADR-0007` is with `ADR`. One name with no document, beside names that have
+them, stops the check the same way, because what cites that family goes
+unread. With `ADR` and `RFC` on the list and no RFC written, `RFC-0001` in an
+ADR is no finding, under `--strict` too. And `RFCS` for `RFC`, in a repository
+that has RFCs, takes their family off the list: a citation of an RFC nobody
+wrote passed, with one line on stderr.
 
 ```text
 spec-graph: no document here belongs to RFC, named by --family; the documents here belong to ADR
+  name each family as its documents do, or leave it off the list until its first document is written
 ```
+
+A family the repository means to start waits for its first document. A run
+over part of a repository, whose patterns leave a listed family out, is
+stopped too: give it the whole corpus, or `--no-config` and the families it
+does read.
 
 A list whose every name has a document sees neither line. `ignoreFamilies`
 needs no such check: a name on it passes over citations of that family alone,
@@ -1100,8 +1109,9 @@ variable in `--family "$FAMILIES"` is the usual way to write one:
   that reads one, `rules` included;
 - an empty or blank `--baseline`, `--record-baseline`, `--ignore`,
   `--ignore-ref`, `--history` or pattern;
-- a list of families, `--family` or `families`, none of which a document
-  here belongs to ([Family rules](#family-rules));
+- a family on a list, `--family` or `families`, that no document here
+  belongs to, alone or beside families that have documents
+  ([Family rules](#family-rules));
 - a second word after `rules`, which takes one rule id, and an empty name
   given to `diff`;
 - `--format json` asked of `graph`, whose JSON is `--graph-format json`, or

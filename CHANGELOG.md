@@ -11,6 +11,28 @@ the family's
 [versioning policy](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0009-versions-before-1-0.md)
 records.
 
+## Unreleased
+
+### Changed
+
+- **A family on a list that no document here belongs to stops the check,
+  beside families that have documents too.** Since 0.14.0 a list none of
+  whose names has a document is exit `2`, and one such name beside names
+  that have documents was a line on stderr. What cites that family went
+  unread all the same: `--family ADR --family RFCS`, in a repository of ADRs
+  and RFCs, took the RFCs' family off the list, and `check` printed `the
+  specification graph is consistent` over a citation of an RFC nobody
+  wrote, under `--strict` too; `--family ADR --family RFC` did the same once
+  the RFCs were ignored or outside the patterns. Each such name is exit `2`
+  now, for `--family` and `families` alike, with the line it had and what to
+  do under it
+  ([ADR-0010](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0010-configuration-belongs-to-the-repository.md)).
+  Upgrading: write each name as its documents carry it, `RFC` for
+  `RFC-0007`, and leave a family off the list until its first document is
+  written. A run over part of a repository, whose patterns leave a listed
+  family out, takes the whole corpus, or `--no-config` and a `--family` for
+  each family it does read.
+
 ## 0.14.1
 
 `FORCE_COLOR=false` forced colour on, and a Windows console with
