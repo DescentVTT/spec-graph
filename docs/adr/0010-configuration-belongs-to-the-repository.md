@@ -271,12 +271,21 @@ deciding: that pair is not this amendment's, and is left as it is.
 `--help` and `--version` are answered first, as they are beside an option of
 another command.
 
-Every command takes `--no-ascii`, as every command takes `--ascii`, and it
-joins the last row of the table below. Only a check's report draws a
-glyph. `--ascii` is true already of a command that draws none, and
-`--no-ascii` is taken with it because the pair says in which characters a
-glyph is drawn, not that one is: `--color`, which is refused there, would
-promise colour.
+`--no-ascii` is a check's option, and joins `--color` in the table below.
+Only a check's report draws a glyph, and the family's rule is that an option
+is refused where taking it would say what is not so, and taken where it asks
+a command to leave out what it never does
+([spec-core's ADR-0005](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0005-the-family-contract.md),
+2026-10-11). `--ascii` on a command that draws no glyph asks for what is
+already so, as `--no-color` does there, and every command still takes it.
+`--no-ascii` there would say the Unicode glyphs were drawn where none is, as
+`--color` would of colour, and `query`, `graph`, `rules` and `diff` refuse
+it in the words they have for any option they do not read: `--no-ascii
+belongs to check, not to query`. The first draft of this amendment took it
+on every command, reading the pair as saying how a glyph is drawn and not
+that one is. The family's rule is the one above, and it is the one `--color`
+already follows here. A format of a check that draws no glyph takes both,
+as it takes `--no-color`: that pairs an option with an option.
 
 **A list of families is held against the documents.** *Amended again
 2026-10-09.* The amendment above refused a name no family can have and kept

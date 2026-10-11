@@ -83,9 +83,7 @@ describe('reading the command line', () => {
     const refusal = '--ascii is given beside --no-ascii, and the glyphs are drawn one way: give one of the two';
     expect(usage(['--ascii', '--no-ascii']).message).toBe(refusal);
     expect(usage(['--no-ascii', '--ascii']).message).toBe(refusal);
-    // By every command, since every command takes the two.
-    expect(usage(['query', 'document', '--no-ascii', '--verbose', '--ascii']).message).toBe(refusal);
-    expect(usage(['diff', 'a.json', 'b.json', '--ascii', '--no-ascii']).message).toBe(refusal);
+    expect(usage(['check', '--no-ascii', '--verbose', '--ascii']).message).toBe(refusal);
     // One of them twice is one of them.
     expect(parseArgs(['--ascii', '--ascii'], '/repo').ascii).toBe(true);
     expect(parseArgs(['--no-ascii', '--no-ascii'], '/repo').ascii).toBe(false);
@@ -93,6 +91,35 @@ describe('reading the command line', () => {
     // they are beside an option of another command.
     expect(parseArgs(['--ascii', '--no-ascii', '--help'], '/repo').help).toBe(true);
     expect(parseArgs(['--no-ascii', '--ascii', '-v'], '/repo').version).toBe(true);
+  });
+
+  it('takes --no-ascii for a check alone, as --color, and --ascii for every command', () => {
+    const others: Record<string, string[]> = {
+      query: ['query', 'document'],
+      graph: ['graph'],
+      rules: ['rules'],
+      diff: ['diff', 'a.json', 'b.json'],
+    };
+    for (const [command, argv] of Object.entries(others)) {
+      // It would say the Unicode glyphs were drawn, where the command draws none.
+      expect(usage([...argv, '--no-ascii']).message, command).toBe(`--no-ascii belongs to check, not to ${command}`);
+      expect(usage([...argv, '--color']).message, command).toBe(`--color belongs to check, not to ${command}`);
+      // Beside --ascii too: the option of another command is named before the pair is.
+      expect(usage([...argv, '--ascii', '--no-ascii']).message, command).toBe(`--no-ascii belongs to check, not to ${command}`);
+      // --ascii asks for what is already so, and is taken.
+      expect(parseArgs([...argv, '--ascii'], '/repo'), command).toMatchObject({ command, ascii: true });
+      // Help and the version are answered first.
+      expect(parseArgs([...argv, '--no-ascii', '--help'], '/repo').help, command).toBe(true);
+      expect(parseArgs([...argv, '--no-ascii', '-v'], '/repo').version, command).toBe(true);
+    }
+    // A check takes it, named or not, and in a format that draws no glyph:
+    // that pairs an option with an option, as --no-color beside sarif does.
+    expect(parseArgs(['check', '--no-ascii'], '/repo')).toMatchObject({ command: 'check', ascii: false });
+    expect(parseArgs(['--no-ascii', 'docs'], '/repo')).toMatchObject({ command: 'check', ascii: false });
+    for (const format of ['json', 'sarif', 'github', 'gitlab', 'markdown']) {
+      expect(parseArgs(['check', '--format', format, '--no-ascii'], '/repo').ascii, format).toBe(false);
+      expect(parseArgs(['check', '--format', format, '--ascii'], '/repo').ascii, format).toBe(true);
+    }
   });
 
   it('takes each graph format by name and refuses any other, naming the ones there are', () => {
@@ -177,6 +204,18 @@ describe('what the flags do to a run', () => {
     const told = await runWith({ SPEC_GRAPH_ASCII: '1' }, false, ...report, '--no-ascii');
     expect(told.out.replace(/[\d.]+ms/, '')).toBe(asked.out.replace(/[\d.]+ms/, ''));
     expect(told.code).toBe(asked.code);
+  });
+
+  it('refuses --no-ascii to a command that draws no glyph, and writes nothing', async () => {
+    expect(await run('query', 'document', '--root', DEMO, '--no-ascii')).toEqual({
+      code: EXIT_ERROR,
+      out: '',
+      err: 'spec-graph: --no-ascii belongs to check, not to query\n',
+    });
+    // --ascii is taken there, and the answer is the one without it.
+    const plain = await run('query', 'document', '--root', DEMO);
+    expect(plain.code).toBe(EXIT_OK);
+    expect(await run('query', 'document', '--root', DEMO, '--ascii')).toEqual(plain);
   });
 
   it('refuses a run given --ascii beside --no-ascii, and writes no report', async () => {

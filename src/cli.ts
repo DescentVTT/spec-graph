@@ -233,8 +233,9 @@ OPTIONS
     every other option                  check
 
   --no-config, --no-color and --ascii are taken by every command: each is
-  true already of a command with nothing to read it for. --no-ascii is taken
-  with --ascii: the two say how a glyph is drawn, not that one is.
+  true already of a command with nothing to read it for. --color and
+  --no-ascii are not: each would say that a command drew what only a check
+  draws.
 
   A value that begins with -- reads as an option, so the option before it is
   refused as missing its value. A name that does begin so is written ./--name
@@ -370,10 +371,11 @@ const SEVERITIES: readonly Severity[] = ['error', 'warn', 'info', 'off'];
  * Each is true already of what the commands that do not read it write - none
  * of them colours or draws a glyph, and `diff` reads no configuration - and
  * a script passes them to every command it runs. `--color` is not one of
- * them: it would promise colour that only a check prints. `--no-ascii` is
- * taken with `--ascii`: the pair says how a glyph is drawn, in which
- * characters, and not that one is, so a command that draws none has nothing
- * to get wrong by either.
+ * them: it would promise colour that only a check prints. Nor is
+ * `--no-ascii`, for the same reason: taken by a query, it would say the
+ * Unicode glyphs were drawn where none is. An option is refused where
+ * taking it would say what is not so, and taken where it asks a command to
+ * leave out what it never does (spec-core's ADR-0005, 2026-10-11).
  *
  * A function and not a table, so that none of it runs when the module loads:
  * a mutant of a table built at import pays for the whole suite (ADR-0007).
@@ -404,6 +406,7 @@ function readersOf(option: string): readonly Command[] | undefined {
     case '--max':
     case '--max-warnings':
     case '--color':
+    case '--no-ascii':
       return ['check'];
   }
   return undefined;

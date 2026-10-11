@@ -1130,16 +1130,17 @@ into the file.
 | `--format` | `check`, `query`, `diff` |
 | `--graph-format`, `--documents-only` | `graph` |
 | `--explain` | `rules` |
-| `--ignore-ref`, `--family`, `--ignore-family`, `--baseline`, `--record-baseline`, `--ratchet`, `--rule`, `--strict`, `--max`, `--max-warnings`, `--color` | `check` |
-| `--no-config`, `--no-color`, `--ascii`, `--no-ascii`, `--help`, `--version` | every command |
+| `--ignore-ref`, `--family`, `--ignore-family`, `--baseline`, `--record-baseline`, `--ratchet`, `--rule`, `--strict`, `--max`, `--max-warnings`, `--color`, `--no-ascii` | `check` |
+| `--no-config`, `--no-color`, `--ascii`, `--help`, `--version` | every command |
 
 `--no-config`, `--no-color` and `--ascii` are taken by every command because
 each is true already of a command with nothing to read it for: only a check
-colours its report or draws a glyph, and `diff` reads no configuration.
-`--no-ascii` is taken with `--ascii`: the two say in which characters a glyph
-is drawn, not that one is. A script can pass them to whatever it runs. The configuration file is not an
-option: `ignoreReferences` in `.spec-graph.json` stops no `graph`, which
-draws the same graph with it as without.
+colours its report or draws a glyph, and `diff` reads no configuration. A
+script can pass them to whatever it runs. `--color` and `--no-ascii` are a
+check's alone: taken by a query, each would say the query drew what only a
+check draws. The configuration file is not an option: `ignoreReferences` in
+`.spec-graph.json` stops no `graph`, which draws the same graph with it as
+without.
 
 **There is no `--watch`.** A full run on this repository takes 60 ms, so the
 loop that would justify a resident process is one line of shell, and it belongs
@@ -1160,12 +1161,15 @@ the report is coloured when stdout is a terminal. `CI` is not read.
 `--ascii` draws the report in ASCII glyphs and `--no-ascii` in the Unicode
 ones, `✖`, `⚠`, `↳` and the like, on any platform and whatever the
 environment says. Given together they are refused, exit `2`: one of the two
-would go unread. Without either, `SPEC_GRAPH_ASCII` set to anything but `0`,
-`false` or nothing asks for ASCII; and without that, a Windows console that
-sets neither `WT_SESSION` nor `TERM_PROGRAM`, or sets them to nothing, gets
-ASCII and every other terminal the Unicode glyphs. Where those two variables
-say nothing of the terminal that draws the report, `--no-ascii` asks for the
-Unicode glyphs outright.
+would go unread. `--no-ascii` belongs to `check`, as `--color` does; a format
+of a check that draws no glyph takes it all the same.
+
+Without either, `SPEC_GRAPH_ASCII` set to anything but `0`, `false` or nothing
+asks for ASCII; and without that, a Windows console that sets neither
+`WT_SESSION` nor `TERM_PROGRAM`, or sets them to nothing, gets ASCII and every
+other terminal the Unicode glyphs. Where those two variables say nothing of
+the terminal that draws the report, `--no-ascii` asks for the Unicode glyphs
+outright.
 
 ## In CI
 
