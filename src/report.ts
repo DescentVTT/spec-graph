@@ -94,7 +94,11 @@ export interface ColorEnvironment {
 }
 
 /**
- * Honours `NO_COLOR`, `FORCE_COLOR` and `TERM=dumb` before falling back to TTY.
+ * Honours `NO_COLOR`, `FORCE_COLOR` and `TERM=dumb` before falling back to
+ * TTY, as the family reads them (spec-core's ADR-0005): `NO_COLOR` set to
+ * anything first; then `FORCE_COLOR`, off for exactly `0` or exactly `false`
+ * and on for anything else; then `TERM=dumb`. Either of the first two set to
+ * nothing is as unset.
  *
  * `CI` is not read. It says who started the run and nothing of what the
  * stream draws: a pipeline's log that is a terminal draws colour, spec-brief
@@ -103,10 +107,13 @@ export interface ColorEnvironment {
 export function shouldUseColor(environment: ColorEnvironment = {}): boolean {
   const env = environment.env ?? process.env;
   if (env['NO_COLOR'] !== undefined && env['NO_COLOR'] !== '') return false;
-  // `FORCE_COLOR=0` is the conventional way to turn colour off, so it has to
-  // win over an attached TTY rather than merely failing to force it on.
-  if (env['FORCE_COLOR'] === '0') return false;
-  if (env['FORCE_COLOR'] !== undefined && env['FORCE_COLOR'] !== '') return true;
+  // `0` and `false` are how the convention writes off, as Node and
+  // supports-color read them, so each has to win over an attached TTY rather
+  // than merely fail to force colour on: `false` used to force it. The two
+  // spellings exactly; every other value that is not empty forces colour on.
+  const forced = env['FORCE_COLOR'];
+  if (forced === '0' || forced === 'false') return false;
+  if (forced !== undefined && forced !== '') return true;
   if (env['TERM'] === 'dumb') return false;
   return environment.isTTY === true;
 }
@@ -124,7 +131,9 @@ export function shouldUseAscii(environment: ColorEnvironment = {}): boolean {
   if (asked !== '' && asked !== '0' && asked !== 'false') return true;
   if ((environment.platform ?? process.platform) !== 'win32') return false;
   // Windows Terminal and modern shells set these; the legacy console does not.
-  return env['WT_SESSION'] === undefined && env['TERM_PROGRAM'] === undefined;
+  // Set to nothing is as unset, as for every convention's variable: `WT_SESSION=`
+  // is a script clearing it, and used to read as a terminal announcing itself.
+  return (env['WT_SESSION'] ?? '') === '' && (env['TERM_PROGRAM'] ?? '') === '';
 }
 
 const EMPTY_RULES: ReadonlySet<RuleId> = new Set<RuleId>();

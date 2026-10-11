@@ -126,6 +126,8 @@ describe('what the flags do to a run', () => {
     expect(coloured((await runWith({}, false, ...report)).out)).toBe(false);
     expect(coloured((await runWith({}, true, ...report)).out)).toBe(true);
     expect(coloured((await runWith({ FORCE_COLOR: '1' }, false, ...report)).out)).toBe(true);
+    // Off as the convention spells it, on a terminal that would colour.
+    expect(coloured((await runWith({ FORCE_COLOR: 'false' }, true, ...report)).out)).toBe(false);
     // "Force colour on or off", whatever the environment says.
     expect(coloured((await runWith({ NO_COLOR: '1' }, true, ...report, '--color')).out)).toBe(true);
     expect(coloured((await runWith({ FORCE_COLOR: '1' }, true, ...report, '--no-color')).out)).toBe(false);

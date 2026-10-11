@@ -83,6 +83,21 @@ describe('colour detection', () => {
     expect(shouldUseColor({ isTTY: true, env: { FORCE_COLOR: '0' } })).toBe(false);
   });
 
+  it('reads FORCE_COLOR=false as off, as it reads 0, on a terminal too', () => {
+    // Node and supports-color read `false` as off; it used to force colour on,
+    // into a pipe as well.
+    expect(shouldUseColor({ isTTY: true, env: { FORCE_COLOR: 'false' } })).toBe(false);
+    expect(shouldUseColor({ isTTY: false, env: { FORCE_COLOR: 'false' } })).toBe(false);
+  });
+
+  it('reads every other FORCE_COLOR that is not empty as on, true, 1 and FALSE among them', () => {
+    // Off is the two spellings exactly: another case, a blank beside the word
+    // or a second zero is a value that is not empty.
+    for (const on of ['true', '1', 'FALSE', 'False', ' false', 'false ', '00', '2']) {
+      expect(shouldUseColor({ isTTY: false, env: { FORCE_COLOR: on } }), JSON.stringify(on)).toBe(true);
+    }
+  });
+
   it('stays plain for a dumb terminal, which says it draws none', () => {
     expect(shouldUseColor({ isTTY: true, env: { TERM: 'dumb' } })).toBe(false);
   });
@@ -141,6 +156,17 @@ describe('colour detection', () => {
     expect(shouldUseAscii({ env: { TERM_PROGRAM: 'vscode' }, platform: 'win32' })).toBe(false);
     // Either marker is enough on its own.
     expect(shouldUseAscii({ env: { WT_SESSION: 'x', TERM_PROGRAM: 'vscode' }, platform: 'win32' })).toBe(false);
+  });
+
+  it('reads a terminal marker set to nothing as unset, as the family reads every such variable', () => {
+    // `WT_SESSION=` is a script clearing the variable. Read for being set, it
+    // announced Windows Terminal to a console that draws mojibake.
+    expect(shouldUseAscii({ env: { WT_SESSION: '' }, platform: 'win32' })).toBe(true);
+    expect(shouldUseAscii({ env: { TERM_PROGRAM: '' }, platform: 'win32' })).toBe(true);
+    expect(shouldUseAscii({ env: { WT_SESSION: '', TERM_PROGRAM: '' }, platform: 'win32' })).toBe(true);
+    // One cleared beside one that names a terminal is still a terminal named.
+    expect(shouldUseAscii({ env: { WT_SESSION: '', TERM_PROGRAM: 'vscode' }, platform: 'win32' })).toBe(false);
+    expect(shouldUseAscii({ env: { WT_SESSION: 'x', TERM_PROGRAM: '' }, platform: 'win32' })).toBe(false);
   });
 
   it('defaults to the real platform when none is given', () => {
