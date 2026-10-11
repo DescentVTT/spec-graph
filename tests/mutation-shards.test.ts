@@ -6,6 +6,9 @@
  * anything but exactly one sweep: a report split into shards the way Stryker
  * would write them must merge back to the same verdicts, tests and score, and
  * each way of not being one sweep must be refused rather than scored.
+ *
+ * The order the sweep runs a mutant's test files in is held here too
+ * (vitest.mutation.config.ts): it is the sweep's, and no mutant is under it.
  */
 
 import { execFileSync } from 'node:child_process';
@@ -14,7 +17,10 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { minimatch } from 'minimatch';
 import { describe, expect, it } from 'vitest';
+import { BaseSequencer, type TestSpecification, type Vitest } from 'vitest/node';
 
+import unitSuite from '../vitest.config.js';
+import mutationSuite, { QuickestFirst } from '../vitest.mutation.config.js';
 import {
   ASSIGNED,
   cacheFor,
@@ -386,6 +392,104 @@ describe('the merged report as people read it', () => {
     expect(html.match(/<\/script>/g)).toHaveLength(2);
     const payload = html.slice(html.indexOf('app.report = ') + 'app.report = '.length, html.indexOf(';\nfunction updateTheme'));
     expect(new Function(`return ${payload}`)()).toEqual(report);
+  });
+});
+
+describe("the order a mutant's test files run in", () => {
+  // What a worker knows of each file after its last run, by the key vitest
+  // files it under, and the files as vitest finds them: the times are CI's
+  // for these four, and the sizes the files' own.
+  type Timed = Record<string, { duration: number; failed: boolean }>;
+  const TIMED: Timed = {
+    ':tests/cli.test.ts': { duration: 1_605, failed: false },
+    ':tests/glob.test.ts': { duration: 801, failed: false },
+    ':tests/extract-vocabulary.test.ts': { duration: 118, failed: false },
+    ':tests/paths-posix.test.ts': { duration: 7, failed: false },
+  };
+  const SIZES: Record<string, number> = {
+    ':tests/cli.test.ts': 86_196,
+    ':tests/glob.test.ts': 44_984,
+    ':tests/markdown.test.ts': 43_865,
+    ':tests/extract-vocabulary.test.ts': 9_697,
+    ':tests/vendor.test.ts': 3_494,
+    ':tests/paths-posix.test.ts': 1_610,
+  };
+  const FOUND = Object.keys(SIZES).map((key) => key.slice(1));
+
+  const worker = (timed: Timed, found = FOUND) => {
+    const asked: string[] = [];
+    const ctx = {
+      config: { root: '/work/spec-graph' },
+      cache: {
+        getFileTestResults: (key: string) => {
+          asked.push(key);
+          return timed[key];
+        },
+        getFileStats: (key: string) => (key in SIZES ? { size: SIZES[key]! } : undefined),
+      },
+    } as unknown as Vitest;
+    const files = found.map(
+      (file) =>
+        ({
+          moduleId: `/work/spec-graph/${file}`,
+          project: { name: '', config: { isolate: true, sequence: { groupOrder: 0 } } },
+        }) as unknown as TestSpecification,
+    );
+    return { ctx, files, asked };
+  };
+  const names = (files: TestSpecification[]) =>
+    files.map((file) => file.moduleId.slice('/work/spec-graph/tests/'.length).replace('.test.ts', ''));
+
+  it('runs the quickest file first, and a file the worker has not timed after those it has, the smaller first', async () => {
+    const { ctx, files } = worker(TIMED);
+    const order = ['paths-posix', 'extract-vocabulary', 'glob', 'cli', 'vendor', 'markdown'];
+    expect(names(await new QuickestFirst(ctx).sort(files))).toEqual(order);
+    // Whatever order vitest found them in, and every file it found, once.
+    expect(names(await new QuickestFirst(ctx).sort([...files].reverse()))).toEqual(order);
+  });
+
+  it('runs a file that failed in the last run before any that passed, however long it takes', async () => {
+    const { ctx, files } = worker({ ...TIMED, ':tests/cli.test.ts': { duration: 1_605, failed: true } });
+    expect(names(await new QuickestFirst(ctx).sort(files))).toEqual([
+      'cli',
+      'paths-posix',
+      'extract-vocabulary',
+      'glob',
+      'vendor',
+      'markdown',
+    ]);
+  });
+
+  it('differs from the order vitest would give in that alone, and reads what vitest recorded by the keys vitest reads', async () => {
+    const failed = { ...TIMED, ':tests/extract-vocabulary.test.ts': { duration: 118, failed: true } };
+    const timed = Object.keys(TIMED).map((key) => key.slice(1));
+
+    // Vitest's own: the failed file, then the longest.
+    const theirs = worker(failed, timed);
+    expect(names(await new BaseSequencer(theirs.ctx).sort(theirs.files))).toEqual(['extract-vocabulary', 'cli', 'glob', 'paths-posix']);
+    const ours = worker(failed, timed);
+    expect(names(await new QuickestFirst(ours.ctx).sort(ours.files))).toEqual(['extract-vocabulary', 'paths-posix', 'glob', 'cli']);
+
+    // A key vitest stopped using would find nothing, every file would count
+    // as never run, and the order would quietly be by size.
+    expect(new Set(ours.asked)).toEqual(new Set(theirs.asked));
+    expect(new Set(ours.asked)).toEqual(new Set(Object.keys(TIMED)));
+  });
+
+  it("is the sweep's alone, over the suite `npm test` runs less the two files no mutant reaches", () => {
+    const unit = unitSuite.test!;
+    const { exclude, sequence, ...sweep } = mutationSuite.test!;
+    expect(sequence).toEqual({ sequencer: QuickestFirst });
+    // `npm test` reports every failure and runs its files side by side:
+    // vitest's order is the one for that.
+    expect(unit.sequence).toBeUndefined();
+    expect(sweep).toEqual({
+      include: unit.include,
+      environment: unit.environment,
+      testTimeout: unit.testTimeout,
+      hookTimeout: unit.hookTimeout,
+    });
+    expect(exclude).toEqual(['tests/mutation-shards.test.ts', 'tests/bin.test.ts', '**/node_modules/**']);
   });
 });
 
