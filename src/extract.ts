@@ -467,7 +467,7 @@ const VERB_WINDOW = 40;
  */
 const VERB_LOOKUP: ReadonlyMap<string, Classification> = new Map(
   VERB_RULES.flatMap((rule) =>
-    rule.phrases.map((phrase) => [phrase, { kind: rule.kind, inverted: rule.inverted }] as const),
+    rule.phrases.map((phrase) => [phrase, { kind: rule.kind, inverted: rule.inverted }] satisfies [string, Classification]),
   ),
 );
 
@@ -930,7 +930,7 @@ function buildRegion(context: RegionInput): BuiltRegion {
     kind: relation.kind,
     from: document.id,
     target: relation.target,
-    origin: 'front-matter' as const,
+    origin: 'front-matter',
     declaredAt: at(relation.start, relation.end),
     raw: `${relation.column}: ${relation.target}`,
     inverted: relation.inverted,
@@ -1120,7 +1120,7 @@ function extractItems(context: ItemContext): ItemNode[] {
     if (!isObligation(item, inObligationSection, directive)) continue;
 
     const documentId = ownerAt(item.start);
-    const slug = section.length > 0 ? slugify(section[section.length - 1] as string) : 'item';
+    const slug = section.length > 0 ? slugify(section[section.length - 1]!) : 'item';
     // Ordinals count within a specification, so two decisions in one register
     // each get their own `#open-questions.1` rather than sharing a sequence.
     const key = `${documentId}#${slug}`;
@@ -1181,7 +1181,7 @@ function sectionPathAt(scanned: ScannedDocument, offset: number): string[] {
     // starting on a `#` or on the first word of a setext heading - and a heading
     // that begins with a reference is no section name either way.
     if (heading.start > offset) break;
-    while (path.length > 0 && (path[path.length - 1] as { level: number }).level >= heading.level) path.pop();
+    while (path.length > 0 && path[path.length - 1]!.level >= heading.level) path.pop();
     path.push({ level: heading.level, text: heading.text });
   }
   return path.map((entry) => entry.text);

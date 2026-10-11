@@ -218,10 +218,10 @@ function compareDocuments(before: GraphExport, after: GraphExport): GraphDiff['d
     // decision moved, never one removed and another added (ADR-0009).
     const change: DocumentChange = {
       id,
-      ...(previous.path !== next.path && { path: [previous.path, next.path] as const }),
-      ...(previous.title !== next.title && { title: [previous.title, next.title] as const }),
-      ...(previous.phase !== next.phase && { phase: [previous.phase, next.phase] as const }),
-      ...(previous.status !== next.status && { status: [previous.status, next.status] as const }),
+      ...(previous.path !== next.path && { path: [previous.path, next.path] satisfies DocumentChange['path'] }),
+      ...(previous.title !== next.title && { title: [previous.title, next.title] satisfies DocumentChange['title'] }),
+      ...(previous.phase !== next.phase && { phase: [previous.phase, next.phase] satisfies DocumentChange['phase'] }),
+      ...(previous.status !== next.status && { status: [previous.status, next.status] satisfies DocumentChange['status'] }),
     };
     if (Object.keys(change).length > 1) changed.push(change);
   }
@@ -358,7 +358,7 @@ function compareObligations(before: GraphExport, after: GraphExport): GraphDiff[
   return {
     transitions: pairs
       .filter(([a, b]) => a.openness !== b.openness)
-      .map(([a, b]) => ({ ...nowRef(b), openness: [a.openness, b.openness] as const }))
+      .map(([a, b]) => ({ ...nowRef(b), openness: [a.openness, b.openness] satisfies Transition['openness'] }))
       .sort(byPlace),
     appeared: after.items.filter((item) => !paired.has(item)).map((item) => ({ ...nowRef(item), openness: item.openness })).sort(byPlace),
     disappeared: before.items.filter((item) => !paired.has(item)).map((item) => ({ ...wasRef(item), openness: item.openness })).sort(byPlace),
@@ -404,7 +404,7 @@ export function diffVerdict(diff: GraphDiff): string {
     count.obligations > 0 ? plural(count.obligations, 'obligation') : null,
   ].filter((part): part is string => part !== null);
   if (parts.length === 0) return 'No relational change.';
-  const listed = parts.length === 1 ? (parts[0] as string) : `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1] as string}`;
+  const listed = parts.length === 1 ? (parts[0] as string) : `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]!}`;
   return `${listed} changed.`;
 }
 
