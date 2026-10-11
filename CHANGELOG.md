@@ -11,7 +11,11 @@ the family's
 [versioning policy](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0009-versions-before-1-0.md)
 records.
 
-## Unreleased
+## 0.14.1
+
+`FORCE_COLOR=false` forced colour on, and a Windows console with
+`WT_SESSION` or `TERM_PROGRAM` set to nothing was sent the Unicode glyphs;
+each is read now as the rest of the family reads it.
 
 ### Fixed
 
