@@ -213,7 +213,8 @@ OPTIONS
   --max-warnings <n>      Fail when warnings exceed n (default: no limit)
   --strict                Raise every warning to an error. An explicit --rule
                           still wins, so --strict --rule x=warn exempts x.
-  --color / --no-color    Force colour on or off
+  --color / --no-color    Force colour on or off, whatever NO_COLOR, FORCE_COLOR
+                          and the terminal say. The two together are refused
   --ascii / --no-ascii    ASCII glyphs or Unicode ones. SPEC_GRAPH_ASCII asks
                           for ASCII, unless it is empty, 0 or false. Either
                           option wins over it, and over what the terminal is
@@ -239,6 +240,11 @@ OPTIONS
   true already of a command with nothing to read it for. --color and
   --no-ascii are not: each would say that a command drew what only a check
   draws.
+
+  An option beside its own opposite is refused, whichever comes first:
+  --color beside --no-color, and --ascii beside --no-ascii. The later would
+  decide and the earlier go unread. Either alone wins over the environment,
+  and the same option twice is that option once.
 
   A value that begins with -- reads as an option, so the option before it is
   refused as missing its value. A name that does begin so is written ./--name
@@ -272,7 +278,8 @@ EXIT CODES
   An input that is set and names nothing is a 2, named on stderr, and never
   read as if it had not been given: an empty value, a family name no family
   has, a list of families no document here belongs to, a --root that is no
-  directory, a second word after rules, an option of another command.
+  directory, a second word after rules, an option of another command. So is
+  an option beside its own opposite, of which one would go unread.
 
 CONFIGURATION
   Anything repeated on every run belongs in the repository rather than in the
@@ -411,6 +418,36 @@ function readersOf(option: string): readonly Command[] | undefined {
     case '--color':
     case '--no-ascii':
       return ['check'];
+  }
+  return undefined;
+}
+
+interface Opposite {
+  /** The option that says the other thing. */
+  readonly option: string;
+  /** What the two decide between them, as the refusal says it. */
+  readonly decided: string;
+}
+
+/**
+ * The option that undoes this one, or nothing for an option that has none.
+ *
+ * Given both, the later decided and the earlier went unread: a script that
+ * adds `--no-color` to a line already holding `--color` was told nothing of
+ * which it got, and two things of which one would go unread are refused
+ * together (spec-core's ADR-0005, 2026-10-11). Either alone still wins over
+ * the environment, which is what it is for.
+ *
+ * Asked of the affirmative alone, so each pair is found once, by the option
+ * that names it, and each name here decides a refusal. A function and not a
+ * table, for the reason `readersOf` is one.
+ */
+function oppositeOf(option: string): Opposite | undefined {
+  switch (option) {
+    case '--color':
+      return { option: '--no-color', decided: 'a report is coloured or it is not' };
+    case '--ascii':
+      return { option: '--no-ascii', decided: 'the glyphs are drawn one way' };
   }
   return undefined;
 }
@@ -669,13 +706,15 @@ export function parseArgs(argv: readonly string[], cwd: string): CliOptions {
         throw new UsageError(`${option} belongs to ${listed(readers, 'or')}, not to ${command}`);
       }
     }
-  }
-
-  // The later of the two would decide and the earlier go unread: a script
-  // that adds `--no-ascii` to a line already holding `--ascii` would be told
-  // nothing of which it got.
-  if (given.has('--ascii') && given.has('--no-ascii') && !help && !version) {
-    throw new UsageError('--ascii is given beside --no-ascii, and the glyphs are drawn one way: give one of the two');
+    // After the loop above, so that an option of another command is named
+    // before the pair it is half of: `query --color --no-color` is told
+    // that `--color` is a check's, which is the line to act on first.
+    for (const option of given) {
+      const opposite = oppositeOf(option);
+      if (opposite !== undefined && given.has(opposite.option)) {
+        throw new UsageError(`${option} is given beside ${opposite.option}, and ${opposite.decided}: give one of the two`);
+      }
+    }
   }
 
   // The second word given to `rules` was dropped, so `rules a b` listed `a`

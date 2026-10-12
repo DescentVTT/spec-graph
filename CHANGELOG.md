@@ -11,6 +11,26 @@ the family's
 [versioning policy](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0009-versions-before-1-0.md)
 records.
 
+## Unreleased
+
+### Changed
+
+- **`--color` beside `--no-color` is refused.** The later of the two
+  decided and the earlier went unread, with no word of it: `check --color
+  --no-color` printed a report without colour and `check --no-color --color`
+  one with it. Given together, in either order and in every format of a
+  check, they are exit `2` now, `--color is given beside --no-color, and a
+  report is coloured or it is not: give one of the two`, as `--ascii` beside
+  `--no-ascii` is since 0.15.0. Those are the two pairs the command line
+  has, so every option given beside its own opposite is refused. Either
+  alone wins over `NO_COLOR`, `FORCE_COLOR` and the terminal as before, the
+  same option twice is that option once, and `--help` and `--version` are
+  answered first
+  ([ADR-0010](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0010-configuration-belongs-to-the-repository.md)).
+  Upgrading: where a script adds `--no-color` or `--color` to a command line
+  that may already hold the other, keep the one the run should have and drop
+  the other.
+
 ## 0.15.0
 
 A list of families that names one no document belongs to, and leaves out

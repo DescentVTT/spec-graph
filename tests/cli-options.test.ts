@@ -79,18 +79,77 @@ describe('reading the command line', () => {
     expect(parseArgs(['--no-ascii'], '/repo')).toMatchObject({ ascii: false, documentsOnly: false });
   });
 
-  it('refuses --ascii beside --no-ascii, whichever comes first, and takes either alone', () => {
-    const refusal = '--ascii is given beside --no-ascii, and the glyphs are drawn one way: give one of the two';
-    expect(usage(['--ascii', '--no-ascii']).message).toBe(refusal);
-    expect(usage(['--no-ascii', '--ascii']).message).toBe(refusal);
-    expect(usage(['check', '--no-ascii', '--verbose', '--ascii']).message).toBe(refusal);
-    // One of them twice is one of them.
-    expect(parseArgs(['--ascii', '--ascii'], '/repo').ascii).toBe(true);
-    expect(parseArgs(['--no-ascii', '--no-ascii'], '/repo').ascii).toBe(false);
+  // Every option that has an opposite on the command line: the other
+  // twenty-one have none to be given beside.
+  const pairs = [
+    { on: '--color', off: '--no-color', key: 'color', refusal: '--color is given beside --no-color, and a report is coloured or it is not: give one of the two' },
+    { on: '--ascii', off: '--no-ascii', key: 'ascii', refusal: '--ascii is given beside --no-ascii, and the glyphs are drawn one way: give one of the two' },
+  ] as const;
+
+  it.each(pairs)('refuses $on beside $off, whichever comes first, and takes either alone', ({ on, off, key, refusal }) => {
+    // The later decided and the earlier went unread, with no word of it.
+    expect(usage([on, off]).message).toBe(refusal);
+    expect(usage([off, on]).message).toBe(refusal);
+    expect(usage(['check', off, '--verbose', on]).message).toBe(refusal);
+    // In a format that draws neither colour nor glyph too: one of the two is still unread.
+    for (const format of ['json', 'sarif', 'github', 'gitlab', 'markdown']) {
+      expect(usage(['check', '--format', format, on, off]).message, format).toBe(refusal);
+    }
+    // Either alone is taken, and one of them twice is one of them.
+    expect(parseArgs([on], '/repo')[key]).toBe(true);
+    expect(parseArgs([off], '/repo')[key]).toBe(false);
+    expect(parseArgs([on, on], '/repo')[key]).toBe(true);
+    expect(parseArgs([off, off], '/repo')[key]).toBe(false);
+    // After `--` the second is a pattern, not an option.
+    expect(parseArgs([on, '--', off], '/repo')).toMatchObject({ [key]: true, patterns: [off] });
     // Help and the version are answered whatever else is on the line, as
     // they are beside an option of another command.
-    expect(parseArgs(['--ascii', '--no-ascii', '--help'], '/repo').help).toBe(true);
-    expect(parseArgs(['--no-ascii', '--ascii', '-v'], '/repo').version).toBe(true);
+    expect(parseArgs([on, off, '--help'], '/repo').help).toBe(true);
+    expect(parseArgs([off, on, '-h'], '/repo').help).toBe(true);
+    expect(parseArgs([on, off, '--version'], '/repo').version).toBe(true);
+    expect(parseArgs([off, on, '-v'], '/repo').version).toBe(true);
+  });
+
+  it('holds every option the help lists to that: one with an opposite is refused beside it, and the rest have none', () => {
+    // Read off the help, so an opposite added later is held to the refusal
+    // without being listed here: `--no-strict` taken, and `--strict` beside
+    // it not refused, fails this.
+    const start = HELP.indexOf('\nOPTIONS\n');
+    // The list ends at the first empty line; the paragraphs after it name options in prose.
+    const block = HELP.slice(start, HELP.indexOf('\n\n', start));
+    const listed = [...block.matchAll(/^ {2}(?:-[a-z], )?(--[a-z-]+)(?: \/ (--[a-z-]+))?/gm)].flatMap((line) => line.slice(1).filter((name) => name !== undefined));
+    expect(listed).toHaveLength(25);
+    const unknown = (option: string): boolean => {
+      try {
+        parseArgs([option], '/repo');
+      } catch (error) {
+        return (error as Error).message.startsWith(`unknown option "${option}"`);
+      }
+      return false;
+    };
+    const found: string[][] = [];
+    for (const option of listed) {
+      expect(unknown(option), option).toBe(false);
+      const opposite = option.startsWith('--no-') ? `--${option.slice(5)}` : `--no-${option.slice(2)}`;
+      if (unknown(opposite)) continue;
+      const on = option.startsWith('--no-') ? opposite : option;
+      const off = option.startsWith('--no-') ? option : opposite;
+      expect(usage([option, opposite]).message, option).toContain(`${on} is given beside ${off}, and `);
+      expect(usage([opposite, option]).message, option).toContain(`${on} is given beside ${off}, and `);
+      if (option === on) found.push([on, off]);
+    }
+    expect(found).toEqual(pairs.map(({ on, off }) => [on, off]));
+  });
+
+  it('takes an option beside the opposite of another, and names the pair whose first half comes first', () => {
+    // Half of each pair is no pair: nothing here goes unread.
+    expect(parseArgs(['--color', '--no-ascii'], '/repo')).toMatchObject({ color: true, ascii: false });
+    expect(parseArgs(['--ascii', '--no-color'], '/repo')).toMatchObject({ color: false, ascii: true });
+    expect(parseArgs(['--color', '--ascii'], '/repo')).toMatchObject({ color: true, ascii: true });
+    expect(parseArgs(['--no-color', '--no-ascii'], '/repo')).toMatchObject({ color: false, ascii: false });
+    // Both pairs on one line are refused one at a time.
+    expect(usage(['--color', '--no-color', '--ascii', '--no-ascii']).message).toBe(pairs[0].refusal);
+    expect(usage(['--no-ascii', '--no-color', '--ascii', '--color']).message).toBe(pairs[1].refusal);
   });
 
   it('takes --no-ascii for a check alone, as --color, and --ascii for every command', () => {
@@ -106,6 +165,7 @@ describe('reading the command line', () => {
       expect(usage([...argv, '--color']).message, command).toBe(`--color belongs to check, not to ${command}`);
       // Beside --ascii too: the option of another command is named before the pair is.
       expect(usage([...argv, '--ascii', '--no-ascii']).message, command).toBe(`--no-ascii belongs to check, not to ${command}`);
+      expect(usage([...argv, '--no-color', '--color']).message, command).toBe(`--color belongs to check, not to ${command}`);
       // --ascii asks for what is already so, and is taken.
       expect(parseArgs([...argv, '--ascii'], '/repo'), command).toMatchObject({ command, ascii: true });
       // Help and the version are answered first.
@@ -224,6 +284,23 @@ describe('what the flags do to a run', () => {
       out: '',
       err: 'spec-graph: --ascii is given beside --no-ascii, and the glyphs are drawn one way: give one of the two\n',
     });
+  });
+
+  it('refuses a run given --color beside --no-color, in either order, and writes no report', async () => {
+    const refused = {
+      code: EXIT_ERROR,
+      out: '',
+      err: 'spec-graph: --color is given beside --no-color, and a report is coloured or it is not: give one of the two\n',
+    };
+    // On a terminal and into a pipe, whatever the environment asks for.
+    expect(await runWith({}, true, 'check', '--root', DEMO, '--color', '--no-color')).toEqual(refused);
+    expect(await runWith({ FORCE_COLOR: '1' }, false, 'check', '--root', DEMO, '--no-color', '--color')).toEqual(refused);
+    expect(await runWith({ NO_COLOR: '1' }, false, 'check', '--root', DEMO, '--format', 'json', '--color', '--no-color')).toEqual(refused);
+    // Help is answered first, and a command that prints no colour names --color as a check's.
+    expect(await run('check', '--color', '--no-color', '--help')).toEqual({ code: EXIT_OK, out: HELP, err: '' });
+    expect((await run('query', 'document', '--root', DEMO, '--color', '--no-color')).err).toBe('spec-graph: --color belongs to check, not to query\n');
+    // --no-color twice, on a command that takes it, is --no-color.
+    expect(await run('query', 'document', '--root', DEMO, '--no-color', '--no-color')).toEqual(await run('query', 'document', '--root', DEMO));
   });
 
   it('fails on warnings only when there are more than --max-warnings allows', async () => {

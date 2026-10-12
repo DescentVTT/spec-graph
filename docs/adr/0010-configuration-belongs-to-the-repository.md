@@ -287,6 +287,63 @@ that one is. The family's rule is the one above, and it is the one `--color`
 already follows here. A format of a check that draws no glyph takes both,
 as it takes `--no-color`: that pairs an option with an option.
 
+**An option beside its own opposite is refused.** *Amended again
+2026-10-12.* The amendment above refused `--ascii` beside `--no-ascii` and
+left `--color` beside `--no-color` as it was. The rule it cites makes no
+such difference: two things of which one would go unread are refused
+together. Measured on main at 70bdd90, 0.15.0, through the launcher into a
+pipe (Windows 11, Node 24.18.1), over two ADRs of which one cites an
+`ADR-0099` nobody wrote, with `NO_COLOR`, `FORCE_COLOR`, `TERM`,
+`SPEC_GRAPH_ASCII`, `WT_SESSION` and `TERM_PROGRAM` cleared and then set as
+a row says:
+
+| Given | 0.15.0 | Now |
+| --- | --- | --- |
+| `check --color --no-color` | exit `1`, the report without colour | exit `2`, the line below |
+| `check --no-color --color` | exit `1`, the report in colour | exit `2`, the same line |
+| The same two under `FORCE_COLOR=1`, `NO_COLOR=1` or `TERM=dumb` | the later of the two decided | exit `2` |
+| The same two beside `--format json`, `sarif`, `github`, `gitlab` or `markdown` | exit `1`, the document | exit `2` |
+| `check --ascii --no-ascii`, either order, in each format | exit `2` | the same |
+| `--color --color`, `--no-color --no-color`, `--ascii --ascii`, `--no-ascii --no-ascii` | taken as the option once | the same |
+| `--color --no-ascii`, `--no-color --ascii` | taken | the same |
+| Either pair beside `--help`, `-h`, `--version` or `-v`, on every command | the help, the version | the same |
+| `query`, `graph`, `rules` or `diff` with `--color --no-color`, either order | exit `2`: `--color belongs to check, not to query` | the same |
+| `check --no-color` under `FORCE_COLOR=1`; `check --color` under `NO_COLOR=1` or `TERM=dumb` | the option decides | the same |
+| `check --no-ascii` under `SPEC_GRAPH_ASCII=1`; `check --ascii` under `WT_SESSION=1` | the option decides | the same |
+
+Those are the two pairs the command line has. Each of its other twenty-one
+options was given with `--no-` put before its name, and `--no-config` with
+it taken off: every one is `unknown option`, `--no-strict`, `--no-ratchet`
+and `--config` among them. So every option given beside its own opposite is
+refused now, exit `2`, whichever of the two comes first:
+
+```text
+spec-graph: --color is given beside --no-color, and a report is coloured or it is not: give one of the two
+```
+
+The line names the option that turns the thing on first, in either order,
+as the line for the glyphs does. Where both pairs are on one line the first
+such option on it decides which pair is named, and the run that follows
+names the other. An option of another command is still named before the
+pair it is half of, since that is the line to act on first: `query --color
+--no-color` is told that `--color` is a check's. A format that prints no
+colour refuses the pair all the same, as it refuses the glyphs' pair: one
+of the two is unread there too, and what a script meant by the line is as
+unknown.
+
+An opposite is for overriding, and still does. Here it overrides the
+environment alone: the configuration file has no key for colour or for the
+glyphs, and `"color"` or `"ascii"` in it is an unknown key, exit `2`. What
+the file can turn on, `strict` and `ratchet`, no option turns off - a
+`--rule` exempts one rule, and `--no-config` leaves the whole file out - so
+there is no opposite of either to be given beside it.
+
+The same option twice is as it was, the ones that take no value and the
+ones that do: `--root a --root b` reads `b`, and `--max 1 --max 0` shows
+every finding. `tests/cli-options.test.ts` reads the options off `--help`
+and holds each that has an opposite to the refusal, so a third pair cannot
+be added without it.
+
 **A list of families is held against the documents.** *Amended again
 2026-10-09.* The amendment above refused a name no family can have and kept
 `--family RFC` where the corpus has no such family: "a name a family can have

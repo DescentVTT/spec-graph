@@ -1094,7 +1094,7 @@ spec-graph diff <before> <after>     Compare two JSON graph exports.
 --strict                Raise every warning to an error
 --max <n>               Show at most n findings
 --max-warnings <n>      Fail when warnings exceed n
---color / --no-color    Force colour
+--color / --no-color    Force colour on or off; one of the two, not both
 --ascii / --no-ascii    ASCII glyphs or Unicode ones; SPEC_GRAPH_ASCII=1 asks for ASCII
 --verbose               Include parse problems
 ```
@@ -1127,7 +1127,9 @@ variable in `--family "$FAMILIES"` is the usual way to write one:
 - `--format json` asked of `graph`, whose JSON is `--graph-format json`, or
   of `rules`, which has one format;
 - an option given to a command that does not read it, in the table below;
-- `--ascii` beside `--no-ascii`, of which one would go unread;
+- an option beside its own opposite, `--color` beside `--no-color` or
+  `--ascii` beside `--no-ascii`, in either order: the later would decide and
+  the earlier go unread ([Colour and glyphs](#colour-and-glyphs));
 - a value that begins with `--`, which reads as the option after one whose
   value was forgotten: `--ignore --strict` would ignore a directory called
   `--strict`, and `--record-baseline --verbose` write a file of that name.
@@ -1180,9 +1182,24 @@ the report is coloured when stdout is a terminal. `CI` is not read.
 
 `--ascii` draws the report in ASCII glyphs and `--no-ascii` in the Unicode
 ones, `✖`, `⚠`, `↳` and the like, on any platform and whatever the
-environment says. Given together they are refused, exit `2`: one of the two
-would go unread. `--no-ascii` belongs to `check`, as `--color` does; a format
+environment says. `--no-ascii` belongs to `check`, as `--color` does; a format
 of a check that draws no glyph takes it all the same.
+
+An option given beside its own opposite is refused, exit `2`, whichever of
+the two comes first and in every format of a check:
+
+```text
+spec-graph: --color is given beside --no-color, and a report is coloured or it is not: give one of the two
+spec-graph: --ascii is given beside --no-ascii, and the glyphs are drawn one way: give one of the two
+```
+
+The later of the two would decide and the earlier go unread, and a script
+that adds `--no-color` to a line already holding `--color` would be told
+nothing of which it got. Those are the two pairs the command line has; no
+other option has an opposite to be given beside. Either of a pair alone wins
+over the environment, which is what it is for, and the same option given
+twice is that option once. `--help` and `--version` are answered whatever
+else is on the line.
 
 Without either, `SPEC_GRAPH_ASCII` set to anything but `0`, `false` or nothing
 asks for ASCII; and without that, a Windows console that sets neither
