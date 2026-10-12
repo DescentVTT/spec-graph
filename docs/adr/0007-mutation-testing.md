@@ -1040,6 +1040,111 @@ sweep did reach are true whatever it could not see. A cast that has to
 stay, because no rewrite keeps its types, is recorded in the script with
 the reason in a comment beside the code. The `break` stays 93.
 
+### 2026-10-12: a file that did not load is not a test that failed
+
+Stryker's vitest runner counts a test that failed. A test file that failed
+to load has no test to fail, so a mutant under which a module throws as it
+loads takes with it every file that imports the module at its top, and
+where no other test fails it is scored as survived, with nothing working.
+The pass of 2026-09-27 met this in `select.ts` and answered it with a test
+that imports inside an `it`; `tests/extract-loading.test.ts` is there for
+the same reason. spec-harness met it again in the sweep of its 0.15.0: the
+emptied body of the function its tables are built through was a survivor,
+where the sweep before had killed it through a test whose file had since
+come to import the module
+([its ADR-0010](https://github.com/DescentVTT/spec-harness/blob/main/docs/adr/0010-toolchain-and-verification.md)).
+So the question was put to this repository's own survivors, which nobody
+had asked it of since that pass.
+
+**The static survivors, replayed.** The sweep of 73b6334, run 38168801706,
+read 96.53% over 8,895 mutants, 293 survivors and 16 without coverage. It
+marks 1,417 mutants static: 1,392 killed, 5 timed out, 20 survived. The two
+sweeps of 70bdd90 after it, runs 38172827431 and 38177697927, have the same
+20. Each was written into the source by hand and the suite the sweep runs,
+62 files and 2,117 tests, run whole against it, with nothing stopping it at
+the first failure:
+
+| What happened | Mutants |
+| --- | ---: |
+| A test failed | 0 |
+| A test file did not load, and no test failed | 0 |
+| Nothing: every file loaded and every test passed | 20 |
+
+No survivor of that sweep is a file that did not load. Seventeen of the 20
+were already called equivalent beside the code: the entry planted in
+`spec-history`'s empty list of attributes; the case `foldRelationKey` folds
+to; the `^` of the negation pattern; the sort and the escaping of the verb
+phrases, four mutants; the three that empty or drop an option of the
+reference filter's dialect; the bound of `skipSpace`, two, and the anchor
+of the selector's value; and `normalisePhrase` and `escapeRegExp`, four.
+Three were not, and each is a behaviour no test stated:
+
+- The `$` of the negation pattern, `(?:\s|$)`. The text read for a negation
+  ends where the reference begins, so a negation written against the
+  bracket, `Deferred to nobody[ADR-0002](0002-b.md)`, is its last word.
+  Without the `$` that sentence was read as handing its question on.
+- The `-+` of an empty register cell, read as one dash. A status cell of
+  `--` became the row's status, and a relation cell of `--` a finding.
+- The `_+` of the same pattern, read as one underscore. It meets only a
+  link's destination or label, where `[to be decided](__)` became a
+  finding: every other cell is flattened first, which takes underscores
+  out as emphasis.
+
+Each has a test now, in `tests/extract-references.test.ts` and
+`tests/sections-regions.test.ts`, and fails it by an assertion.
+
+**What the sweep already owed to a test that loads inside itself.** In the
+same report 84 static mutants were killed by an error thrown as a module
+loaded inside a test's body: 66 by the test of
+`tests/select-language.test.ts` that loads `rules.ts`, 65 of them in
+`select.ts`, whose parser `rules.ts` runs as it loads; 16 by
+`tests/extract-loading.test.ts`, 15 in `extract.ts` and one in `state.ts`;
+and two by `tests/rules-findings.test.ts`. Each of the 84 would read as a
+survivor if those three files imported at their top.
+
+**Every module, made not to load.** A `throw` was put at the top of each of
+the 22 modules a sweep mutates in turn, which stands for any mutant that
+only stops the module loading, and the suite run whole, the three tests
+above in it:
+
+| Module | Files that did not load, of 62 | Tests that failed in their body | In |
+| --- | ---: | ---: | --- |
+| `baseline.ts`, `cli.ts`, `config.ts`, `diff.ts`, `report.ts` | 9 to 17 | 3 | `rules-findings` |
+| `glob.ts`, `resolve.ts`, `runner.ts` | 46 to 48 | 32 | `rules-findings` |
+| `select.ts` | 47 | 34 | `rules-findings` |
+| `graph.ts`, `paths.ts`, `project-rules.ts`, `rules.ts` | 46 to 50 | 35 | `rules-findings`, `select-language` |
+| `directives.ts`, `extract.ts`, `identity.ts`, `lifecycle.ts`, `markdown.ts`, `sections.ts`, `source.ts`, `state.ts`, `yaml.ts` | 49 to 51 | 33 to 35 | `rules-findings`, `extract-loading` |
+
+Every one fails a test, so none is a blind spot. But nine of the 22 fail
+one only in `tests/rules-findings.test.ts`, and five of those only in the
+three of its tests that print a rule's selector, which import the command
+line inside themselves to do it. That file imports inside its tests for the
+sake of `rules.ts`. Nothing said it also stood between `diff.ts` and a
+survivor, and a test of it moved to an import at the top would have lost
+those kills as spec-harness lost its own, with every test green.
+
+Under two of the 22 a fourth test failed in the first run, by running out
+of its thirty seconds on a machine doing other work, and passed when the
+two were run again. A test that ran out of time is no answer about a
+mutant, and a replay reads why each test failed before it counts one.
+
+**What holds it.** `tests/loading.test.ts` imports each module of `src/`
+by itself, inside a test, and nothing of the source at its top; a test in
+it holds its list to the directory. With the same `throw` in each of the 22
+in turn and that file run alone, each fails between two and twelve of its
+tests: its own, and those of the modules that import it. Every static
+mutant runs it, as it runs every file: 25 tests that load the source and
+do nothing else, 0.13 of the 14.7 seconds the tests of the suite took on
+the workstation that replayed these.
+
+There is no one function here to load by itself. The tables are built
+where they are declared, and the entry of 2026-10-12 above added no helper
+for their types, so the module is the smallest thing that meets such a
+mutant.
+
+The three tests take three survivors from the 293 once a full sweep has
+read them; a pull request's sweep is incremental. The `break` stays 93.
+
 ## Open Questions
 
 - [x] Should the `Regex` mutator be scoped? At 57.9% it was among the weakest.

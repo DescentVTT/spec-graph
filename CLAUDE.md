@@ -181,6 +181,13 @@ table. `tests/mutation-unmeasured.test.ts` and the sweep's score job fail on
 a site left under one (`scripts/mutation-unmeasured.mjs`; ADR-0007,
 2026-10-12).
 
+**A module that does not load fails no test.** A table a mutant breaks while
+its module loads takes every test file that imports the module at its top
+with it, and a sweep counts failed tests, not files that did not load: the
+mutant reads as survived. `tests/loading.test.ts` imports each module inside
+a test, where the failure is that test's, and a new module goes on its list
+(ADR-0007, 2026-10-12).
+
 **A test that writes to disk writes to a path named for its process**, and never
 changes a shared fixture. Stryker runs the same test file in several workers at
 once, in one sandbox, and a fixed path is one they write and delete under each

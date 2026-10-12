@@ -144,6 +144,15 @@ held to. `node scripts/mutation-unmeasured.mjs --sources` counts what is left;
 `tests/mutation-unmeasured.test.ts` fails on any, and so does the sweep's score
 job, which counts in the report it merged (ADR-0007, 2026-10-12).
 
+A sweep counts a failed test, not a test file that failed to load. A table a
+mutant breaks while its module loads takes with it every file that imports the
+module at its top, and where nothing else fails the mutant reads as survived.
+`tests/loading.test.ts` imports each module of `src/` inside a test, so that
+failure is a test's; a new module goes on its list, which the file holds to the
+directory. A survivor Stryker marks static is checked for this before it is
+called a survivor: write it in by hand, run the suite, and read whether a test
+failed or a file did not load (ADR-0007, 2026-10-12).
+
 **Where an oracle exists, use it.** The matcher behind `~=` replaces a built-in
 engine, so its tests - in spec-core now, beside it - do not assert what its
 author believed about regular expressions — they run both engines over the same

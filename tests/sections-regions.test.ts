@@ -194,6 +194,17 @@ describe('a register kept as a table', () => {
     expect(graph.document('ADR-0001')?.title).toBe('ADR-0001');
   });
 
+  it('reads a status cell of several dashes or underscores as the placeholder one of them is', () => {
+    // A cell filled in with `--` or `___` is as empty as one holding `-`: it
+    // is no status the row has, and a lifecycle is not read off it.
+    const { graph } = analyse(
+      register(...table('ID | Title | Status | Depends on', 'ADR-0001 | One | -- | -', 'ADR-0002 | Two | --- | -', 'ADR-0003 | Three | __ | -', 'ADR-0004 | Four | ___ | -')),
+    );
+    for (const id of ['ADR-0001', 'ADR-0002', 'ADR-0003', 'ADR-0004']) {
+      expect([id, graph.document(id)?.rawStatus, graph.document(id)?.statusAt]).toEqual([id, null, null]);
+    }
+  });
+
   it('reads a status that ends in a full stop', () => {
     expect(document(register(...table('ID | Status', 'ADR-0001 | Accepted.')), 'ADR-0001')?.phase).toBe('active');
   });
@@ -309,6 +320,19 @@ describe('a relation cell', () => {
     const placeholders = [...sentence.matchAll(/`([^`]+)`/g)].map(([, placeholder]) => placeholder as string);
     expect(placeholders.length).toBeGreaterThan(4);
     for (const placeholder of placeholders) expect(dependencies(placeholder)).toEqual({ to: [], findings: [] });
+  });
+
+  it('declares nothing when it holds several dashes, as when it holds one', () => {
+    for (const placeholder of ['--', '---']) expect(dependencies(placeholder), placeholder).toEqual({ to: [], findings: [] });
+  });
+
+  it('declares nothing through a link whose destination is a blank of underscores', () => {
+    // Underscores in a cell's prose are emphasis, and are gone before the
+    // cell is read. A link's destination is kept whole, so a template's blank
+    // there is the one place a run of them arrives.
+    for (const blank of ['_', '__', '___']) {
+      expect(dependencies(`[to be decided](${blank})`), blank).toEqual({ to: [], findings: [] });
+    }
   });
 
   it('splits a list written without spaces', () => {
