@@ -1040,6 +1040,1195 @@ sweep did reach are true whatever it could not see. A cast that has to
 stay, because no rewrite keeps its types, is recorded in the script with
 the reason in a comment beside the code. The `break` stays 93.
 
+### 2026-10-12: a file that did not load is not a test that failed
+
+Stryker's vitest runner counts a test that failed. A test file that failed
+to load has no test to fail, so a mutant under which a module throws as it
+loads takes with it every file that imports the module at its top, and
+where no other test fails it is scored as survived, with nothing working.
+The pass of 2026-09-27 met this in `select.ts` and answered it with a test
+that imports inside an `it`; `tests/extract-loading.test.ts` is there for
+the same reason. spec-harness met it again in the sweep of its 0.15.0: the
+emptied body of the function its tables are built through was a survivor,
+where the sweep before had killed it through a test whose file had since
+come to import the module
+([its ADR-0010](https://github.com/DescentVTT/spec-harness/blob/main/docs/adr/0010-toolchain-and-verification.md)).
+So the question was put to this repository's own survivors, which nobody
+had asked it of since that pass.
+
+**The static survivors, replayed.** The sweep of 73b6334, run 38168801706,
+read 96.53% over 8,895 mutants, 293 survivors and 16 without coverage. It
+marks 1,417 mutants static: 1,392 killed, 5 timed out, 20 survived. The two
+sweeps of 70bdd90 after it, runs 38172827431 and 38177697927, have the same
+20. Each was written into the source by hand and the suite the sweep runs,
+62 files and 2,117 tests, run whole against it, with nothing stopping it at
+the first failure:
+
+| What happened | Mutants |
+| --- | ---: |
+| A test failed | 0 |
+| A test file did not load, and no test failed | 0 |
+| Nothing: every file loaded and every test passed | 20 |
+
+No survivor of that sweep is a file that did not load. Seventeen of the 20
+were already called equivalent beside the code: the entry planted in
+`spec-history`'s empty list of attributes; the case `foldRelationKey` folds
+to; the `^` of the negation pattern; the sort and the escaping of the verb
+phrases, four mutants; the three that empty or drop an option of the
+reference filter's dialect; the bound of `skipSpace`, two, and the anchor
+of the selector's value; and `normalisePhrase` and `escapeRegExp`, four.
+Three were not, and each is a behaviour no test stated:
+
+- The `$` of the negation pattern, `(?:\s|$)`. The text read for a negation
+  ends where the reference begins, so a negation written against the
+  bracket, `Deferred to nobody[ADR-0002](0002-b.md)`, is its last word.
+  Without the `---
+status: accepted
+date: 2026-09-07
+---
+
+# ADR-0007: Mutation testing, and what the score actually means
+
+## Context
+
+Line coverage is 92.7% statements and 95.7% lines. That number says a line ran.
+It says nothing about whether an assertion was holding its behaviour down.
+
+This codebase is unusually exposed to that gap, because it is built out of
+vocabularies and boundary conditions rather than data structures. Consider the
+edits that change what spec-graph reports and move coverage not at all:
+
+- flipping `openness !== 'closed'` to `===` in the ghost-handover query
+- widening the governing-phrase window from 40 characters to 41
+- dropping `'deferred to'` from the delegation vocabulary
+- changing `phase !== 'retired'` to `phase !== 'archived'`
+
+Every one is a real behaviour change. A suite can execute all four lines and
+assert nothing that any of them would break. Mutation testing is the only
+mechanical check that distinguishes "this line ran" from "this line is pinned".
+
+## Decision
+
+Run Stryker on every push, and treat the threshold as a regression guard rather
+than an aspiration.
+
+Two configuration choices are worth recording:
+
+**Per-mutant timeout is 15s, not the default 60s.** A mutated regex can turn
+linear scanning into catastrophic backtracking, and a mutant that hangs is a
+genuine detection - but each one costs a worker its full budget. The first run
+here logged 185 timeouts, which at a minute apiece was most of its 27 minutes.
+The whole suite runs in about a second, so 15s is still far longer than any
+healthy mutant needs.
+
+**`break` sits a few points below the measured score.** Its job is to fail the
+build when the suite gets weaker, not to assert an aspiration nobody has met. It
+moves up as the measurement does: 60 against 63.31%, then 70 against 74.05%.
+
+## Consequences
+
+The measured score is **79.69% over 8,126 mutants** at 0.3.0, on a developer
+machine. It has moved 48.11% → 60.6% → 63.31% → 74.05% → 74.73% → 75.68% →
+76.52% → 77.16% → 79.69% as the suite grew from 149 to 684 tests.
+
+**That number is a property of the measurement as much as of the code, and the
+figure the guard fires against is lower.** The same commit measured on the
+hosted runner reads **73.32%**. This is not drift and not incremental mode: the
+one CI run that completed at v0.1.2 read 72.34% against 74.73% recorded here for
+the same commit, before incremental existed.
+
+`lifecycle.ts` is the clearest case, because it contains nothing platform can
+touch - it is vocabulary tables. One file, one commit, one machine:
+
+| how it was measured | score |
+| --- | --- |
+| `perTest`, concurrency 8, whole project | 77.13 |
+| `perTest`, concurrency 8, this file alone | 68.99 |
+| `coverageAnalysis: all`, concurrency 8 | 73.26 |
+| `perTest`, concurrency 4 | 60.47 |
+| hosted runner: Linux, concurrency 4, `perTest` | 64.34 |
+
+A sixteen-point range on identical source. Concurrency cannot change which
+mutants a test kills, so what is moving is `perTest` attribution - which tests
+Stryker believes cover which mutants - and it moves with worker count, with how
+many files are mutated, and with the machine.
+
+0.3.0 measured it again, and cleanly. Two full runs, same machine, same
+settings, same 8,126 mutants - **nothing in `src/` changed between them**, only
+six test cases added. The total moved 80.00% → 79.69%, and underneath that
+nearly-still number:
+
+| file | run 1 | run 2 | move |
+| --- | ---: | ---: | ---: |
+| `rules.ts` | 81.32 | 76.56 | **-4.76** |
+| `paths.ts` | 94.59 | 90.54 | **-4.05** |
+| `report.ts` | 76.46 | 74.32 | -2.14 |
+| `markdown.ts` | 80.39 | 82.34 | +1.95 |
+| `runner.ts` | 91.77 | 94.30 | +2.53 |
+| `lifecycle.ts` | 75.58 | 78.68 | **+3.10** |
+
+Nine files moved a point or more, in both directions, and not one of them was
+touched. `paths.ts` is sixty lines of string handling that no added test goes
+near, and it lost four points. `markdown.ts`, the only file the new tests
+actually target, gained two - which is the one movement that means anything.
+
+This is the reason the practice in `CLAUDE.md` is worded the way it is. **A
+per-file drop is a question, not an answer**, and the way to answer it costs
+seconds: change the line by hand and see whether the suite goes red. All nine
+mutants the 0.3.0 work was chasing were confirmed killed that way, while the
+score they belong to went *down* by a third of a point.
+
+0.4.0 reproduced the shape on a realistic change. Two full runs on one machine,
+`src/` differing only by a simplified comparator, 23 test cases added to two
+files. The total moved 79.03% → 79.41%; eight files nobody touched moved a point
+or more, and again in both directions - `source.ts` +4.55, `runner.ts` +3.08,
+`directives.ts` +2.60, against `state.ts` -2.14, `glob.ts` -2.08 and
+`baseline.ts` -1.99. This is weaker evidence than the run above, because adding
+tests genuinely does change which tests `perTest` believes cover which mutants.
+That is the point: **the ordinary act of writing a test moves the score of files
+you did not open**, so a per-file comparison across two runs is not a measurement
+of anything you did.
+
+The one number that meant something was the file the work was actually in.
+`project-rules.ts` went 86.89% → 99.50%, and that did not come from re-running
+anything. It came from reading its survivor list: a targeted
+`--coverageAnalysis all` pass agreed with `perTest` to within half a point, which
+said the gap was real, and sixteen of the survivors were tests nobody had
+written.
+
+`perTest` stays, because `coverageAnalysis: all` runs the whole suite per mutant
+and the hosted run already takes 80 minutes of its 90-minute cap. The cost is
+paid in honesty instead: **the hosted figure is the one that governs**, because
+that is where the build actually fails, and the developer figure is a fast local
+proxy that reads a few points high.
+
+**Incremental runs are trusted for the gate, and rebuilt weekly anyway.** A full
+hosted run takes 80 minutes; an incremental one on a warm cache takes 36
+seconds. Measured against each other on the same source, they read 73.82% and
+73.34% - within half a point, with incremental reporting 35 more survivors than
+the rebuild.
+
+*Amended 2026-09-10.* This paragraph used to continue "it errs low, which is the
+safe direction for something that fails a build: it cannot hide a regression by
+reading high." **That was wrong, and 0.3.0 measured it wrong.** The tag and the
+branch push were the same commit, `84fa10d`, on the same hosted runner:
+
+| | score | killed | timeout | survived |
+| --- | ---: | ---: | ---: | ---: |
+| full rebuild | 75.14 | 5,792 | 314 | 1,800 |
+| incremental | 78.32 | 6,061 | 303 | 1,542 |
+
+Incremental read **3.18 points high** and 258 survivors short. The direction was
+never the property; the half-point was. What actually governs the size of the
+error is **how far the restored report is from the source being measured**: the
+earlier comparison restored a cache one commit old, this one restored from
+v0.2.3, nine commits and two thousand lines back, because the nine were pushed
+together. Incremental reuse is an inference about which mutants a change can
+reach, and the further back the inference starts, the more of it is wrong.
+
+So the honest statement is narrower. **Incremental is a fast signal, not a
+verdict**, and it can read high enough to hide a regression for as long as the
+cache stays stale. What keeps that bounded is not a direction it errs in - there
+isn't one - but the two places a full run is unconditional: the Monday rebuild
+and every tag. A regression can therefore sit on `main` behind a stale cache for
+up to a week, and that is the cost of a fast gate against an 80-minute one.
+
+*Confirmed 2026-09-12.* The claim above says the direction is not a property, and
+0.4.0 is the first run to see the other one. The `main` push and the `v0.4.0` tag
+were the same commit, `6f398ee`, on the same hosted runner:
+
+| | score | mutants | killed | timeout | survived |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| full rebuild | 75.40 | 8,585 | 6,161 | 312 | 1,896 |
+| incremental | 74.11 | 8,585 | 6,044 | 318 | 2,007 |
+
+Incremental read **1.29 points low** this time, having read 3.18 points high at
+0.3.0. Two observations, opposite signs: the direction is not a property, and
+nobody should build a safety argument on one.
+
+Note the mutant count. The incremental run reported the whole corpus - 8,585,
+the same as the rebuild - because the change was broad enough that there was
+nothing left to reuse: a new module and eight touched files. An incremental run
+after a wide change is a full run with extra bookkeeping, and it billed like one,
+taking **110 minutes against the rebuild's 103**. The 36-second figure above is
+real and belongs to a narrow change; it is not what the gate costs on a release.
+
+**And the rebuild could not record having corrected anything.** The cache was
+keyed on the commit, with a comment saying that gave every run a fresh entry. Two
+runs share a commit: the branch push saved `stryker-Linux-6f398ee` at 11:00, and
+at 12:45 the tag's full run logged *"Cache hit occurred on the primary key ...,
+not saving cache"* and discarded its own report. The very next incremental run -
+a documentation commit, nothing mutable changed - restored the incremental
+lineage and reproduced it to within one mutant, 74.12 against 74.11, while the
+rebuild that was supposed to supersede it had measured 75.40.
+
+Which makes the paragraph above worse than it read. The claim was that a wrong
+inference is bounded because a full run is unconditional on a tag and on Mondays.
+The full run happened; its result was thrown away; the next inference started from
+the wrong report anyway. This paragraph then said the bound held through the
+Monday rebuild, because its commit has no earlier run to collide with. It did
+not hold there either, for two reasons found later and recorded below: the
+cache's scoping, and a full step that never wrote a report for anything to
+save.
+
+The key is `github.run_id` now, which is unique, so every run saves and the
+prefix restore picks up the most recent entry it is allowed to see - which, as
+0.5.0 showed, never includes a tag's. Worth writing down for what it
+is: a declaration in a comment that had drifted from what the code did, in the
+CI of the tool built to find exactly that, found by reading a log instead of
+trusting the comment.
+
+*Confirmed again 2026-09-13.* 0.5.0 gives the third observation, again the
+`main` push against the tag on one commit, `940f8e2`, on the hosted runner:
+
+| | score | mutants | killed | timeout | survived | minutes |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| full rebuild | 76.83 | 9,697 | 7,109 | 341 | 2,023 | 168 |
+| incremental | 76.43 | 9,697 | 7,064 | 347 | 2,062 | 64 |
+
+**0.40 points low.** Three releases, three readings - 3.18 high, 1.29 low, 0.40
+low - and the spread is the whole finding: incremental is a signal about the
+direction of a change, and never a figure to quote.
+
+This time it did reuse something: 4,465 of the 9,697 results came from the cache,
+and the run took 64 minutes to the rebuild's 168. So the cost of the gate on a
+release is not a constant either - it depends on how much of the corpus the
+change leaves alone.
+
+**A per-file gap in an incremental run looked like staleness, and mostly was
+not.** Against the local full run, the incremental one read `lifecycle.ts` 18
+points low, `directives.ts` 7 and `yaml.ts` 8, all files 0.5.0 never touched.
+The tempting reading was that those were cached results from an older lineage,
+and the first reading of the incremental result said so, as a question. The
+rebuild answered it: `directives.ts` and `yaml.ts` scored identically in both
+hosted runs, and only `lifecycle.ts` moved much (53.88 to 62.40, still nine
+points under local). Most of that gap is the hosted-against-local attribution
+difference this ADR already describes. Worth recording because the wrong answer
+came with a plausible mechanism attached, and the only thing that separated them
+was running the full measurement rather than reasoning about the partial one.
+
+**The rebuild saved an entry, and it still could not reach `main`.** The tag's
+run logged `Cache saved with key: stryker-Linux-34724969717`, and this ADR first
+read that as the correction arriving at last. The next push to `main` said
+otherwise. A documentation commit, reusing 9,696 of 9,697 results, restored from
+`stryker-Linux-34713469263` - the previous *incremental* run on `main` - and read
+76.44: the incremental lineage to within a hundredth, not the rebuild's 76.83.
+
+The reason is a rule of the cache rather than of this workflow. A run can restore
+only caches created on its own ref or on the default branch, and the cache list
+shows where each entry lives:
+
+```text
+stryker-Linux-34735515258   refs/heads/main     push, the docs commit after the tag
+stryker-Linux-34724969717   refs/tags/v0.5.0    the tag's full rebuild
+stryker-Linux-34713469263   refs/heads/main     push, the release commit, incremental
+```
+
+A tag's run can read `main`'s entries - which is exactly how 0.4.0's tag found a
+primary-key hit and declined to save - and nothing on `main` can read a tag's. So
+keying on the run fixed the discard and not the lineage, and the lineage was never
+fixable from a tag at all. 0.3.0 had already shown it, unread: its tag *did* save,
+under `refs/tags/v0.3.0`, with no collision to stop it, and `main` never saw that
+entry either.
+
+So a wrong incremental inference is bounded by exactly one thing: **a full run
+whose cache lands on `main`** - the Monday schedule, or a manual dispatch on
+`main`. The tag's rebuild is still the figure a release quotes, because it
+measures the tagged commit from nothing. It corrects nothing that runs after it.
+
+This is the failure this section already records, one layer further down. A
+comment said keying on the commit gave every run a fresh entry; the fix for that
+said the prefix restore would pick up the tag's rebuild; and this ADR said the
+next incremental would start from a full report. Each was a mechanism described
+from its configuration and believed until a log was read.
+
+**And none of the rebuilds had a report to save.** *Found 2026-09-13.* The full
+step ran `stryker run` with no `--incremental`, and Stryker writes the
+incremental report only in incremental mode - `reportAll` in its
+`MutationTestReportHelper` guards the write with `if (this.options.incremental)`.
+So every full run left `reports/stryker-incremental.json` exactly as the restore
+step had put it, and the cache saved that copy. The sizes say so without the
+source:
+
+| full run | restored from | bytes | saved as | bytes |
+| --- | --- | ---: | --- | ---: |
+| v0.2.3 | `afe576b`, `main` | 470,697 | `38ac322`, tag | 470,702 |
+| v0.3.0 | `38ac322`, `main` | 472,222 | `84fa10d`, tag | 472,228 |
+| v0.5.0 | `34713469263`, `main` | 636,632 | `34724969717`, tag | 636,640 |
+
+A few bytes of archive metadata apart, every time, where the incremental run on
+`84fa10d`, which did re-measure, went from 472,222 to 523,247. The v0.3.0 log
+agrees: it says "Found 20 of 95 file(s) to be mutated" and never "using
+incremental report", which any run that read the file prints.
+
+So the 0.4.0 tag threw nothing away when it declined to save, and the scoping
+above, true as it is, was never the only thing between a rebuild and `main`. No
+full run in this workflow has produced a report since the cache was introduced,
+and a wrong incremental inference has been bounded by nothing. The Monday
+schedule, which this section named as the bound twice, had not run once.
+
+Checked by running it before changing it, on `src/paths.ts`: a bare run wrote no
+file; `--incremental` wrote one and then reused 74 of 74 results; `--incremental
+--force` logged "Force mode is activated, all mutants will be retested", reused 0
+of 74 and rewrote the file. The full step is `--incremental --force` now.
+
+**And a push would have cancelled the rebuild.** The concurrency group was the
+ref, so a scheduled run and a push to `main` shared `mutation-refs/heads/main`,
+and GitHub cancels the older run in a group. That is read from a log rather than
+from the configuration: on 2026-09-07 a manual dispatch overtook a push run on
+`bd254e2`, whose annotation reads "Canceling since a higher priority waiting
+request for mutation-refs/heads/main exists". A rebuild takes about three hours,
+and a push inside them would have ended it with nothing reported. The group
+carries the event name now. Two runs on `main` can then overlap, and the prefix
+restore takes whichever saved last, which is the rebuild unless a push that
+started during it also finishes after it.
+
+**The first rebuild that wrote a report, and what it measured.** *2026-09-13.* A
+manual dispatch on `main` at `5d0bfa3`, whose `src/` and `tests/` are
+byte-identical to the `v0.5.0` tag's, ran the full step with the new flags. It
+logged "Force mode is activated, all mutants will be retested" and reused 0 of
+9,697 results. It restored 608,492 bytes and saved 620,579 - twelve thousand
+bytes apart, where every rebuild before it saved within eight bytes of what it
+had restored.
+
+The same mutants, the same tests, three hosted full runs - the third the Monday
+schedule, on 2026-09-14:
+
+| | score | killed | timeout | survived | minutes |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `v0.5.0` tag | 76.83 | 7,109 | 341 | 2,023 | 168 |
+| dispatch on `main` | 76.39 | 7,062 | 346 | 2,065 | 171 |
+| schedule on `main` | 76.46 | 7,069 | 345 | 2,059 | 166 |
+
+Two things follow. **A full run is a sample too.** Three rebuilds of one source
+span 0.44 points, on code nobody touched between them, and the noise does not
+stay in one file. Between the first two it was nearly all `markdown.ts`, which
+read 74.36 and then 71.43. In the third, `markdown.ts` landed between the two
+and `lifecycle.ts` fell four points, to 58.91. The per-file attribution noise
+this ADR describes for incremental runs is in the rebuild as well, so a
+release's figure carries about half a point of it.
+
+**And the time is the work, not the runner.** 168 minutes reproduced as 171 and
+166, so the jump from 103 at 0.4.0 is not runner variance. The same log names the cost:
+"Detected 5304 static mutants (55% of total) that are estimated to take 95% of
+the time running the tests". A static mutant is one whose code runs outside any
+test, which `perTest` cannot attribute to a test, so Stryker runs the whole suite
+for it. All three logs give the same count. The local 0.5.0 report agrees: of 1,198,095 tests executed, 1,172,141
+were for static mutants. 5,304 is far more than the module-level tables in `src/`
+could account for, and several test files analyse a corpus while they are being
+collected rather than inside a test - at module scope in `pathological.test.ts`
+and `select.test.ts`, in `describe` bodies in `ecosystems.test.ts`,
+`select.test.ts` and `report.test.ts`. Everything those analyses execute is
+static. That is the likely cause and not yet a confirmed one: confirming it means
+moving one and counting again, which is a change under `tests/`.
+
+*Measured the same day, and the list above was wrong while the mechanism was
+right.* Stryker's vitest runner names the current test in a `beforeEach` hook and
+clears it in `afterEach`, and a hit with no test named is static. Probed on the
+25 mutants of `statusSectionBody` in `extract.ts`, all static: leaving out the
+four files named above changed nothing, still 25 of 25. Running the probe once
+per test file, each on its own, found exactly one file that makes them static,
+and it was not on the list - `baseline.test.ts`, whose `describe` body records a
+baseline with `recorded(CORPUS)` before any test starts. With it alone, 25 of 25
+are static and 19 tests cover them. With `engine.test.ts` alone, which analyses
+inside its tests, none are static and 2 tests cover them. **Every analysis at
+collection time makes static whatever its own corpus happens to reach**, so the
+cost is the union of all of them and there is no single file to move. A grep for
+the pattern finds at least `baseline.test.ts:73` and two in `edge-cases.test.ts`
+besides the five above.
+
+**And then all of them were moved.** Grep had already missed one, so the list was
+measured instead. A temporary V8 coverage probe recorded every `src/` function each
+test file ran before its first test. Six files ran the whole pipeline - 158 to 187
+functions each: `pathological`, `ecosystems`, `select`, `report`, `baseline` and
+`edge-cases`. Every other file ran about 15, the tables modules build at import.
+Each of the six now analyses inside its tests. Nothing is memoised: a cached result
+would be attributed to whichever test computed it first, and the tests that only
+read it would not be run for the mutants they catch.
+
+A sharded sweep of the result, against three of the tests before it:
+
+| | static mutants | score | shard 1 (`extract.ts`) | shards 2 to 4 |
+| --- | ---: | ---: | ---: | --- |
+| before, three sweeps | 5,307 | 73.32 to 73.41 | 32 to 34m | 26 to 40m |
+| after | **1,405** | 73.35 | 30m | 22 to 24m |
+
+The score did not move, which is the check that no kill was lost with the static
+flag. What is left is not the tests. 448 of `extract.ts`'s static mutants sit in
+its vocabulary tables - `RELATION_KEYS` 163, `VERB_RULES` 138, `NOT_A_FAMILY` 51,
+`OBLIGATION_SECTIONS` 31 - which are built when the module is imported, before any
+test exists. No change to a test can attribute them, and building the tables
+lazily would only move the problem into whichever test happened to load them
+first. So they stay static, and they are what keeps shard 1 the slowest.
+
+The schedule is also not a time. It is set for 03:00 UTC, and on 2026-09-14
+GitHub did not create the run until 08:31. A rebuild that has to finish before
+something else happens needs a dispatch, not the cron line.
+
+**Some of the kills were the tests racing each other.** *Found 2026-09-14.*
+Stryker's workers share one sandbox, and a static mutant runs the whole suite,
+so the same test file runs in several workers at once. Four test files wrote to
+fixed paths - `tests/fixtures/.tmp/config`, `glob`, `runner`, and a baseline and
+a ratchet file inside the legacy fixture corpus - and one added a document to
+that corpus for the length of a test. A worker running a mutant could read
+another worker's half-written file, lose it to another worker's cleanup, or
+count its extra document. The test then failed, and the mutant was reported
+killed.
+
+The 2026-09-14 sweep's own report shows it. **60 kills have a filesystem error as
+their reason**: `ENOENT` on `tests/fixtures/legacy/.tmp-ratchet.json` alone is
+22, and `ENOTEMPTY` on the config directory another 5. **17 more fail an
+assertion that names a shared temp file.** A race that only changes what a file
+contains leaves no such trace, so those 77 are a floor. They are 0.8 points of
+76.46 that no assertion earned, and the half-point spread between the three
+rebuilds above is likely partly this.
+
+It surfaced while checking that a sweep split across parallel jobs is the same
+sweep. Two files run as two shards,
+against one run over both, disagreed on 8 of 206 verdicts: 93.69% as one run and
+91.26% as two. Every test now writes to a path named for its process, and the
+test that adds a document works on its own copy of the corpus. Run again, the
+two agreed on all 206, at **88.83%** - lower than either run before, as removing
+false kills would make it. **Expect the next full sweep to read lower than the
+figures recorded here, for this reason and no regression.**
+
+**The sweeps that followed measured how much.** *2026-09-14.* Two hosted sweeps
+of the fixed tests, both split across shards
+([ADR-0019](0019-the-sweep-runs-in-shards.md)), read **73.41% and 73.39%** over
+9,801 mutants, with 6,849 killed in each. The 2026-09-14 schedule's report shares
+8,594 mutants with them, outside `regex.ts` and `glob.ts`, which changed in
+between. **302 of those were killed then and survive now, and 9 went the other
+way.** Every one of the 302 had been killed by a test in one of the four files
+that raced - `runner.test.ts` 169, `cli.test.ts` 86, `docs.test.ts` 27,
+`config.test.ts` 20 - and not one by any other file. 238 of them are static, so
+they ran those files on every attempt.
+
+So **about three points of every hosted figure above were races**, and only 77
+of the 302 said so in their reason. The two fixed sweeps also agree with each
+other to 0.02 points, where the three racing rebuilds spread over 0.44 - the same
+finding seen from the other side.
+
+
+This also corrects the headroom, in the useful direction for once. Against 73.32%
+with 305 timeouts - four percent of the corpus, and a timeout is a timing
+measurement - a bad run read 69.3%, which is *below* the guard. Against 0.3.0's
+75.14% with 314 timeouts of 8,126, the same worst case reads 71.28%. `break: 70`
+now clears it by a point and a quarter rather than failing it, which is the first
+time the guard has had real margin under the pessimistic reading - and still not
+enough margin to justify moving it.
+
+0.4.0's hosted figure is 75.40% with 312 timeouts of 8,585, so the same worst
+case reads 71.76% - half a point better again. Three releases of the guard
+holding while the pessimistic reading climbed from below it to a point and three
+quarters above it is an argument for leaving it exactly where it is.
+
+0.5.0's hosted figure is 76.83% with 341 timeouts of 9,697, so the worst case
+reads 73.31%, the first time it has cleared the guard by more than three points.
+Four releases of the same argument, and it still does not justify moving the
+floor: the local figure over the same mutants is 80.54%, 3.71 higher, and that
+gap has been about four points for two releases.
+
+**Then the races came out, and the argument turned.** 73.41% with 346 timeouts
+of 9,801 reads **69.88%** with every timeout lost - under the guard again, as
+it was before 0.3.0. Every "worst case" in the paragraphs above was measured
+with about three points of false kills in it. The guard does not move for that:
+a floor lowered to fit a measurement is what this section exists to refuse. What
+changes is how the margin is read. It is three and a half points, not six, and a
+timeout is still a timing measurement.
+
+**The run nearly did not finish.** The rebuild took **168 minutes against a
+job cap of 180.** 0.4.0's took 103 minutes on 8,585 mutants; 0.5.0 has 13% more
+mutants and took 63% longer, while the local full run grew only 15%, from 64m30s
+to 74m27s. The cap was raised from 120 at 0.4.0 on the argument that a ceiling
+costs nothing unless it is reached; at 120 this run would have been cancelled at
+two hours and reported nothing, and the release would have had no governing
+figure at all.
+
+The cause is not established, and two candidates are on the table without
+either being measured. Hosted runner speed has moved this number before - 80
+minutes to 103 on a 6% larger corpus between 0.3.0 and 0.4.0. And `regex.ts`
+arrived with a differential test that compares two engines over roughly 19,000
+pattern-subject pairs, which `perTest` re-runs for every one of that module's
+~770 mutants it covers; locally that suite takes about 130 ms, which accounts for
+minutes of worker time rather than an hour, but the hosted multiplier is
+unknown. Twelve minutes of headroom is the position that once produced fourteen
+consecutive cancelled runs, so this is recorded as an open question rather than
+as a comfortable margin.
+
+
+**Read "no coverage" before reading the score.** The v0.2.0 modules landed at
+74.61% and 83.08%, and the number worth acting on was neither: it was that 42 of
+their mutants had no covering test at all. Most were genuine - a config key no
+test ever parsed, a comparator that never saw two entries sharing a rule - and
+closing them moved those files to 90.16% and 92.04% measured on their own. The
+rest were `perTest` mis-attribution, and measure fine under
+`--coverageAnalysis all`. A survivor is a test that is too weak; a no-coverage
+mutant is a test that does not exist, and the second is the cheaper thing to
+fix.
+
+**`break` stays at 70 even though the measurement rose.** The guard has to clear
+the noise, and the noise here has a size: 303 of those mutants were detected by
+timeout, and a timeout is a timing measurement. If every one of them flipped to
+`survived` on a slower machine the score would read 71.5%. A guard at 72 would
+fail that build for being slow rather than for being wrong. 70 is the closest
+round number that survives the worst case, so it stays where it is until the
+timeout population shrinks.
+
+It is worth being straight about what that number is and is not.
+
+**It is not "all vocabulary tables".** That would be a convenient story, and the
+data does not support it. String literals - message text and vocabulary entries -
+are still the largest surviving bucket at 428 mutants, but excluding them
+entirely moves the score only to 75.8%. The body of the survivors is 393
+conditional-expression mutants spread across every module. About a quarter of the
+mutants survive, and most of that is genuine headroom rather than noise.
+
+**The survivor list is more useful than the score.** Reading it, rather than
+chasing the number, is what produced `tests/edge-cases.test.ts` - and every test
+in its first batch passed on the first run. The behaviour was already correct; it
+was simply unverified, and unverified behaviour is what silently changes under a
+refactor. That is the return on this tool, and it does not require the score to
+be high to pay out.
+
+**End-to-end tests over a real directory kill more than unit tests over
+synthetic input.** This was the surprise of the v0.1.1 pass. The goal was
+`runner.ts`, which went from 45.3% to 84.2%. But the total moved 63.31% → 74.05%,
+and *forty per cent of that gain came from modules that got no new tests at all* -
+`extract.ts` +16.4, `identity.ts` +13.7, `markdown.ts` +11.3, `yaml.ts` +10.1.
+
+The reason is that the new tests drive `analyse()` over a fixture directory of
+realistic documents - front matter, four kinds of checkbox, a wrapped item, a
+relative link crossing two directories, a document that opts out - rather than
+over the minimal in-memory corpora the unit tests use. Those minimal corpora are
+easy to read and pin down one behaviour precisely, but they never exercise the
+paths a real file takes. Both kinds of test earn their place; only one of them
+finds the code that no input in the suite had ever reached.
+
+**The per-file figures are a floor, not a point estimate.** Two effects pull
+them around, and both were visible on the v0.1.2 pass.
+
+A timeout counts as a detection, and 296 of these mutants time out - most of
+them in `state.ts`, where a mutated marker regex turns linear scanning into
+catastrophic backtracking. Whether a given mutant crosses the 15s budget depends
+on how loaded the machine is, so a *faster* run scores *lower*: mutants that
+would have hung instead run to completion and survive. Per-module swings of two
+or three points between runs are this, not the suite changing.
+
+More seriously, `coverageAnalysis: 'perTest'` mis-attributes coverage for async
+tests that touch the filesystem. `runner.ts` reported 74.2% on the full run and
+84.2% on the one before, which looked like a ten-point regression from new
+`--ignore-ref` wiring. It was not. Mutating `openObligations` by hand fails
+`runner.test.ts` immediately, and re-measuring that one file with
+`coverageAnalysis: 'all'` gives **83.51%**. Stryker had linked those lines to
+tests that execute them without asserting on them, and never ran the test that
+does.
+
+The lesson is to read a per-file drop as a question rather than an answer.
+Confirm it by mutating the line by hand, or re-measure that file with
+`--mutate src/<file>.ts --coverageAnalysis all`, which takes seconds.
+
+**Some survivors are not worth killing.** Removing `'provisional'` from the draft
+vocabulary fails no test, and the test that would catch it asserts that one word
+of a thirty-word table exists. A hundred such tests would raise the score and
+detect nothing a human would call a defect. Where a table entry is load-bearing -
+the checkbox characters, the four lifecycle phases - it has a test. Where it is
+one synonym among many, it does not.
+
+*Amended 2026-09-27.* That was wrong about what such a test finds, and
+`'provisional'` is the proof: the vocabulary tests written since found that
+`Provisionally accepted` read as active, because `active` is tried first and
+contains `accepted` - the entry was in the table and could never match. The
+tests that found it do not assert that a word exists. They read the README's
+own table of every status word, marker, heading and key, and for each entry
+put it in a document and check that it reads as the row says; and they check
+that every entry the code exports is one the README documents. A synonym is
+tested because a reader was told it works, and the table in the code and the
+table in the README cannot drift apart without a test failing. That is a
+test of documented behaviour, one row at a time - not the assertion of
+existence this paragraph argued against.
+
+**A survivor can be a defect in the test corpus rather than in the tests.**
+0.5.0 produced the clearest example this project has had, because the module in
+question is verified against an oracle and the oracle agreed anyway.
+
+`regex.ts` is checked by running every pattern through both it and `RegExp` and
+comparing — 1.33 million pattern-subject pairs, no disagreements. Its mutation
+score still had a survivor on the line that steps past the `^` in a negated
+character class:
+
+```ts
+if (negated) this.position += 1;
+```
+
+Mutated to `-= 1`, `[^abc]` compiles as `[^[^abc]`, and the whole suite still
+passed. Hand-mutating it — the practice above — confirmed the survivor was real
+rather than a `perTest` artefact, and then the question was why 1.33 million
+comparisons had missed it. The answer is that the corpus had a blind spot with a
+name: **a two-character subject gives the pattern a second chance.** The class
+tests were run against `"[]"`, where the wrongly-included `[` is cancelled by the
+`]` that follows it. One character on its own is a different question, and the
+corpus contained none.
+
+Adding `[`, `]`, `^`, `{`, `|` and the rest as subjects in their own right killed
+that mutant. It also found a **bug the oracle had been agreeing with all along**:
+`[\d-\w]` matched U+017F, because upper-casing it gives `S` and the range
+check tried the character's case forms without asking whether the fold survived.
+It does not — the specification keeps a non-ASCII character out of ASCII, which
+is the same clause that had already been read wrongly once, in the word-character
+set for `\b`. Two bugs, one clause, found by two different techniques a week
+apart.
+
+So the composition is worth stating: **the oracle checks the implementation
+against a corpus, and the mutation score checks the corpus.** Neither finds what
+the other does. A differential test with a blind spot passes forever; a mutation
+score with no oracle behind it only says the tests notice changes, not that the
+changes are wrong.
+
+
+### 2026-09-27: a pass over eight modules, and the gate at 90
+
+The full sweep on fc26fef read 76.80% over 8,406 mutants, 1,950 undetected.
+A pass over the survivors of `extract.ts`, `report.ts`, `cli.ts`,
+`rules.ts`, `lifecycle.ts`, `state.ts`, `select.ts`, `sections.ts` and
+`identity.ts` - each mutant replayed by hand against the tests written for
+it - killed 1,284, recorded 197 as equivalent with a comment at the code,
+deleted 71 with code that decided nothing, and found ten defects, each fixed
+with a test. The sweep on 9589932 then read **93.34% over 8,248 mutants**, 549
+undetected, 258 of the detections timeouts. `break` moved from 70 to 90: losing
+every timeout would leave 90.21%.
+
+A second pass took the remaining modules - `glob.ts`, `directives.ts`,
+`paths.ts`, `runner.ts`, `baseline.ts`, `yaml.ts`, `config.ts`, `graph.ts`,
+`diff.ts` and `resolve.ts` - with the approved behaviour changes of 0.9.3 in
+the same modules. It killed 208 more, found three more defects, and the
+sweep on d5f9abd read **96.28% over 8,221 mutants**, 306 undetected, 257 of
+the detections timeouts. `break` moved from 90 to 93: losing every timeout
+would leave 93.15%.
+
+Two lessons from the first pass:
+
+- **A module that throws while it loads reads as a survivor.** A vocabulary
+  table or selector parsed at import that a mutant breaks makes every test file
+  that imports it fail to load, before any test exists, and Stryker's vitest
+  runner counts that as no failure. About ninety mutants of `select.ts`,
+  whose selectors `rules.ts` parses at import, were scored as survivors this
+  way. A test that imports the module inside an `it` turns the load failure
+  into a failed test.
+- **Vocabulary is tested from the README**, as the amendment above says.
+
+### 2026-09-30: what the timeouts held
+
+Main's sweep of 8f5e6e8, run 36654889728, read **96.34% over 8,575
+mutants**, 283 of the detections timeouts, and 93.04% with every timeout
+lost, a whisker over the `break` of 93. spec-core found that a faster runner
+finishes mutants a slower one timed out, and that some of them then survive
+(its ADR-0007, 2026-09-28): a timeout had been the only thing holding them.
+Two more sweeps of the same source, on 37e2295, read 96.34% and 96.35%, with
+283 and 285 timeouts; across the three, six mutants changed verdict, and no
+timeout became a survivor.
+
+Every one of the 283 was replayed by hand: applied to the source, the tests
+that cover it run - the whole suite for the 217 that are static, as Stryker
+runs it - with the clock the tests read held at 0, so that only an assertion
+about an answer could kill, and a hard limit: 120 seconds where the covering
+tests take a few, 50 to 60 where the whole suite takes about fifteen.
+
+- **Killed by an assertion, 2.** Copying the whole source again for every
+  link `findBareReferences` blanks doubles a document's references, and
+  fifteen tests say so once the pathological corpora have taken their time;
+  a node the cycle search never numbers is visited again, and eight tests
+  find cycles where there are none. Neither needs the clock.
+- **Never end, 281.** 22 filled the heap, among them the argument loops that
+  push `--ignore` forever once `i += 1` goes backwards and the glob compiler
+  that stops advancing. The other 259 were still running at the limit: 42
+  loops that no longer step - a counter turned round, a `pop` or a `shift`
+  taken out, a block emptied, a guard made `true` or `false` - and the 217
+  static mutants. 200 of those empty a phrase of the relation or marker
+  tables, and an empty alternative matches at a place without moving: `exec`
+  with `/g` does not step past an empty match, so the scan finds it again,
+  forever. The other 17 empty a table or the alternation built from one,
+  drop the escaping, the respelling of a marker or the `g` flag, or stop the
+  selector parser's loops, which `rules.ts` runs at import. 66 of the 283
+  Stryker cut off by its hit limit, a hundred times the calls the dry run
+  made, which counts rather than times.
+- **Detected only by being slow: none.**
+
+No runner, however fast, finishes a loop that does not end, so none of the
+281 can survive, and the two the suite kills would read as killed. Counted
+as Stryker counts them, main's report is the projection on any runner:
+96.34%, and 96.35% with the survivor below killed; losing every timeout,
+93.04% was never a reading a runner could produce. 25 of the 281 are in the
+Chinese reading 0.10.0 added (its phrases and markers, the split of the
+relation pattern by script, the search for a Han term), which is being
+taken out.
+
+The same pass read the survivors on the lines 0.10.0 changed, eleven. One
+was not equivalent and is killed: a status label is the word status, so
+`Review-status: rejected` is not a register section's status. Three were
+already commented as equivalent, two plant an entry in an empty fallback
+list and are commented where they are, one is a test of script that goes
+with the Chinese reading, and the other four - the successor clean-up in
+`supersessionTargetsIn`, and the `.trim()` that `phaseOf` gained when it
+stopped calling `normaliseStatus` - are there because of it or were there
+before it.
+
+**A race counted mutants killed.** tests/cli.test.ts records baselines into
+tests/fixtures/legacy under `.tmp-` names, one per process, and two tests
+copy that corpus. A copy that lists one of those files as the worker that
+wrote it deletes it fails with ENOENT, by no assertion. The three sweeps
+counted 2, 6 and 6 mutants killed that way; replayed, 13 of the 14 are
+killed by an assertion, and the fourteenth is the comparator's `<=` in
+`runner.ts`, commented as equivalent. In the sweep of 0.9.10 it was how
+`value.trim()` in `parsePrefixedRef` read as killed. The copies now leave
+`.tmp-` files out.
+
+### 2026-10-01: the scans step past an empty match
+
+The three sweeps of 58a5389's source counted 191 static mutants timed out, 186
+of them in `extract.ts` and `state.ts`: 179 empty a phrase of the relation or
+marker tables, six empty a table, the alternation built from one, or the
+escaping or respelling of its phrases, and one drops the `g` flag. The record
+above says why none of them ended: an empty alternative matches without
+moving, and a loop over `exec` resumes at `lastIndex`, which an empty match
+leaves where it began; without `g`, `exec` starts again from the beginning.
+Each held a worker for Stryker's clock, 29 to 36 seconds, and between them
+they were most of the minutes of the two files that set the sweep's wall time
+([ADR-0019](0019-the-sweep-runs-in-shards.md)).
+
+No real input reaches that, since no table has an empty entry, so every scan
+over a `/g` pattern now steps past an empty match. Five use `matchAll`, which
+does, and refuses a pattern without `g`. The marker scan resumes inside its
+match, where `matchAll` cannot, and steps past by hand (`execPast` in
+`state.ts`, whose six mutants its own tests kill by assertion). Every output
+over the fixtures and the four family repositories is byte-identical.
+
+All 191 were replayed on the change: applied to the source, the whole suite
+run as Stryker runs a static mutant, stopping at the first failure, with the
+clock the tests read held at 0 and a limit of 120 seconds.
+
+- **Killed by an assertion, 184**: all 102 in `extract.ts` and 82 of the 84 in
+  `state.ts`, in 5 to 17 seconds each for `extract.ts` and a median of 11 for
+  `state.ts`, on a machine running three replays at once, most of it starting
+  vitest. The first test to fail was most often the README's markers read one
+  by one (61), the README's relation examples (36), a baseline naming its
+  citations (31) and ghost-handover as the README prints it (19). An emptied
+  relation phrase matches wherever its lookarounds allow, at the end of the
+  text before a reference among them, so it takes over the classification of
+  nearly every reference; an emptied marker is simply not read.
+- **Survived, 2, and killed now.** Emptying `follow up in` or `follow-up in`
+  loses no phrase: the two respell to one alternative and fold to one key.
+  What the empty entry adds is a marker read from punctuation alone, and a
+  test now holds that `: see #412.` under an item is no marker.
+- **Still never end, 5**: the query parser's loops in `select.ts`, which
+  `rules.ts` runs at import and which the change does not touch.
+
+The sweeps of the change, dispatched on its branch:
+
+| Commit | Run | Score | Mutants | Killed | Timed out | Survived | No coverage |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 58a5389, main | 36681244752 | 96.32% | 8,393 | 7,825 | 259 | 293 | 16 |
+| 2d02aac | 36724681688 | 96.29% | 8,385 | 8,008 | 66 | 295 | 16 |
+| c6c7d00 | 36729888575 | 96.31% | 8,385 | 8,011 | 65 | 293 | 16 |
+| dba9ed5 | 36732850656 | 96.31% | 8,385 | 8,007 | 69 | 293 | 16 |
+
+Mutant by mutant against main's sweep, the static timeouts of `extract.ts` and
+`state.ts` are killed, and so are two of `state.ts`'s others, which moved the
+scan's resume back before its match; from c6c7d00 on the survivors are main's
+293, and no kill is lost. The lines the change rewrote hold 32 new mutants,
+all killed. What timing still decides is 69 mutants, and losing every one of
+them would take 96.31 to 95.49, where it took 96.32 to 93.23. `extract.ts`'s
+447 static mutants took 3.9 to 4.3 minutes of its shard, where they had taken
+15.5 to 20.5, and the file 13.9 to 14.7; `state.ts` took 2.3 to 2.8.
+
+### 2026-10-07: vitest is held on 4
+
+**Vitest stays on 4 until Stryker's runner reads 5.** On vitest 5,
+`@stryker-mutator/vitest-runner` 10.0.0, the newest there is, runs no test
+against a mutant a test covers and scores it as survived, with every test
+green: vitest 5 matches a test's name with ` > ` between its suites, and the
+runner asks for the tests of a mutant by names joined with a space
+([stryker-js #6210](https://github.com/stryker-mutator/stryker-js/issues/6210),
+open). The evidence is spec-guard's, which met this on 2026-09-07 and pinned
+vitest then
+([its ADR-0003](https://github.com/DescentVTT/spec-guard/blob/main/docs/adr/0003-mutation-testing.md)).
+On 2026-10-06 Dependabot proposed vitest 5.0.0 across the family. The two
+repositories that sweep a pull request in full measured it: 4.00% in
+spec-core, where main reads 96.36%, and 3.83% in spec-harness, where main
+reads 98.13%. Here pull request 61 passed, at 96.31%, and that figure is
+vitest 4's: a pull request's sweep is incremental, and run 37528788750
+reused 8,381 of its 8,385 verdicts. The bump would have merged green, and
+main's full sweep would have failed after it, with a score and no reason.
+
+So `.github/dependabot.yml` proposes no major of `vitest` or of an `@vitest`
+package, and `tests/docs.test.ts` fails when `package.json` admits a vitest
+that is not a 4, with the issue and this entry in its message: a bump made
+by hand fails `npm test` before it reaches main. Minors and patches of 4
+still come, and a security update is not held back.
+
+The hold is the family's and is lifted in spec-core first, by the steps in
+[its ADR-0008](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0008-toolchain.md)
+(amended 2026-10-07), which also says what vitest 4 still receives while it
+is held. When the bump comes here, its pull request's sweep reuses vitest
+4's verdicts and measures nothing: dispatch `mutation.yml` on the branch,
+which is the full sweep, and hold it to the two conditions written there
+before merging.
+
+### 2026-10-11: a mutant's quickest test files run first
+
+Stryker's vitest runner runs a mutant's test files one after another in one
+worker and stops at the first test that fails: every file for a static
+mutant, the files of the tests that cover it for any other. Vitest's own
+order puts first the file that failed in the worker's last run, then the
+longest. spec-harness measured what that cost its sweep, where a static
+mutant waited out forty seconds of sandbox tests ahead of the unit file that
+kills it, and gave the sweep an order of its own, the quickest first
+([its ADR-0010](https://github.com/DescentVTT/spec-harness/blob/main/docs/adr/0010-toolchain-and-verification.md),
+2026-10-09). It inferred that vitest's order costs this sweep as well. Nobody
+had measured that.
+
+**Before.** Three sweeps of 0.14.0's source ran in vitest's order: runs
+37837800195 and 37840088558 on ebdae4c, and 38111076929 on 9a7c5aa, which
+differs by a package of types. Each read 96.50% over 8,832 mutants with the
+same 293 survivors. A report says how many tests had completed when a mutant
+was decided and which test killed it, so a mutant was killed late when more
+tests had completed than those of the killer's own file up to the killer:
+
+| | Static | Not static |
+| --- | ---: | ---: |
+| Tested | 1,415 | 7,401 |
+| Killed in the first file that ran | 1,205 to 1,212 | 5,983 to 6,028 |
+| Killed late | 178 to 185 | 1,035 to 1,083 |
+| Tests of other files completed first, for each of those | 691 to 735 | 134 to 137 |
+| Survived | 20 | 273 |
+| Timed out | 5 | 61 to 65 |
+| Minutes of the four shards | 12.8 to 13.6 | 41.4 to 43.0 |
+
+The static mutants are a quarter of this sweep, where they were three
+quarters of spec-harness's: the suite's initial run takes 12 to 21 seconds
+here and took two minutes there. It is the others that wait. Fourteen test
+files cover a mutant that is not static, on average, and `tests/cli.test.ts`,
+twice as long as any other file, covers 5,290 of the 7,401.
+
+What the wait cost could be bounded and not read. A report names the first
+test that failed in the order that ran: not the files that ran ahead of it,
+and not a quicker file that would have killed the mutant as well. With the
+time each test file took in CI's run of that commit, and a tenth of a second
+to start a file, the files ahead of the killers took between 8 and 16 of the
+56 to 59 minutes, and the quickest first would have them take between
+nothing and 24. So the sweep was the measurement.
+
+**The order.** `vitest.mutation.config.ts` gives the sweep an order of its
+own: the file that failed in the worker's last run first, as vitest has it,
+then the quickest, and a file the worker has not run yet after those it has,
+the smaller first. No test leaves the run, and `npm test` keeps vitest's
+order. A mutant survives when every file has passed, in any order, so the
+sweep proves what it proved.
+
+A shard's minutes follow its runner. The suite's initial run took 12 to 21
+seconds across these sweeps, and the three in vitest's order, 56m13s to
+58m41s between their shards, come to 54.5, 54.8 and 54.9 minutes once each
+shard is scaled to a runner whose initial run takes 17 seconds. Those are the
+figures in brackets. Run 38111409073 is ebdae4c's source and table with the
+order alone changed, on 0cddd48; run 38114717761 is the same order on
+9a7c5aa's source, on e8a6c7c, with the table
+[ADR-0019](0019-the-sweep-runs-in-shards.md) now has:
+
+| | Vitest's order, three sweeps | The quickest first, run 38111409073 | Run 38114717761 |
+| --- | ---: | ---: | ---: |
+| The four shards | 56m13s to 58m41s (54.5 to 54.9) | 47m30s (47.0) | 51m21s (46.2) |
+| The four jobs | 57m04s to 59m35s | 48m25s | 52m21s |
+| Their initial runs, added up | 69 to 73 s | 67 s | 75 s |
+| Mutants not static | 41.4 to 43.0 min (39.8 to 40.5) | 32.7 min (31.9) | 35.9 min (32.1) |
+| Static mutants | 12.8 to 13.6 min (12.4 to 12.7) | 12.7 min (13.1) | 13.3 min (12.2) |
+| Not static, killed late | 1,035 to 1,083 | 968 | 973 |
+| Tests of other files completed first, each | 134 to 137 | 50 | 54 |
+| Static, killed late | 178 to 185 | 197 | 203 |
+| Tests of other files completed first, each | 691 to 735 | 679 | 613 |
+| Slowest shard | 16m53s to 18m37s | 16m59s | 14m43s |
+| Score | 96.50% over 8,832 | 96.50% over 8,832 | 96.50% over 8,832 |
+| Killed, timed out, survived, no coverage | 8,453 to 8,457, 66 to 70, 293, 16 | 8,456, 67, 293, 16 | 8,454, 69, 293, 16 |
+
+The survivors are the same 293 in all five, mutant for mutant. Six mutants
+moved between killed and timed out across them, all in the two searches of
+`graph.ts` and at one line of `extract.ts`: three to five between a sweep
+in this order and one in vitest's, where the three in vitest's order differ
+among themselves in one to four. One of the six, in the cycle search, was
+killed in all three sweeps in vitest's order, by `Invalid array length` in
+the first test that ran, and timed out in both in this one. It is a loop that
+does not end: it fails a test when it fills an array first and runs out the
+clock when it does not, and which test runs first is the order's. Either way
+it is detected. With every timeout lost the two sweeps would read 95.74% and
+95.72%, and the `break` stays 93.
+
+**What the order gives, and what it does not.** The mutants that are not
+static took a fifth less: one killed late had 50 to 54 tests of other files
+ahead of its killer where it had 135. The static ones took what they had
+taken: one killed late had 613 and 679 tests ahead of its killer, for 691 to
+735 before. File by file, on the 17-second runner and in the two sweeps,
+`extract.ts` took 9.9 and 10.1 minutes where it had taken 12.1 to 13.9,
+`identity.ts` 3.6 and 3.9 for 6.0 to 6.3, `state.ts` 2.2 and 2.3 for 2.8 to
+2.9 and `resolve.ts` 2.9 and 3.0 for 3.5 to 3.7. Two took more, `glob.ts`
+1.6 and 1.9 for 1.2 to 1.4 and `project-rules.ts` 0.7 and 0.8 for 0.5 to
+0.6, and `cli.ts` and `rules.ts` took the most they had taken or a little
+over it, 3.2 and 3.4 for 2.9 to 3.2 and 4.0 and 4.3 for 3.4 to 4.1.
+`tests/cli.test.ts` was the recorded killer of 951 to 963 mutants that are
+not static in vitest's order and of 428 and 416 in this one: where a quicker
+file kills too, the mutant no longer waits for it, and where it alone kills,
+the quicker files that cover the mutant run ahead of it.
+
+So the four jobs took five to eleven minutes less between them as their
+runners went, and eight on one runner's scale, a seventh of the sweep. Its
+own time is its slowest shard's, and the order alone did not move that: in
+the first sweep the last shard, whose mutants are the command line's, took
+the 17 minutes a slow runner had taken it before, while the first two took
+seven and eight. The shards that were level had come apart.
+[ADR-0019](0019-the-sweep-runs-in-shards.md) (2026-10-11) has the table that
+levels them again, and in its sweep the slowest shard took 14m43s on a
+runner whose initial run took 20 seconds.
+
+`tests/mutation-shards.test.ts` holds the order: the failed file first, the
+quickest after it, a file never run after those, the keys vitest's own
+sequencer reads its times by, and `npm test` left with vitest's order.
+`scripts/mutation-timeline.mjs` prints the mutants killed late beside each
+file's minutes, static and not, so the next measurement reads them off a
+report.
+
+### 2026-10-12: what a sweep does not see
+
+**Stryker makes no mutant of anything under a TypeScript `as`.** Read from
+the source of 10.0.0: `shouldSkip` in its instrumenter's
+`transformers/babel-transformer.js` passes over a node `isTypeNode` accepts,
+and that list, in `util/syntax-helpers.js`, holds `'TSAsExpression'`. The
+whole subtree goes unread: the `i - 1` of `lines[i - 1] as string`, every
+entry of a table written `{ ... } as const`. No test is held to what stands
+there, and the score says nothing of it. `satisfies` and `!` are not on that
+list, and neither is a name.
+
+**Before.** `scripts/mutation-unmeasured.mjs` counts, under every outermost
+`as` of the files a sweep mutates, the nodes one of Stryker's mutators
+applies to. A site is a place a mutator applies, not a mutant. Over the three
+sweeps of the source 0.14.1 was released from, runs 38118353890 on ec232ac and 38119760391 and
+38130734856 on 11e2895, each of 8,841 mutants:
+
+| | |
+| --- | ---: |
+| Files mutated | 22 |
+| Outermost `as` expressions | 150 |
+| With a site under them | 19 |
+| Sites under them | 23 |
+| Mutants a report has inside one | 0 |
+
+Eight of the 19 read the last entry of a list, `xs[xs.length - 1] as T`,
+and one the only entry of a list made from `[pattern]`; six are tuples
+written `[a, b] as const`, five of them in what a diff reports and one the
+entry of the verb table, built when `extract.ts` loads; two slice the two halves of `--rule`; one is `'front-matter' as
+const`; and one, `(match?.[0] ?? '') as string` in the selector's
+`parseValue`, holds three sites.
+
+Two things in the counting are worth keeping. The parser at the top of
+`node_modules` is not Stryker's: `@babel/parser` 7 is there for vitest's
+coverage provider, and the instrumenter loads its own 8 from beneath
+itself, which is the one the script asks for. Both count 23 under 19 here.
+And Stryker 10 has a mutator named `CallExpression` that drops a call
+statement or a `throw new`, but only where no other mutant stands under the
+statement: so a cast inside such a statement, once rewritten, gives its own
+mutants and takes the statement's away. None of the 19 stood in one.
+
+**The rewrite.** Each of the 19 is written so that what stood under the
+cast is read, with the types the compiler sees as they were:
+
+| Rewrite | Casts | Sites |
+| --- | ---: | ---: |
+| `!`, where the cast only dropped `undefined` from an index read | 9 | 9 |
+| `!` on a search that cannot miss, its fallback deleted | 1 | 3 |
+| The value hoisted to a constant, the cast on the name | 2 | 3 |
+| `satisfies`, with the type the tuple is held to | 6 | 7 |
+| The cast dropped: the declared type already held the literal | 1 | 1 |
+| A function with a `const` type parameter | 0 | 0 |
+| Left under an `as`, with a comment | 0 | 0 |
+
+The search is `/^[^\]\s]*/` in `parseValue`: a starred class matches the
+empty string where the search starts, so `exec` never returns `null`, and the
+`?.` and the `?? ''` after it decided nothing. They go with the cast, as
+code that decides nothing went in the passes of 2026-09-27. No table here
+needed `as const` for its literal types, so no helper is added.
+
+The declarations `tsc` emits are byte for byte what they were, all of
+them. The JavaScript differs in two places: the two constants `--rule` now
+has, and that fallback.
+
+**After.** The sweep of the change, dispatched on its branch, beside main's
+last:
+
+| | Main, 11e2895, run 38119760391 | The branch, ba8d7c7, run 38158750946 |
+| --- | ---: | ---: |
+| Mutants | 8,841 | 8,861 |
+| Killed | 8,462 | 8,485 |
+| Timed out | 70 | 67 |
+| Survived | 293 | 293 |
+| No coverage | 16 | 16 |
+| Score | 96.50% | 96.51% |
+| With every timeout lost | 95.71% | 95.76% |
+| Static | 1,415 | 1,417 |
+| Sites under an `as` | 23 | 0 |
+
+Mutant for mutant, by file, the text replaced and the replacement, with the
+19 places spelled as they were: every mutant of main's sweep is in the
+branch's, and the branch has 20 more, one for each site but the three of
+the deleted fallback. All 20 are killed:
+
+- `cli.ts`, 5: `names.length + 1` in the list a refusal names its commands
+  with; `value` for each slice of `--rule`, and `equals - 1`;
+  `match.nodes.length + 1` where a query prints its matches.
+- `diff.ts`, 6: `[]` for each of the five pairs a change is reported as,
+  and `parts.length + 1` in the verdict.
+- `extract.ts`, 5: `[]` and `{}` for an entry of the verb table, both
+  static; `""` for the origin of a relation a table declares;
+  `section.length + 1` and `path.length + 1`.
+- `directives.ts`, `glob.ts`, `graph.ts` and `select.ts`, one each:
+  `open.length + 1`, `pathList([])`, `work.length + 1` and
+  `match.nodes.length + 1`.
+
+The survivors are main's 293 and the mutants without coverage main's 16,
+the same mutants. Three mutants of the two searches in `graph.ts` read
+killed where main's sweep had them timed out: `edge.to === id`, and the
+two `stack.push` statements dropped. Each has read both ways before, on
+this source and the one before it: all three killed in run 38111076929,
+the first killed and the other two timed out in 38114717761 and again, the
+other way round, in the tag's 38130734856. They are the loops the entry
+above describes, detected either way.
+
+Each of the 20 had been written into the source by hand before the sweep
+ran, and the suite the sweep runs run against it: all 20 failed a test.
+The emptied entry of the verb table throws while `extract.ts` loads, so 49
+test files fail to load, which Stryker's runner counts as no failure, and
+`tests/extract-loading.test.ts`, which imports the module inside a test for
+that reason, is what kills it.
+
+The 20 cost no minutes that a runner does not move further. The shards took
+12m50s, 14m07s, 8m16s and 14m08s on runners whose initial runs took 20, 20,
+11 and 20 seconds, which is 10.9, 12.0, 12.8 and 12.0 minutes on the
+17-second runner [ADR-0019](0019-the-sweep-runs-in-shards.md) scales to;
+main's sweep took 7m49s, 14m12s, 15m16s and 14m06s on runners of 12, 21, 20
+and 20 seconds, 11.1, 11.5, 13.0 and 12.0. The two static mutants are in
+shard 1, which now holds 449 of them.
+
+**What holds it.** The script records the number of sites left under an
+`as`, which is none, and fails on more. `tests/mutation-unmeasured.test.ts`
+holds the repository's sources to that number in `npm test`, and the
+script to sources small enough to count by hand, one line for each of
+Stryker's mutators and each thing a mutator leaves alone. The sweep's
+score job runs the script on the report its merge wrote, each source as the
+sweep read it, after the incremental file is published: the verdicts a
+sweep did reach are true whatever it could not see. A cast that has to
+stay, because no rewrite keeps its types, is recorded in the script with
+the reason in a comment beside the code. The `break` stays 93.
+
+### 2026-10-12: a file that did not load is not a test that failed
+
+Stryker's vitest runner counts a test that failed. A test file that failed
+to load has no test to fail, so a mutant under which a module throws as it
+loads takes with it every file that imports the module at its top, and
+where no other test fails it is scored as survived, with nothing working.
+The pass of 2026-09-27 met this in `select.ts` and answered it with a test
+that imports inside an `it`; `tests/extract-loading.test.ts` is there for
+the same reason. spec-harness met it again in the sweep of its 0.15.0: the
+emptied body of the function its tables are built through was a survivor,
+where the sweep before had killed it through a test whose file had since
+come to import the module
+([its ADR-0010](https://github.com/DescentVTT/spec-harness/blob/main/docs/adr/0010-toolchain-and-verification.md)).
+So the question was put to this repository's own survivors, which nobody
+had asked it of since that pass.
+
+**The static survivors, replayed.** The sweep of 73b6334, run 38168801706,
+read 96.53% over 8,895 mutants, 293 survivors and 16 without coverage. It
+marks 1,417 mutants static: 1,392 killed, 5 timed out, 20 survived. The two
+sweeps of 70bdd90 after it, runs 38172827431 and 38177697927, have the same
+20. Each was written into the source by hand and the suite the sweep runs,
+62 files and 2,117 tests, run whole against it, with nothing stopping it at
+the first failure:
+
+| What happened | Mutants |
+| --- | ---: |
+| A test failed | 0 |
+| A test file did not load, and no test failed | 0 |
+| Nothing: every file loaded and every test passed | 20 |
+
+No survivor of that sweep is a file that did not load. Seventeen of the 20
+were already called equivalent beside the code: the entry planted in
+`spec-history`'s empty list of attributes; the case `foldRelationKey` folds
+to; the `^` of the negation pattern; the sort and the escaping of the verb
+phrases, four mutants; the three that empty or drop an option of the
+reference filter's dialect; the bound of `skipSpace`, two, and the anchor
+of the selector's value; and `normalisePhrase` and `escapeRegExp`, four.
+Three were not, and each is a behaviour no test stated:
+
+- The `$` of the negation pattern, `(?:\s|$)`. The text read for a negation
+  ends where the reference begins, so a negation written against the
+  bracket, `Deferred to nobody[ADR-0002](0002-b.md)`, is its last word.
+ that sentence was read as handing its question on.
+- The `-+` of an empty register cell, read as one dash. A status cell of
+  `--` became the row's status, and a relation cell of `--` a finding.
+- The `_+` of the same pattern, read as one underscore. It meets only a
+  link's destination or label, where `[to be decided](__)` became a
+  finding: every other cell is flattened first, which takes underscores
+  out as emphasis.
+
+Each has a test now, in `tests/extract-references.test.ts` and
+`tests/sections-regions.test.ts`, and fails it by an assertion.
+
+**What the sweep already owed to a test that loads inside itself.** In the
+same report 84 static mutants were killed by an error thrown as a module
+loaded inside a test's body: 66 by the test of
+`tests/select-language.test.ts` that loads `rules.ts`, 65 of them in
+`select.ts`, whose parser `rules.ts` runs as it loads; 16 by
+`tests/extract-loading.test.ts`, 15 in `extract.ts` and one in `state.ts`;
+and two by `tests/rules-findings.test.ts`. Each of the 84 would read as a
+survivor if those three files imported at their top.
+
+**Every module, made not to load.** A `throw` was put at the top of each of
+the 22 modules a sweep mutates in turn, which stands for any mutant that
+only stops the module loading, and the suite run whole, the three tests
+above in it:
+
+| Module | Files that did not load, of 62 | Tests that failed in their body | In |
+| --- | ---: | ---: | --- |
+| `baseline.ts`, `cli.ts`, `config.ts`, `diff.ts`, `report.ts` | 9 to 17 | 3 | `rules-findings` |
+| `glob.ts`, `resolve.ts`, `runner.ts` | 46 to 48 | 32 | `rules-findings` |
+| `select.ts` | 47 | 34 | `rules-findings` |
+| `graph.ts`, `paths.ts`, `project-rules.ts`, `rules.ts` | 46 to 50 | 35 | `rules-findings`, `select-language` |
+| `directives.ts`, `extract.ts`, `identity.ts`, `lifecycle.ts`, `markdown.ts`, `sections.ts`, `source.ts`, `state.ts`, `yaml.ts` | 49 to 51 | 33 to 35 | `rules-findings`, `extract-loading` |
+
+Every one fails a test, so none is a blind spot. But nine of the 22 fail
+one only in `tests/rules-findings.test.ts`, and five of those only in the
+three of its tests that print a rule's selector, which import the command
+line inside themselves to do it. That file imports inside its tests for the
+sake of `rules.ts`. Nothing said it also stood between `diff.ts` and a
+survivor, and a test of it moved to an import at the top would have lost
+those kills as spec-harness lost its own, with every test green.
+
+Under two of the 22 a fourth test failed in the first run, by running out
+of its thirty seconds on a machine doing other work, and passed when the
+two were run again. A test that ran out of time is no answer about a
+mutant, and a replay reads why each test failed before it counts one.
+
+**What holds it.** `tests/loading.test.ts` imports each module of `src/`
+by itself, inside a test, and nothing of the source at its top; a test in
+it holds its list to the directory. With the same `throw` in each of the 22
+in turn and that file run alone, each fails between two and twelve of its
+tests: its own, and those of the modules that import it. Every static
+mutant runs it, as it runs every file: 25 tests that load the source and
+do nothing else, 0.13 of the 14.7 seconds the tests of the suite took on
+the workstation that replayed these.
+
+There is no one function here to load by itself. The tables are built
+where they are declared, and the entry of 2026-10-12 above added no helper
+for their types, so the module is the smallest thing that meets such a
+mutant.
+
+The three tests take three survivors from the 293 once a full sweep has
+read them; a pull request's sweep is incremental. The `break` stays 93.
+
 ## Open Questions
 
 - [x] Should the `Regex` mutator be scoped? At 57.9% it was among the weakest.

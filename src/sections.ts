@@ -124,8 +124,15 @@ const RELATION_COLUMNS: ReadonlyMap<string, { kind: EdgeKind; inverted: boolean 
   ['references', { kind: 'references', inverted: false }],
 ]);
 
-/** Cell values that mean "nothing here". */
 const MARKDOWN_LINK = /!?\[([^\]]*)\]\(([^)]*)\)/g;
+/**
+ * Cell values that mean "nothing here".
+ *
+ * Underscores reach this only out of a link in a relation cell, whose
+ * destination or label is kept whole: a template's blank such as
+ * `[to be decided](___)`. Everywhere else a cell is flattened first, which
+ * takes them out as emphasis.
+ */
 const EMPTY_CELL = /^(?:-+|—|–|n\/?a|none|nil|tbd|\.|_+)$/i;
 
 /** `## ADR-0007: Sharding` - an identifier at the very start of a heading. */

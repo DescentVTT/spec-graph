@@ -444,7 +444,9 @@ const VERB_RULES: readonly { kind: EdgeKind; inverted: boolean; phrases: readonl
  * is worse than no inference at all.
  *
  * The `^` never decides anything: the text tested starts just after a phrase,
- * and a phrase only matches where no letter follows it.
+ * and a phrase only matches where no letter follows it. The `$` does: the
+ * text ends where the reference begins, so a negation written against the
+ * bracket, `nobody[ADR-7]`, has nothing after it.
  */
 const NEGATION = /(?:^|\s)(?:no|not|nobody|none|never|neither|nor|nothing|without)(?:\s|$)/;
 

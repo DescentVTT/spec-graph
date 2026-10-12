@@ -293,6 +293,13 @@ describe('a governing phrase', () => {
     expect(reading('# A\n\nNot in this release: deferred to [ADR-0002](0002-b.md).\n')).toEqual(DELEGATES);
   });
 
+  it('is cancelled by a negation the reference follows with no space between', () => {
+    // What is read for a negation ends where the reference begins, so one
+    // written against the bracket is its last word and has nothing after it.
+    expect(reading('# A\n\nDeferred to nobody[ADR-0002](0002-b.md).\n')).toEqual(REFERENCES);
+    expect(reading('# A\n\nDeferred to nobody [ADR-0002](0002-b.md).\n')).toEqual(REFERENCES);
+  });
+
   it('is not cancelled by a word that only begins like a negation', () => {
     expect(reading('# A\n\nDeferred to the notification design in [ADR-0002](0002-b.md).\n')).toEqual(DELEGATES);
   });
