@@ -286,7 +286,7 @@ describe('what the flags do to a run', () => {
     });
   });
 
-  it('refuses a run given --color beside --no-color, in either order, where the later used to decide', async () => {
+  it('refuses a run given --color beside --no-color, in either order, and writes no report', async () => {
     const refused = {
       code: EXIT_ERROR,
       out: '',

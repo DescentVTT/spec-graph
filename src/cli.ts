@@ -243,8 +243,8 @@ OPTIONS
 
   An option beside its own opposite is refused, whichever comes first:
   --color beside --no-color, and --ascii beside --no-ascii. The later would
-  decide and the earlier go unread. Either alone wins over the environment
-  as before, and the same option twice is that option once.
+  decide and the earlier go unread. Either alone wins over the environment,
+  and the same option twice is that option once.
 
   A value that begins with -- reads as an option, so the option before it is
   refused as missing its value. A name that does begin so is written ./--name

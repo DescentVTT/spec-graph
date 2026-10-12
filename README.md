@@ -1197,9 +1197,9 @@ The later of the two would decide and the earlier go unread, and a script
 that adds `--no-color` to a line already holding `--color` would be told
 nothing of which it got. Those are the two pairs the command line has; no
 other option has an opposite to be given beside. Either of a pair alone wins
-over the environment as before, which is what it is for, and the same option
-given twice is that option once. `--help` and `--version` are answered
-whatever else is on the line.
+over the environment, which is what it is for, and the same option given
+twice is that option once. `--help` and `--version` are answered whatever
+else is on the line.
 
 Without either, `SPEC_GRAPH_ASCII` set to anything but `0`, `false` or nothing
 asks for ASCII; and without that, a Windows console that sets neither
