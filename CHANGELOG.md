@@ -11,7 +11,11 @@ the family's
 [versioning policy](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0009-versions-before-1-0.md)
 records.
 
-## Unreleased
+## 0.16.0
+
+`--color` beside `--no-color` is refused, exit 2, where the later of the
+two decided and the earlier went unread, as `--ascii` beside `--no-ascii`
+already was.
 
 ### Changed
 
