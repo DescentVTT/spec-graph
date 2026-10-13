@@ -444,11 +444,17 @@ const VERB_RULES: readonly { kind: EdgeKind; inverted: boolean; phrases: readonl
  * is worse than no inference at all.
  *
  * The `^` never decides anything: the text tested starts just after a phrase,
- * and a phrase only matches where no letter follows it. The `$` does: the
- * text ends where the reference begins, so a negation written against the
- * bracket, `nobody[ADR-7]`, has nothing after it.
+ * and a phrase only matches where no letter follows it.
+ *
+ * The word ends where a phrase ends, at anything but a letter or a digit, so
+ * that the mark a sentence puts after it does not hide it: "Blocked by none:
+ * [ADR-7]" was a `blocked-by` edge, where the same words with a space after
+ * them were a citation. The end of the text is such a place too: it ends
+ * where the reference begins, and `nobody[ADR-7]` has nothing after it. A
+ * hyphen is not one. It joins the word to the next, and "the no-op" or "the
+ * never-ending migration" names a thing and denies nothing (ADR-0006).
  */
-const NEGATION = /(?:^|\s)(?:no|not|nobody|none|never|neither|nor|nothing|without)(?:\s|$)/;
+const NEGATION = /(?:^|\s)(?:no|not|nobody|none|never|neither|nor|nothing|without)(?![\p{L}\p{N}-])/u;
 
 /** How close a governing phrase must sit to the reference it governs. */
 const VERB_WINDOW = 40;

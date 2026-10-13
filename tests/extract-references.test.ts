@@ -304,6 +304,44 @@ describe('a governing phrase', () => {
     expect(reading('# A\n\nDeferred to the notification design in [ADR-0002](0002-b.md).\n')).toEqual(DELEGATES);
   });
 
+  it('is cancelled by a negation with a colon after it, as by one with a space', () => {
+    // The two sentences were a blocked-by edge and a delegation, each the
+    // opposite of what it says, where the same words without the colon were
+    // a citation (ADR-0006, 2026-10-14).
+    expect(reading('# A\n\nBlocked by none: [ADR-0002](0002-b.md).\n')).toEqual(REFERENCES);
+    expect(reading('# A\n\nDeferred to nothing: see [ADR-0002](0002-b.md).\n')).toEqual(REFERENCES);
+    expect(reading('# A\n\nBlocked by none [ADR-0002](0002-b.md).\n')).toEqual(REFERENCES);
+  });
+
+  // A stop with a space after it ends the statement, so each mark is written
+  // against the reference, where it ends only the word.
+  it.each([
+    ['a colon', ':'],
+    ['a semicolon', ';'],
+    ['a full stop', '.'],
+    ['a question mark', '?'],
+    ['a slash', '/'],
+    ['an em dash', '\u2014'],
+    ['an en dash', '\u2013'],
+    ['an ellipsis', '\u2026'],
+  ])('is cancelled by a negation that ends at %s', (_name, mark) => {
+    expect(reading(`# A\n\nDeferred to nobody${mark}[ADR-0002](0002-b.md).\n`)).toEqual(REFERENCES);
+    // The mark hides nothing by itself: the phrase governs across it.
+    expect(reading(`# A\n\nDeferred to the board${mark}[ADR-0002](0002-b.md).\n`)).toEqual(DELEGATES);
+  });
+
+  it('is not cancelled by a longer word a negation begins: a letter, a digit or a hyphen joins the two', () => {
+    const BLOCKED = { kind: 'blocked-by', inverted: false } as const;
+    // The name of a thing, which denies nothing.
+    expect(reading('# A\n\nBlocked by the no-op in [ADR-0002](0002-b.md).\n')).toEqual(BLOCKED);
+    expect(reading('# A\n\nBlocked by the no-op: [ADR-0002](0002-b.md).\n')).toEqual(BLOCKED);
+    expect(reading('# A\n\nBlocked by the never-ending migration in [ADR-0002](0002-b.md).\n')).toEqual(BLOCKED);
+    expect(reading('# A\n\nBlocked by the NO2 ceiling in [ADR-0002](0002-b.md).\n')).toEqual(BLOCKED);
+    expect(reading('# A\n\nBlocked by the notes: [ADR-0002](0002-b.md).\n')).toEqual(BLOCKED);
+    // A letter of another script is a letter.
+    expect(reading('# A\n\nBlocked by the no\u00e9 gate in [ADR-0002](0002-b.md).\n')).toEqual(BLOCKED);
+  });
+
   it('survives a line break inside it, however far the next line is indented', () => {
     const text = '# A\n\n## Open Questions\n\n- [ ] Which policy applies? Deferred\n      to [ADR-0002](0002-b.md).\n';
     expect(reading(text)).toEqual(DELEGATES);

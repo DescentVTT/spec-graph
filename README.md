@@ -461,7 +461,10 @@ Blocked by [ADR-0009](0009-compliance.md).                       → blocked-by
 A phrase governs a reference when it stands no more than 40 characters before
 it, in the same statement: a sentence, a paragraph, a list item or a table cell.
 
-- A negation between the two - `owned by nobody` - cancels it.
+- A negation between the two - `owned by nobody` - cancels it, whatever mark
+  stands after the word: `blocked by none: [ADR-0002](0002.md)` is a citation
+  and no more. A hyphen joins the word to the next, which names a thing, so
+  `blocked by the no-op in` cancels nothing.
 - A sentence written in Chinese ends at `。`, `？`, `！` or `；`, with a space
   after it or none, so `Deferred to later。另見 ADR-0002` hands nothing to
   ADR-0002. A stop only ends a statement sooner: it reads less, never more.
