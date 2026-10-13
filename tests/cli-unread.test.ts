@@ -523,3 +523,243 @@ describe('an empty name given to diff', () => {
     expect((await run('diff', '', 'b.json', '--version')).code).toBe(EXIT_OK);
   });
 });
+
+/*
+ * Two things given of which one would go unread, where neither is the
+ * other's opposite: an option that takes one value given two, a baseline to
+ * read beside one to record, a family asked for and ignored. The later value
+ * was read and the earlier went unread, the baseline was never opened, and
+ * the family's citations were passed over whatever asked for them (ADR-0010,
+ * amended 2026-10-14).
+ */
+
+/** An ADR that cites an ADR and an RFC nobody wrote, beside an RFC: two errors, one of each family. */
+const MIXED = {
+  'docs/adr/0001-a.md': accepted('ADR-0001', 'As settled with the team, see ADR-0099 and RFC-0099.'),
+  'docs/rfcs/0001-x.md': accepted('RFC-0001', 'The transport.'),
+};
+const RECORDED = `${JSON.stringify({ version: 1, findings: [{ rule: 'broken-reference', document: 'ADR-0001', subject: 'ADR-0099', count: 1 }, { rule: 'broken-reference', document: 'ADR-0001', subject: 'RFC-0099', count: 1 }] })}\n`;
+
+describe('an option that takes one value, given two', () => {
+  const twice = (option: string, first: string, second: string, takes = 'takes one value'): string =>
+    `${option} is given "${first}" and "${second}", and ${takes}: give one of the two`;
+
+  it('is refused with both values, in the order they were given', () => {
+    expect(usage(['check', '--root', 'a', '--root', 'b'])).toBe(twice('--root', 'a', 'b'));
+    expect(usage(['check', '--root', 'b', '--root', 'a'])).toBe(twice('--root', 'b', 'a'));
+    expect(usage(['--baseline', 'a.json', '--baseline', 'b.json'])).toBe(twice('--baseline', 'a.json', 'b.json'));
+    expect(usage(['--record-baseline', 'a.json', '--record-baseline', 'b.json'])).toBe(twice('--record-baseline', 'a.json', 'b.json'));
+    expect(usage(['--format', 'json', '--format', 'human'])).toBe(twice('--format', 'json', 'human'));
+    expect(usage(['graph', '--graph-format', 'dot', '--graph-format', 'json'])).toBe(twice('--graph-format', 'dot', 'json'));
+    expect(usage(['--max', '1', '--max', '0'])).toBe(twice('--max', '1', '0'));
+    expect(usage(['--max-warnings', '0', '--max-warnings', '5'])).toBe(twice('--max-warnings', '0', '5'));
+    // In every command that reads the option.
+    expect(usage(['query', 'document', '--format', 'sarif', '--format', 'json'])).toBe(twice('--format', 'sarif', 'json'));
+    expect(usage(['diff', 'a.json', 'b.json', '--format', 'json', '--format', 'markdown'])).toBe(twice('--format', 'json', 'markdown'));
+    expect(usage(['rules', '--root', 'a', '--root', 'b'])).toBe(twice('--root', 'a', 'b'));
+  });
+
+  it('takes the same value twice as that value once, as an option that takes none is taken', () => {
+    expect(parseArgs(['--root', 'a', '--root', 'a'], '/repo')).toMatchObject({ root: 'a', rootExplicit: true });
+    expect(parseArgs(['--baseline', 'a.json', '--baseline', 'a.json'], '/repo').baseline).toBe('a.json');
+    expect(parseArgs(['--record-baseline', 'a.json', '--record-baseline', 'a.json'], '/repo').recordBaseline).toBe('a.json');
+    expect(parseArgs(['--format', 'json', '--format', 'json'], '/repo').format).toBe('json');
+    expect(parseArgs(['graph', '--graph-format', 'json', '--graph-format', 'json'], '/repo').graphFormat).toBe('json');
+    expect(parseArgs(['--max', '3', '--max', '3'], '/repo').max).toBe(3);
+    expect(parseArgs(['--max-warnings', '3', '--max-warnings', '3'], '/repo').maxWarnings).toBe(3);
+    expect(parseArgs(['--strict', '--strict', '--verbose', '--verbose'], '/repo')).toMatchObject({ strict: true, verbose: true });
+  });
+
+  it('names the first two that differ, wherever they stand on the line', () => {
+    expect(usage(['--max', '1', '--strict', '--max', '1', '--max', '2', '--max', '3'])).toBe(twice('--max', '1', '2'));
+    // A second option given two values is the next run's to name.
+    expect(usage(['--max', '1', '--format', 'json', '--format', 'human', '--max', '2'])).toBe(twice('--format', 'json', 'human'));
+    // One option's value is never held against another's.
+    expect(parseArgs(['--baseline', 'a.json', '--max', '1', '--max-warnings', '2'], '/repo')).toMatchObject({ baseline: 'a.json', max: 1, maxWarnings: 2 });
+  });
+
+  it('compares the values as they were typed: a path spelled two ways is two values', () => {
+    expect(usage(['--root', '.', '--root', './'])).toBe(twice('--root', '.', './'));
+    expect(usage(['--max', '1', '--max', ' 1'])).toBe(twice('--max', '1', ' 1'));
+  });
+
+  it('leaves a list a list: every value of an option that is repeatable is read', () => {
+    expect(parseArgs(['--ignore', 'a', '--ignore', 'b', '--ignore', 'a'], '/repo').ignore).toEqual(['a', 'b', 'a']);
+    expect(parseArgs(['--ignore-ref', 'a', '--ignore-ref', 'b'], '/repo').ignoreReferences).toEqual(['a', 'b']);
+    expect(parseArgs(['--history', 'a', '--history', 'b'], '/repo').historyPatterns).toEqual(['a', 'b']);
+    expect(parseArgs(['--family', 'ADR', '--family', 'RFC', '--family', 'ADR'], '/repo').families).toEqual(['ADR', 'RFC', 'ADR']);
+    expect(parseArgs(['--ignore-family', 'ADR', '--ignore-family', 'RFC'], '/repo').ignoreFamilies).toEqual(['ADR', 'RFC']);
+  });
+
+  it('takes each rule its severity, the same one twice as once, and refuses one rule given two', () => {
+    expect(parseArgs(['--rule', 'broken-reference=off', '--rule', 'self-reference=warn', '--rule', 'project:x=error'], '/repo').severities).toEqual({
+      'broken-reference': 'off',
+      'self-reference': 'warn',
+      'project:x': 'error',
+    });
+    expect(parseArgs(['--rule', 'broken-reference=off', '--rule', 'broken-reference=off'], '/repo').severities).toEqual({ 'broken-reference': 'off' });
+    const severity = 'a rule has one severity';
+    expect(usage(['--rule', 'broken-reference=off', '--rule', 'broken-reference=error'])).toBe(twice('--rule', 'broken-reference=off', 'broken-reference=error', severity));
+    expect(usage(['--rule', 'broken-reference=error', '--rule', 'self-reference=off', '--rule', 'broken-reference=off'])).toBe(
+      twice('--rule', 'broken-reference=error', 'broken-reference=off', severity),
+    );
+  });
+
+  it('is said after an option of another command, and after an option beside its own opposite', () => {
+    expect(usage(['query', 'document', '--max', '1', '--max', '0'])).toBe('--max belongs to check, not to query');
+    expect(usage(['graph', '--format', 'json', '--format', 'human'])).toBe('--format belongs to check, query or diff, not to graph');
+    expect(usage(['--root', 'a', '--root', 'b', '--color', '--no-color'])).toBe('--color is given beside --no-color, and a report is coloured or it is not: give one of the two');
+    // A value no format has, and a value that was forgotten, are said where they are met.
+    expect(usage(['--format', 'json', '--format', 'xml'])).toBe('--format must be human, json, sarif, markdown, gitlab or github, got "xml"');
+    expect(usage(['--root', 'a', '--root'])).toBe('--root needs a value');
+    expect(usage(['--max', '1', '--max', 'x'])).toBe('--max expects a non-negative whole number, got "x"');
+  });
+
+  it('does not stand between a person and the help or the version', async () => {
+    for (const asked of ['--help', '-h', '--version', '-v']) {
+      expect((await run('check', '--root', 'a', '--root', 'b', asked)).code, asked).toBe(EXIT_OK);
+      expect((await run('check', '--rule', 'broken-reference=off', '--rule', 'broken-reference=error', asked)).code, asked).toBe(EXIT_OK);
+    }
+    expect((await run('--format', 'json', '--format', 'human', '--help')).out).toBe(HELP);
+  });
+
+  it('is a pattern after --, not an option', () => {
+    expect(parseArgs(['--root', 'a', '--', '--root', 'b'], '/repo')).toMatchObject({ root: 'a', patterns: ['--root', 'b'] });
+  });
+
+  it('stops the run that read the later and never said what the earlier was', async () => {
+    await withRepo('unread-twice', MIXED, async (root) => {
+      const refused = (line: string): Run => ({ code: EXIT_ERROR, out: '', err: `spec-graph: ${line}\n` });
+      // The root that is not there was never said to be missing.
+      expect(await run('check', '--no-config', '--root', 'nowhere', '--root', root)).toEqual(refused(twice('--root', 'nowhere', root)));
+      expect(await run('rules', '--no-config', '--root', 'nowhere', '--root', root)).toEqual(refused(twice('--root', 'nowhere', root)));
+      // The format a query does not write was never refused.
+      expect(await run('query', 'document', '--no-config', '--root', root, '--format', 'sarif', '--format', 'json')).toEqual(
+        refused(twice('--format', 'sarif', 'json')),
+      );
+      // Once, the option is read as it was.
+      expect((await run('check', '--no-config', '--root', root, '--root', root)).code).toBe(EXIT_FAILED);
+      expect((await run('check', '--no-config', '--root', root, '--max', '1', '--max', '1')).out).toContain('1 more');
+    });
+  });
+
+  it('records no baseline under either of two names', async () => {
+    const { readdir } = await import('node:fs/promises');
+    await withRepo('unread-twice-record', MIXED, async (root) => {
+      const result = await run('check', '--root', root, '--no-config', '--record-baseline', 'one.json', '--record-baseline', 'two.json');
+      expect(result).toEqual({ code: EXIT_ERROR, out: '', err: `spec-graph: ${twice('--record-baseline', 'one.json', 'two.json')}\n` });
+      expect(await readdir(root)).toEqual(['docs']);
+    });
+  });
+});
+
+describe('a baseline to read, beside one to record', () => {
+  const REFUSAL = '--baseline is given beside --record-baseline, and a check holds its findings against a baseline or records them as one: give one of the two';
+
+  it('is refused whichever comes first, and whatever the two files are', () => {
+    expect(usage(['--baseline', 'a.json', '--record-baseline', 'b.json'])).toBe(REFUSAL);
+    expect(usage(['--record-baseline', 'b.json', '--baseline', 'a.json'])).toBe(REFUSAL);
+    expect(usage(['check', '--baseline', 'a.json', '--strict', '--record-baseline', 'a.json'])).toBe(REFUSAL);
+  });
+
+  it('takes either alone', () => {
+    expect(parseArgs(['--baseline', 'a.json'], '/repo')).toMatchObject({ baseline: 'a.json', recordBaseline: null });
+    expect(parseArgs(['--record-baseline', 'b.json'], '/repo')).toMatchObject({ baseline: null, recordBaseline: 'b.json' });
+    expect(parseArgs(['--baseline', 'a.json', '--ratchet'], '/repo')).toMatchObject({ baseline: 'a.json', ratchet: true });
+  });
+
+  it('is said after an option of another command, and does not stand before the help or the version', async () => {
+    expect(usage(['query', 'document', '--baseline', 'a.json', '--record-baseline', 'b.json'])).toBe('--baseline belongs to check, not to query');
+    for (const asked of ['--help', '-h', '--version', '-v']) {
+      expect((await run('check', '--baseline', 'a.json', '--record-baseline', 'b.json', asked)).code, asked).toBe(EXIT_OK);
+    }
+  });
+
+  it('writes nothing, where it recorded every finding and never opened the baseline it was given', async () => {
+    const { readdir, readFile } = await import('node:fs/promises');
+    await withRepo('unread-baseline-record', { ...MIXED, 'held.json': RECORDED }, async (root) => {
+      const check = ['check', '--root', root, '--no-config'];
+      // A baseline that is not there is refused when it is the only one named.
+      expect((await run(...check, '--baseline', 'nowhere.json')).code).toBe(EXIT_ERROR);
+      for (const baseline of ['nowhere.json', 'held.json']) {
+        const result = await run(...check, '--baseline', baseline, '--record-baseline', 'new.json');
+        expect(result, baseline).toEqual({ code: EXIT_ERROR, out: '', err: `spec-graph: ${REFUSAL}\n` });
+      }
+      // The same file for both is one of the two unread all the same.
+      expect((await run(...check, '--baseline', 'held.json', '--record-baseline', 'held.json')).code).toBe(EXIT_ERROR);
+      expect((await readdir(root)).sort()).toEqual(['docs', 'held.json']);
+      expect(await readFile(`${root}/held.json`, 'utf8')).toBe(RECORDED);
+    });
+  });
+
+  it('still records over the baseline the configuration names, which is how that file is made', async () => {
+    const { readFile } = await import('node:fs/promises');
+    await withRepo('unread-baseline-configured', { ...MIXED, '.spec-graph.json': '{ "baseline": "held.json" }' }, async (root) => {
+      const recorded = await run('check', '--root', root, '--record-baseline', 'held.json');
+      expect(recorded).toEqual({ code: EXIT_OK, out: 'recorded 2 findings as 2 entries in held.json\n', err: '' });
+      expect((JSON.parse(await readFile(`${root}/held.json`, 'utf8')) as { findings: unknown[] }).findings).toHaveLength(2);
+      // And the file is read by the run after it, and by one that names it.
+      expect((await run('check', '--root', root)).code).toBe(EXIT_OK);
+      expect((await run('check', '--root', root, '--baseline', 'held.json')).code).toBe(EXIT_OK);
+    });
+  });
+});
+
+describe('a family asked for and ignored', () => {
+  const both = (asked: string, ignored: string): string =>
+    `--family ${asked} is given beside --ignore-family ${ignored}, and a family's citations are read or they are passed over: give one of the two`;
+
+  it('is refused whichever option comes first, naming each as it was typed', () => {
+    expect(usage(['--family', 'ADR', '--ignore-family', 'ADR'])).toBe(both('ADR', 'ADR'));
+    expect(usage(['--ignore-family', 'ADR', '--family', 'ADR'])).toBe(both('ADR', 'ADR'));
+    // A family's name is read in any case, and with the spaces a shell variable brings.
+    expect(usage(['--family', 'adr', '--ignore-family', 'ADR'])).toBe(both('adr', 'ADR'));
+    expect(usage(['--family', 'ADR', '--ignore-family', 'adr'])).toBe(both('ADR', 'adr'));
+    expect(usage(['--family', ' ADR', '--ignore-family', 'ADR'])).toBe(both(' ADR', 'ADR'));
+    expect(usage(['--family', 'ADR', '--ignore-family', 'ADR '])).toBe(both('ADR', 'ADR '));
+  });
+
+  it('is refused for one family among several, the first on the line that is on both lists', () => {
+    expect(usage(['--family', 'ADR', '--family', 'RFC', '--ignore-family', 'RFC'])).toBe(both('RFC', 'RFC'));
+    expect(usage(['--family', 'ADR', '--family', 'RFC', '--ignore-family', 'KEP', '--ignore-family', 'ADR'])).toBe(both('ADR', 'ADR'));
+    expect(usage(['--family', 'ADR', '--family', 'RFC', '--ignore-family', 'RFC', '--ignore-family', 'ADR'])).toBe(both('ADR', 'ADR'));
+  });
+
+  it('takes one family asked for beside another ignored: both are read', () => {
+    expect(parseArgs(['--family', 'ADR', '--ignore-family', 'RFC'], '/repo')).toMatchObject({ families: ['ADR'], ignoreFamilies: ['RFC'] });
+    expect(parseArgs(['--family', 'ADR', '--family', 'RFC', '--ignore-family', 'KEP'], '/repo')).toMatchObject({ families: ['ADR', 'RFC'], ignoreFamilies: ['KEP'] });
+    // A name that only begins as another does is another family.
+    expect(parseArgs(['--family', 'ADR', '--ignore-family', 'ADRS'], '/repo')).toMatchObject({ families: ['ADR'], ignoreFamilies: ['ADRS'] });
+    expect(parseArgs(['--family', 'ADR'], '/repo')).toMatchObject({ families: ['ADR'], ignoreFamilies: [] });
+    expect(parseArgs(['--ignore-family', 'ADR'], '/repo')).toMatchObject({ families: [], ignoreFamilies: ['ADR'] });
+  });
+
+  it('is said after an option of another command, and does not stand before the help or the version', async () => {
+    expect(usage(['graph', '--family', 'ADR', '--ignore-family', 'ADR'])).toBe('--family belongs to check, not to graph');
+    expect(usage(['--baseline', 'a.json', '--record-baseline', 'b.json', '--family', 'ADR', '--ignore-family', 'ADR'])).toContain('--baseline is given beside --record-baseline');
+    expect(usage(['--max', '1', '--max', '2', '--family', 'ADR', '--ignore-family', 'ADR'])).toContain('--max is given "1" and "2"');
+    for (const asked of ['--help', '-h', '--version', '-v']) {
+      expect((await run('check', '--family', 'ADR', '--ignore-family', 'ADR', asked)).code, asked).toBe(EXIT_OK);
+    }
+  });
+
+  it('stops the check that passed over every citation, and records nothing', async () => {
+    const { readdir } = await import('node:fs/promises');
+    await withRepo('unread-family-both', MIXED, async (root) => {
+      const check = ['check', '--root', root, '--no-config'];
+      // Each option alone leaves the other family's citation to be reported.
+      expect((await run(...check)).out).toContain('2 errors');
+      expect((await run(...check, '--family', 'ADR')).code).toBe(EXIT_FAILED);
+      expect((await run(...check, '--ignore-family', 'ADR')).code).toBe(EXIT_FAILED);
+      const refused = { code: EXIT_ERROR, out: '', err: `spec-graph: ${both('ADR', 'ADR')}\n` };
+      expect(await run(...check, '--family', 'ADR', '--ignore-family', 'ADR')).toEqual(refused);
+      expect(await run(...check, '--family', 'ADR', '--ignore-family', 'ADR', '--strict', '--format', 'json')).toEqual(refused);
+      expect(await run(...check, '--family', 'ADR', '--ignore-family', 'ADR', '--record-baseline', 'debt.json')).toEqual(refused);
+      expect(await readdir(root)).toEqual(['docs']);
+      // One family asked for, another ignored: the run reads what --family ADR alone reads.
+      const narrowed = await run(...check, '--family', 'ADR', '--ignore-family', 'RFC');
+      expect(narrowed.code).toBe(EXIT_FAILED);
+      expect(timeless(narrowed.out)).toBe(timeless((await run(...check, '--family', 'ADR')).out));
+    });
+  });
+});

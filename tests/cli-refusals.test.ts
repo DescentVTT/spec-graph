@@ -156,9 +156,9 @@ describe('a baseline whose path is blank', () => {
   });
 
   it('takes a name with a space in it, which is a name', () => {
-    const options = parseArgs(['--baseline', 'accepted debt.json', '--record-baseline', ' b.json'], '/repo');
-    expect(options.baseline).toBe('accepted debt.json');
-    expect(options.recordBaseline).toBe(' b.json');
+    // Each by itself: the two together are refused, since a recording reads no baseline.
+    expect(parseArgs(['--baseline', 'accepted debt.json'], '/repo').baseline).toBe('accepted debt.json');
+    expect(parseArgs(['--record-baseline', ' b.json'], '/repo').recordBaseline).toBe(' b.json');
   });
 });
 
