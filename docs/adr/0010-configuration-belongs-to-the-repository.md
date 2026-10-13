@@ -344,6 +344,105 @@ every finding. `tests/cli-options.test.ts` reads the options off `--help`
 and holds each that has an opposite to the refusal, so a third pair cannot
 be added without it.
 
+**An option that takes one value takes one.** *Amended 2026-10-14.* The
+paragraph above left the same option twice as it was, and for an option
+that takes a value that was the later of two values read and the earlier
+unread, which is what the rule it cites refuses. Measured on main at
+b9da6ab, 0.16.0, through the launcher (Windows 11, Node 24.18.1): 211 runs
+over two ADRs and an RFC, where one ADR cites an ADR and an RFC nobody
+wrote, so the plain check exits `1` on two findings, one of each family.
+
+| Given | 0.16.0 | Now |
+| --- | --- | --- |
+| `check --root nowhere --root .` | exit `1`, the check of `.`, and no word of `nowhere` | exit `2`, the line below |
+| `check --root . --root nowhere` | exit `2`: `--root "nowhere" is not there` | exit `2`, the line below |
+| `rules --root nowhere --root .` | exit `0`, the rules | exit `2` |
+| `check --baseline nowhere.json --baseline base.json` | exit `0`, the findings accepted | exit `2` |
+| `check --record-baseline one.json --record-baseline two.json` | exit `0`, `two.json` written | exit `2`, nothing written |
+| `query --format sarif --format json` | exit `0`, JSON | exit `2` |
+| `query --format json --format sarif` | exit `2`: `--format sarif` is a check's | the same |
+| `diff --format json --format markdown`, `graph --graph-format dot --graph-format json` | the later format | exit `2` |
+| `check --max 1 --max 0`, `--max-warnings 0 --max-warnings 5` | the later number | exit `2` |
+| `check --rule broken-reference=off --rule broken-reference=error` | exit `1`, the later severity | exit `2` |
+| Each of those with one value given twice | as the option once | the same |
+| `--ignore`, `--ignore-ref`, `--history`, `--family`, `--ignore-family`, and `--rule` for two rules, each given twice | every value read | the same |
+| `check --baseline nowhere.json --record-baseline out.json` | exit `0`, two findings recorded | exit `2`, nothing written |
+| `--baseline` beside `--record-baseline`, either order, whatever the files | every finding recorded, the baseline never opened | exit `2` |
+| `"baseline"` in the configuration, and `--record-baseline` | recorded | the same |
+| `check --family ADR --ignore-family ADR`, either order | exit `0`, consistent | exit `2` |
+| `check --family ADR --family RFC --ignore-family RFC` | exit `1`, as `--family ADR` alone | exit `2` |
+| `check --family ADR --ignore-family RFC`, or `--ignore-family KEP` | as `--family ADR` alone | the same |
+| Any row beside `--help`, `-h`, `--version` or `-v` | the help, the version | the same |
+
+Seven options take one value: `--root`, `--baseline`, `--record-baseline`,
+`--format`, `--graph-format`, `--max` and `--max-warnings`. Given two, each
+is exit `2` and one line with both, in the order they were given:
+
+```text
+spec-graph: --root is given "nowhere" and ".", and takes one value: give one of the two
+```
+
+The same value twice is that value once, as an option that takes none is.
+Values are compared as they were typed, so `--root . --root ./` is refused:
+whether two spellings name one directory is a question for the disk, and
+the line is what tells whoever wrote them. An option that is a list stays
+one, each value read. `--rule` is a list of rules and gives each rule one
+severity: the same rule twice with one severity is that rule once, and with
+two it is refused, `--rule is given "broken-reference=off" and
+"broken-reference=error", and a rule has one severity: give one of the two`.
+`tests/cli-options.test.ts` reads the options off `--help` and holds each
+one that takes a value to this, by whether its entry says "Repeatable".
+
+**A baseline to read beside one to record.** A recording writes every
+finding of the run and returns before any baseline is opened, so beside
+`--record-baseline` the file `--baseline` names went unread, and one that
+was not there, which alone is exit `2`, went unnoticed. The two are refused
+together, whichever comes first:
+
+```text
+spec-graph: --baseline is given beside --record-baseline, and a check holds its findings against a baseline or records them as one: give one of the two
+```
+
+A `"baseline"` in the configuration is no option. `--record-baseline` over
+it is how that file is made, and is taken as before.
+
+**A family asked for and ignored.** The list that ignores is asked first,
+so a family on both lists is passed over, and its name on the other says
+nothing: `--family ADR --family RFC --ignore-family RFC` read as `--family
+ADR` does. Where it is the only name on `--family`, every citation in prose
+is passed over: `--family ADR --ignore-family ADR` printed `the
+specification graph is consistent`, exit `0`, over a tree where either
+option alone exits `1`. It is the run the first row of the 2026-10-09 table
+describes, reached by two names that are each right. Given to both options,
+a family is refused, in any case of its name:
+
+```text
+spec-graph: --family ADR is given beside --ignore-family ADR, and a family's citations are read or they are passed over: give one of the two
+```
+
+One family asked for and another ignored are both read, and are taken:
+`--ignore-family RFC` beside `--family ADR` asks for what the list already
+does, and beside a list that names a family not started yet it says which
+family is left out on purpose, as the next section has it.
+
+Each of the three refusals is made after an option of another command is
+named, as the pairs above are, and `--help` and `--version` are answered
+first. A value no option can take, `--format xml`, and a value that was
+forgotten are said where they are met, as before.
+
+What was measured and is as it was:
+
+- Every other option beside `--record-baseline`. `--ratchet`, `--strict`,
+  `--max`, `--max-warnings`, `--verbose` and `--format` are not read by a
+  recording, which `--help` says of all of them at once, "exit 0 without
+  judging them": that pairs an option with an option, as `--format json
+  --max 3` does. A `--rule` is read: a rule turned off records nothing.
+- A family on both lists where the configuration holds one of them.
+  `--ignore-family RFC` over `"families": ["ADR", "RFC"]` is an option over
+  the file. `--family RFC` over `"ignoreFamilies": ["RFC"]` still passes
+  over every RFC, and so does a file that names RFC under both keys.
+  Neither is two options, and neither is decided here.
+
 **A list of families is held against the documents.** *Amended again
 2026-10-09.* The amendment above refused a name no family can have and kept
 `--family RFC` where the corpus has no such family: "a name a family can have

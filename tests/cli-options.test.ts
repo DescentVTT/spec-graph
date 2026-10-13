@@ -141,6 +141,50 @@ describe('reading the command line', () => {
     expect(found).toEqual(pairs.map(({ on, off }) => [on, off]));
   });
 
+  it('holds every option the help gives a value to one value, unless the help calls it repeatable', () => {
+    // Read off the help as above, so an option added later is held to the
+    // rule by what its own entry says: given two values it is refused with
+    // both, or its entry says "Repeatable" and it takes each.
+    const start = HELP.indexOf('\nOPTIONS\n');
+    const block = HELP.slice(start, HELP.indexOf('\n\n', start));
+    const entries = [...block.matchAll(/^ {2}(?:-[a-z], )?(--[a-z-]+)(?: \/ --[a-z-]+)?( <[^>]+>)?/gm)];
+    const taking = entries
+      .map((entry, at) => ({ option: entry[1]!, valued: entry[2] !== undefined, text: block.slice(entry.index, entries[at + 1]?.index) }))
+      .filter((entry) => entry.valued);
+    // Two values each option takes, and the command that reads it.
+    const values: Record<string, [string, string, string?]> = {
+      '--root': ['a', 'b'],
+      '--ignore': ['a', 'b'],
+      '--ignore-ref': ['a', 'b'],
+      '--family': ['ADR', 'RFC'],
+      '--ignore-family': ['ADR', 'RFC'],
+      '--history': ['a', 'b'],
+      '--baseline': ['a.json', 'b.json'],
+      '--record-baseline': ['a.json', 'b.json'],
+      '--format': ['json', 'human'],
+      '--graph-format': ['dot', 'json', 'graph'],
+      '--rule': ['broken-reference=off', 'self-reference=off'],
+      '--max': ['1', '2'],
+      '--max-warnings': ['1', '2'],
+    };
+    expect(taking.map((entry) => entry.option)).toEqual(Object.keys(values));
+    const once: string[] = [];
+    for (const { option, text } of taking) {
+      const [first, second, command = 'check'] = values[option]!;
+      const twice = [command, option, first, option, second];
+      // The same value again is the option once, for every one of them.
+      expect(() => parseArgs([command, option, first, option, first], '/repo'), option).not.toThrow();
+      if (text.includes('Repeatable')) {
+        expect(() => parseArgs(twice, '/repo'), option).not.toThrow();
+        continue;
+      }
+      once.push(option);
+      expect(usage(twice).message, option).toBe(`${option} is given "${first}" and "${second}", and takes one value: give one of the two`);
+      expect(parseArgs([...twice, '--help'], '/repo').help, option).toBe(true);
+    }
+    expect(once).toEqual(['--root', '--baseline', '--record-baseline', '--format', '--graph-format', '--max', '--max-warnings']);
+  });
+
   it('takes an option beside the opposite of another, and names the pair whose first half comes first', () => {
     // Half of each pair is no pair: nothing here goes unread.
     expect(parseArgs(['--color', '--no-ascii'], '/repo')).toMatchObject({ color: true, ascii: false });
