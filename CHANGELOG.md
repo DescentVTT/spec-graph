@@ -11,7 +11,13 @@ the family's
 [versioning policy](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0009-versions-before-1-0.md)
 records.
 
-## Unreleased
+## 0.17.0
+
+Two things of which one went unread are refused, exit 2: an option that
+takes one value given two, `--baseline` beside `--record-baseline`, and a
+family given to both `--family` and `--ignore-family`. And a negation is
+read whatever mark stands after it: `Blocked by none: [ADR-0002](0002.md)`
+was a `blocked-by` edge, the opposite of its sentence.
 
 ### Changed
 
