@@ -507,7 +507,9 @@ describe('this repository', () => {
     patterns.reduce((hit, pattern) => (pattern.startsWith('!') ? hit && !minimatch(file, pattern.slice(1)) : hit || minimatch(file, pattern)), false);
 
   it('lists only files the configuration mutates, each once', () => {
-    expect(base).toEqual([...BASE, '!src/vendor/**']);
+    // Every file that declares a value: the module of re-exports is left out,
+    // and the copy of spec-core (tests/mutation-unmeasured.test.ts holds the first).
+    expect(base).toEqual(['src/**/*.ts', '!src/index.ts', '!src/vendor/**']);
     expect([...checkAssignment(base).keys()].sort()).toEqual(ASSIGNED.flat().sort());
     for (const file of ASSIGNED.flat()) expect(sources).toContain(file);
   });
@@ -522,7 +524,9 @@ describe('this repository', () => {
     };
     for (const file of [...sources, 'src/later/new.ts']) expect(holders(file), file).toEqual(expected(file));
     expect(holders('src/later/new.ts')).toEqual([SHARD_COUNT]);
-    for (const file of ['src/types.ts', 'src/index.ts', vendored[0]!]) expect(holders(file), file).toEqual([]);
+    for (const file of ['src/index.ts', vendored[0]!]) expect(holders(file), file).toEqual([]);
+    // Left out once as holding types alone, and in no table: the last shard has it.
+    expect(holders('src/types.ts')).toEqual([SHARD_COUNT]);
     expect(sources.filter((file) => holders(file)[0] === SHARD_COUNT).length).toBeGreaterThan(1);
   });
 

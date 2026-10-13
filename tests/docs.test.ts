@@ -6,7 +6,7 @@ import { HELP } from '../src/cli.js';
 import { scanMarkdown } from '../src/markdown.js';
 import { DEFAULT_SEVERITIES, RULE_DECISIONS, RULE_IDS } from '../src/rules.js';
 import { attributesOf, SELECTOR_KEYS } from '../src/select.js';
-import { EDGE_KINDS, OPENNESS_OF, type Disposition, type DocumentNode, type ItemNode } from '../src/types.js';
+import { DISPOSITIONS, EDGE_KINDS, OPENNESS_OF, type Disposition, type DocumentNode, type ItemNode } from '../src/types.js';
 
 /**
  * The documentation is held to the same standard as the graph.
@@ -224,6 +224,13 @@ describe('the README disposition table', () => {
 
   it('lists every disposition', () => {
     expect(rows.map((row) => row.disposition).sort()).toEqual(Object.keys(OPENNESS_OF).sort());
+  });
+
+  it('lists them as the package names them, in its order', () => {
+    // `DISPOSITIONS` is the list a program that imports the package reads,
+    // and nothing under src/ reads it: this table is what it is held to.
+    expect(rows.map((row) => row.disposition)).toEqual([...DISPOSITIONS]);
+    expect(DISPOSITIONS).toHaveLength(7);
   });
 
   it('states the right openness for each', () => {
