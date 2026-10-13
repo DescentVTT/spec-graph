@@ -151,6 +151,51 @@ relations and never more - `Deferred to later。另見 ADR-0002` hands nothing
 to ADR-0002 - which is this ADR's direction whatever language a document is
 written in.
 
+*Amended 2026-10-14.* **A negation is read whatever mark stands after it.**
+The rule above is that a verb does not reach across a negation. The reader
+held it where a space followed the word, or the reference itself, and
+nowhere else. Measured on main at b9da6ab, 0.16.0, through the launcher: one
+document for each sentence, and the relation `graph` exports for it.
+
+| Written before the reference | 0.16.0 | Now |
+| --- | --- | --- |
+| `Blocked by none`, and with a comma, a bracket or a spaced dash after the word | a citation | the same |
+| `Blocked by none:` | `blocked-by` | a citation |
+| `Deferred to nothing: see` | `delegates-to` | a citation |
+| `Superseded by none:`, `Depends on nothing:`, `As decided in none:`, `Amended by nobody:` | the phrase's relation | a citation |
+| The word against an em dash, an en dash, an ellipsis or a slash | the phrase's relation | a citation |
+| The word against a stop that no space follows, `none.)` | the phrase's relation | a citation |
+| `Blocked by the no-op in`, `the never-ending migration in`, `the NO2 ceiling in`, `the notes:` | `blocked-by` | the same |
+
+A colon is what a label is written with, and each of those sentences said
+the opposite of the relation read from it. A stop with a space after it ends
+the statement, so `Blocked by none. See` was a citation already: the word
+was missed only where a mark stood against it.
+
+The word now ends where a governing phrase ends, at anything but a letter or
+a digit, and at the end of the text, which is where the reference begins. A
+hyphen is the exception. It joins the word to the next, and what is joined
+names a thing and denies nothing: `the no-op`, `the never-ending migration`,
+`not-yet-written`. Read as negations those would lose a relation the
+sentence does state, which is a miss, and can be a finding too: an open
+question in a retired document is not orphaned while a live document has
+taken it ([ADR-0003](0003-item-state-signals.md)), and is orphaned once the
+sentence that hands it over goes unread.
+
+That is also why this arrives in a minor release. Three checks, measured on
+both builds: an open question in a superseded document, `Deferred to nobody:
+see` a live one, was exit `0` and is exit `1`, `orphaned-obligation`, as it
+was with a comma for the colon; an open question `Blocked by none:` a
+retired document was exit `1`, `ghost-handover`, and is exit `0`; and a
+sentence that `depends on nothing:` a retired document was exit `1`,
+`stale-premise`, and is exit `0`.
+
+Three things are as they were. A negation before the phrase is not read:
+`Not in this release: deferred to` is a delegation, which a test holds, and
+so `Not blocked by` is a `blocked-by` edge. A mark against the front of the
+word leaves it unread, `by:none`. And `no-one` is not on the list of words,
+so the hyphen makes it a name.
+
 ## Open Questions
 
 - [ ] Should the default include patterns be widened, or is naming the fix in

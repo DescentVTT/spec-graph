@@ -47,6 +47,22 @@ records.
   or they are passed over: give one of the two`. One family asked for beside
   another ignored is taken as before. Upgrading: take the family off the
   option that does not say what the run should do with it.
+- **A negation is read whatever mark stands after it.** A governing phrase
+  is cancelled by a negation between it and the reference, and the word was
+  read only where a space or the reference followed it: `Blocked by none:
+  [ADR-0002](0002.md)` was a `blocked-by` edge and `Deferred to nothing: see
+  [ADR-0002](0002.md)` a delegation, each the opposite of its sentence. The
+  word ends now at anything but a letter, a digit or a hyphen, a colon and a
+  dash among them, and those are citations and no more. A hyphen joins the
+  word to the next, so `blocked by the no-op in` is read as it was. A
+  `ghost-handover` or `stale-premise` such a sentence caused goes; an open
+  question in a retired document that was read as handed to a live one by
+  such a sentence is an `orphaned-obligation`, so a check that passed can
+  fail
+  ([ADR-0006](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0006-false-positives-cost-more.md)).
+  Upgrading: run `check`; where it now reports an `orphaned-obligation`, the
+  question is owed by nobody, as its sentence says: close it, or hand it to
+  a live document in so many words.
 
 ## 0.16.0
 

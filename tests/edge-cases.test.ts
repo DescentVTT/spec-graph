@@ -175,6 +175,27 @@ describe('verb governance', () => {
     expect(graph.edges.filter((e) => e.kind === 'delegates-to')).toEqual([]);
   });
 
+  it('is cancelled by a negation that a colon follows, in what a check then reports', () => {
+    // "Blocked by none: [ADR-0002]" handed its question to a retired document,
+    // and "the cap depends on nothing: [ADR-0002]" rested on one: two findings
+    // that say the opposite of their sentences (ADR-0006, 2026-10-14).
+    const question = (sentence: string): string => ['---', 'status: accepted', '---', '', '# C', '', '## Open Questions', '', `- [ ] Who owns this? ${sentence}`].join('\n');
+    expect(rules({ ...retired, 'docs/adr/0003-c.md': question('Blocked by none: [ADR-0002](0002-old.md).') })).toEqual([]);
+    expect(rules({ ...retired, 'docs/adr/0003-c.md': question('Blocked by [ADR-0002](0002-old.md).') })).toEqual(['ghost-handover']);
+    const premise = (sentence: string): string => ['---', 'status: accepted', '---', '', '# C', '', sentence].join('\n');
+    expect(rules({ ...retired, 'docs/adr/0003-c.md': premise('The cap depends on nothing: [ADR-0002](0002-old.md) was withdrawn.') })).toEqual([]);
+    expect(rules({ ...retired, 'docs/adr/0003-c.md': premise('The cap depends on [ADR-0002](0002-old.md).') })).toEqual(['stale-premise']);
+  });
+
+  it('leaves an open question in a retired document orphaned when its sentence hands it to nobody', () => {
+    // The other way round: read as a hand-off to a live document, the
+    // question was owed by nobody and reported by no rule.
+    const live = { 'docs/adr/0002-b.md': '---\nstatus: accepted\n---\n\n# B\n' };
+    const old = (sentence: string): string => ['---', 'status: retired', '---', '', '# Old', '', '## Open Questions', '', `- [ ] Who owns retention? ${sentence}`].join('\n');
+    expect(rules({ ...live, 'docs/adr/0001-old.md': old('Deferred to nobody: see [ADR-0002](0002-b.md).') })).toEqual(['orphaned-obligation']);
+    expect(rules({ ...live, 'docs/adr/0001-old.md': old('Deferred to [ADR-0002](0002-b.md).') })).toEqual([]);
+  });
+
   it('still governs when nothing negates it', () => {
     const { graph } = analyse({
       ...retired,
