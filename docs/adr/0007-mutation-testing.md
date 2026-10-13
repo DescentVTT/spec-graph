@@ -1145,6 +1145,93 @@ mutant.
 The three tests take three survivors from the 293 once a full sweep has
 read them; a pull request's sweep is incremental. The `break` stays 93.
 
+### 2026-10-14: a file left out as holding types alone
+
+`mutate` left two files of `src/` out with one comment: "types.ts is
+type-only and index.ts is pure re-exports: nothing to mutate". The coverage
+configuration left `types.ts` out too, as compiling to an empty module. It
+does not. `src/types.ts` declares six values beside its types: the list of
+dispositions, the openness each one implies, the table of what each relation
+does and is called, the list of relations read off that table, the prefix of
+a project rule's id, and the function that knows such an id by it.
+
+**What no sweep had made.** Stryker's instrumenter, called as a library on
+each file as main has it at b9da6ab:
+
+| File | Mutants |
+| --- | ---: |
+| `src/types.ts` | 65 |
+| `src/index.ts` | 0 |
+
+The 65 are an emptied list, 24 emptied strings, 11 emptied tables, 27 flags
+turned round, and the body and the `startsWith` of the function. `index.ts`
+re-exports the rest and declares nothing, so leaving it out loses nothing.
+
+**The 65, replayed.** Each was written into the file at its place and the
+twenty test files that read those values run against it, 653 tests, before
+any test was added:
+
+| What happened | Mutants |
+| --- | ---: |
+| A test failed | 40 |
+| Every test passed | 25 |
+
+The 40 are the openness of each disposition, which the README's table is
+held to; which relations are load-bearing and which transfer an obligation,
+which the README's two lists are held to; the words of four relations that
+a built-in finding prints and a test reads, and the entries they stand in;
+and the prefix and the function, which the command line and the
+configuration reach. The 25:
+
+- The list of dispositions, eight mutants. Nothing under `src/` reads it:
+  it is exported for a program that imports the package.
+- Whether a relation speaks of its target's lifecycle, nine: the flag of
+  each relation turned round. Nothing under `src/` reads that either.
+- The words and the whole entry of `contains`, `references` and
+  `relates-to`, six. No built-in rule prints them: a finding of a rule a
+  repository wrote for itself does, for each relation on its path after the
+  first.
+- The words `is blocked by` and `amends`, two. Built-in rules print both,
+  and no test read either message.
+
+None is equivalent: each is a value a caller of the package reads, or a
+word in a report. Each has a test now. The README's table of dispositions
+is held to the exported list, in its order. `tests/relation-traits.test.ts`
+walks each of the nine relations with a project rule and reads the sentence
+its finding says, and holds the relations that speak of a lifecycle to
+`supersedes` and `amends`. With those, all 25 fail a test by an assertion.
+
+**What holds it.** `mutate` leaves out `src/index.ts` and the copy of
+spec-core, and nothing else. `scripts/mutation-unmeasured.mjs` names what a
+source declares that a program runs: every statement at its top but an
+import, a re-export, a type and a name declared for the compiler alone. A
+constant no mutator has anything to change in today is a value by that
+rule, since a file is left out for holding none and not for holding none a
+mutant was made of. `tests/mutation-unmeasured.test.ts` fails a file the
+configuration leaves out that declares one, the copy of spec-core aside,
+whose mutants are spec-core's to kill; holds each such file to making no
+mutant in the instrumenter installed; and shows the rule naming the six of
+`types.ts`. The coverage configuration reads `types.ts` now as well.
+
+**The count of what a sweep does not read is spec-core's.** The script
+that counts what stands under an `as` was this repository's own, counted
+three things wider than Stryker applies them, passed over an enum, whose
+initialisers Stryker skips as it skips a cast, and failed on a missing
+parser with Node's own error. It is spec-core's script now, with this
+repository's two ways of running it kept: an enum's initialisers are
+counted, a call statement or a `throw new` only where it would be its
+statement's one mutant, and a parser that is not installed is said with the
+path that was followed to it. Its test holds the count to the Stryker
+installed, which the test here did not: over one source with every kind of
+site the instrumenter makes no mutant under a cast, and with the casts
+taken away it mutates exactly the places counted. The test starts no
+process of its own and writes nothing to disk; it started five, each some
+seconds on a loaded machine against a test's thirty.
+
+`types.ts` is in no shard's list, so the last shard has it. All but two of
+its mutants stand in tables built as the module loads, and those a sweep
+runs the whole suite against. The `break` stays 93.
+
 ## Open Questions
 
 - [x] Should the `Regex` mutator be scoped? At 57.9% it was among the weakest.

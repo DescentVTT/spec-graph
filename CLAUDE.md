@@ -181,6 +181,13 @@ table. `tests/mutation-unmeasured.test.ts` and the sweep's score job fail on
 a site left under one (`scripts/mutation-unmeasured.mjs`; ADR-0007,
 2026-10-12).
 
+**A file is left out of the sweep for declaring no value, and for nothing
+else.** `src/types.ts` was left out as holding types alone while it declared
+six values, 65 mutants no sweep had made. Only `src/index.ts`, which
+re-exports, and the copy of spec-core are left out, and
+`tests/mutation-unmeasured.test.ts` fails a file left out that declares a
+value (ADR-0007, 2026-10-14).
+
 **A module that does not load fails no test.** A table a mutant breaks while
 its module loads takes every test file that imports the module at its top
 with it, and a sweep counts failed tests, not files that did not load: the

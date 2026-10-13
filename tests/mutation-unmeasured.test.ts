@@ -1,262 +1,442 @@
 /**
- * What the mutation sweep does not see (scripts/mutation-unmeasured.mjs).
+ * What the mutation sweep does not read (scripts/mutation-unmeasured.mjs).
  *
- * Stryker makes no mutant of anything under a TypeScript `as`, so a sweep
- * holds no test to what stands there, and its score says nothing of it. The
- * script counts those places and the sweep fails on one too many. Its count
- * is held here to sources small enough to count by hand, each mutator and
- * each of its exceptions once, and the repository to the number the script
- * records as left.
+ * Stryker passes over everything under a TypeScript `as`, and no report says
+ * so: a mutant that was never made is in no column. The script counts the
+ * places a mutator would have applied there, and the sweep's score job fails
+ * a count above the one recorded as left. A count is only worth failing a
+ * sweep for while it is of what Stryker would do, so it is held here to the
+ * instrumenter installed: over one source written with every kind of site,
+ * Stryker makes no mutant under a cast, and with the casts taken away it
+ * mutates exactly the places the script counted.
  *
- * It reaches nothing under src/ a mutant could change, so the sweep leaves
- * this file out, as it does the merge's (vitest.mutation.config.ts).
+ * A file the configuration leaves out is unread the same way, and as
+ * quietly. `src/types.ts` was left out as holding types alone while it
+ * declared six values (ADR-0007, 2026-10-14), so every file left out is held
+ * here to declaring none.
+ *
+ * Not part of a mutation run: it reads `src/` as text, which in Stryker's
+ * sandbox carries every mutant at once, and it loads the instrumenter, which
+ * every static mutant that survives would wait for
+ * (vitest.mutation.config.ts). The counting and these tests of it are
+ * spec-core's, adapted.
  */
 
-import { execFileSync } from 'node:child_process';
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { describe, expect, it } from 'vitest';
 
-import { castsOf, LEFT, measure, mutatedSources, verdict } from '../scripts/mutation-unmeasured.mjs';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
-const sitesOf = (source: string): number[] => castsOf(source).map((cast) => cast.sites);
+import { LEFT, leftOut, loadParser, main, measure, treeSources, unmeasured, valuesOf, verdict, type Hidden, type Parse } from '../scripts/mutation-unmeasured.mjs';
+import type { Report } from '../scripts/mutation-shards.mjs';
+import mutationSuite from '../vitest.mutation.config.js';
+
+const ROOT = path.join(import.meta.dirname, '..');
+
+// Each cast sits between two comments, so that the same source can be read
+// with its casts and with spaces where they were, every other character where
+// it was.
+const CAST = /\/\*<\*\/.*?\/\*>\*\//g;
+const WRITTEN = [
+  'const ESC = String.fromCharCode(27);',
+  "export const TABLE = { red: `${ESC}[31m`, plain: '', deep: [1, -2] }/*<*/ as const/*>*/;",
+  'export function last(words: readonly string[], at: number): string {',
+  '  const end = words[words.length - 1]/*<*/ as string/*>*/;',
+  '  const named = end/*<*/ as string | undefined/*>*/;',
+  '  return (words[at + 1] ?? named?.trim())/*<*/ as string/*>*/;',
+  '}',
+  "export const pick = (list: string[]) => list.filter((item) => item !== '' && !item.startsWith('#')).sort()[0]/*<*/ as string/*>*/;",
+  "export const held = { a: 'x' } satisfies Record<string, string>;",
+  'export const sure = (list: string[]) => list[list.length - 1]!;',
+  "export const kind = 'file'/*<*/ as 'file' | 'directory'/*>*/;",
+  "export const run = (() => { if (kind) { held.a.trim(); } for (;;) { throw new Error('x'); } })/*<*/ as () => void/*>*/;",
+  "export const nested = [(TABLE.deep[0] + 1)/*<*/ as number/*>*/, 'b']/*<*/ as const/*>*/;",
+  'export const quiet = (() => { held.a.at(0); throw new Error(); })/*<*/ as () => void/*>*/;',
+  'export const either = (kind ? 1 : 2)/*<*/ as number/*>*/;',
+  'let count = 0;',
+  'export const step = (count++ > 0 || (count += 2) > 0 ? /a+/ : null)/*<*/ as RegExp | null/*>*/;',
+  '',
+].join('\n');
+const UNCAST = WRITTEN.replace(CAST, (cast) => ' '.repeat(cast.length));
+
+// Line by line, the places counted under each cast that has one.
+const COUNTED: [number, number][] = [
+  // The table, its template, its empty string, its list and the minus in it.
+  [2, 5],
+  // The subtraction in the index.
+  [4, 1],
+  // `??`, the addition, the optional chain and the `trim`.
+  [6, 4],
+  // Three methods, the arrow, `&&`, `!==`, `!` and two strings.
+  [8, 9],
+  // The value, and nothing of the type beside it.
+  [11, 1],
+  // Three blocks, the test of the `if`, the `trim`, a `for` with no test and
+  // the string. Neither statement: each would not be its own only mutant.
+  [12, 7],
+  // The list, the addition under the cast inside it, and the string.
+  [13, 3],
+  // The block, and the call and the throw, each a statement's only mutant.
+  [14, 3],
+  // `||`, `>` twice, `++`, `+=` and the pattern.
+  [17, 6],
+];
+const TOTAL = COUNTED.reduce((sum, [, sites]) => sum + sites, 0);
+
+// What the source above does not write, one cast to a source, with the
+// places counted under it.
+const MORE: [string, number][] = [
+  // A key written as a string is no place: the table and its value are.
+  ["export const TABLE = { 'a-b': 'x' }/*<*/ as const/*>*/;", 2],
+  // A type inside the expression is no place, whatever it is written with:
+  // the arrow is, and neither `true`.
+  ['export const pick = ((flag: true): true | 2 => (flag ? flag : 2))/*<*/ as (flag: true) => true | 2/*>*/;', 1],
+];
+
+interface Made {
+  mutatorName: string;
+  replacement: string;
+  location: { start: { line: number; column: number }; end: { line: number; column: number } };
+}
+
+/** Stryker's own instrumenter, found as Stryker finds it, and the mutants it makes of one source. */
+async function instrumenter(): Promise<(source: string) => Promise<Made[]>> {
+  const core = createRequire(createRequire(import.meta.url).resolve('@stryker-mutator/core/package.json'));
+  const { Instrumenter } = (await import(pathToFileURL(core.resolve('@stryker-mutator/instrumenter')).href)) as {
+    Instrumenter: new (logger: object) => { instrument(files: object[], options: object): Promise<{ mutants: Made[] }> };
+  };
+  const quiet = (): void => undefined;
+  const logger = { debug: quiet, info: quiet, warn: quiet, error: quiet, isDebugEnabled: () => false };
+  const options = { plugins: null, excludedMutations: [], mutationRange: [], ignorers: [], noHeader: true };
+  return async (source) => (await new Instrumenter(logger).instrument([{ name: 'src/written.ts', mutate: true, content: source }], options)).mutants;
+}
+
+// The instrumenter counts lines and columns from 0, and a report from 1.
+const under = ({ location: { start, end } }: Made, entry: Hidden): boolean =>
+  (start.line + 1 > entry.line || (start.line + 1 === entry.line && start.column + 1 >= entry.column)) &&
+  (end.line + 1 < entry.endLine || (end.line + 1 === entry.endLine && end.column + 1 <= entry.endColumn));
+const place = ({ location: { start, end } }: Made): string => `${start.line}:${start.column}-${end.line}:${end.column}`;
+
+const configured = async (): Promise<string[]> =>
+  ((await import(pathToFileURL(path.join(ROOT, 'stryker.config.mjs')).href)) as { default: { mutate: string[] } }).default.mutate;
+
+// The time the suite gives a test, where vitest gives a hook ten seconds:
+// beside every other file on a loaded machine, loading the parser took more.
+let parse: Parse;
+beforeAll(async () => {
+  parse = await loadParser();
+}, 60_000);
 
 describe('what stands under an `as`', () => {
-  it('is counted cast by cast, a cast inside another being the outer one\'s', () => {
-    const source = [
-      "const TABLE = { draft: 'proposed', done: ['accepted', 'final'] } as const;",
-      'const last = lines[lines.length - 1] as string;',
-      'const first = lines[0] as string;',
-      'const both = [left as string, right.trim()] as const;',
-      '',
-    ].join('\n');
-    expect(castsOf(source).map((cast) => [cast.line, cast.sites])).toEqual([
-      // The object, its string, the array and its two: a key is no site.
-      [1, 5],
-      [2, 1],
-      [3, 0],
-      // The array and the method: `left as string` is not a cast of its own.
-      [4, 2],
+  it('is counted place by place, under the outermost cast only', () => {
+    const read = unmeasured(WRITTEN, parse);
+    expect(read.hidden.map(({ line, sites }) => [line, sites])).toEqual(COUNTED);
+    // Twelve casts are written and one is inside another.
+    expect(read.expressions).toBe(11);
+    expect(read.hidden[0]).toEqual({ line: 2, column: 22, endLine: 2, endColumn: 83, sites: 5, text: "{ red: `${ESC}[31m`, plain: '', deep: [1, -2] }/*<*/ as const" });
+  });
+
+  it('is nothing for a cast on a name, a `satisfies`, a `!`, or a ternary that only chooses', () => {
+    const lines = unmeasured(WRITTEN, parse).hidden.map(({ line }) => line);
+    for (const line of [5, 9, 10, 15]) expect(lines).not.toContain(line);
+    expect(unmeasured(UNCAST, parse)).toEqual({ expressions: 0, hidden: [] });
+  });
+
+  it('is nothing for a read by a written key whose object the cast names, and one place with the cast around the read', () => {
+    expect(unmeasured("export const id = (message: object) => (message as { id: string })['id'];", parse)).toEqual({ expressions: 1, hidden: [] });
+    const [entry] = unmeasured("export const id = (message: Record<string, unknown>) => message['id'] as string;", parse).hidden;
+    expect(entry).toMatchObject({ line: 1, sites: 1, text: "message['id'] as string" });
+  });
+
+  it("counts an enum's initialisers, which Stryker passes over the same way", () => {
+    const read = unmeasured("export enum Mark { Pass = 'pass', Fail = 1 + 2, Skip }\nexport const one = [1];\n", parse);
+    expect(read).toEqual({ expressions: 1, hidden: [expect.objectContaining({ line: 1, sites: 2 })] });
+  });
+
+  it('counts a pattern Stryker would make nothing of, and so errs towards saying that something is unread', () => {
+    const [entry] = unmeasured('export const found = /b/.exec(process.title) as RegExpExecArray;', parse).hidden;
+    expect(entry).toMatchObject({ line: 1, sites: 1, text: '/b/.exec(process.title) as RegExpExecArray' });
+  });
+
+  it('shortens a long expression to its two ends', () => {
+    const table = `export const T = { ${Array.from({ length: 30 }, (_, at) => `k${at}: ${at}`).join(', ')} } as const;`;
+    const [entry] = unmeasured(table, parse).hidden;
+    expect(entry!.text).toHaveLength(64 + 5 + 28);
+    expect(entry!.text.startsWith('{ k0: 0, k1: 1,')).toBe(true);
+    expect(entry!.text.endsWith('k29: 29 } as const')).toBe(true);
+  });
+});
+
+describe('the count, held to the Stryker installed', () => {
+  it('is of places Stryker makes no mutant at', async () => {
+    const made = await (await instrumenter())(WRITTEN);
+    // Were this to fail, Stryker reads under a cast now, and the script, its
+    // step in the workflow and `LEFT` have nothing left to say.
+    for (const entry of unmeasured(WRITTEN, parse).hidden) expect(made.filter((mutant) => under(mutant, entry))).toEqual([]);
+    expect(made.length).toBeGreaterThan(0);
+  });
+
+  it('is of exactly the places Stryker mutates once the casts are taken away', async () => {
+    const instrument = await instrumenter();
+    const written = await instrument(WRITTEN);
+    const uncast = await instrument(UNCAST);
+    const { hidden } = unmeasured(WRITTEN, parse);
+
+    for (const entry of hidden) {
+      const places = new Set(uncast.filter((mutant) => under(mutant, entry)).map(place));
+      expect([entry.line, places.size], [...places].join(' ')).toEqual([entry.line, entry.sites]);
+    }
+    // Every mutant the casts had kept from being made is at one of those
+    // places: none was behind a cast the script counted nothing under.
+    const freed = uncast.filter((mutant) => hidden.some((entry) => under(mutant, entry)));
+    expect(uncast.length - written.length).toBe(freed.length);
+    // A site is a place and not a mutant: Stryker makes more than one of some.
+    expect(freed.length).toBeGreaterThan(hidden.reduce((sum, entry) => sum + entry.sites, 0));
+  });
+
+  it('is of the places Stryker mutates for a written key and for a type inside the expression, which are none', async () => {
+    const instrument = await instrumenter();
+    for (const [source, sites] of MORE) {
+      const read = unmeasured(source, parse);
+      expect(read.hidden.map((entry) => entry.sites), source).toEqual([sites]);
+      const [entry] = read.hidden;
+      expect((await instrument(source)).filter((mutant) => under(mutant, entry!)), source).toEqual([]);
+      const uncast = await instrument(source.replace(CAST, (cast) => ' '.repeat(cast.length)));
+      expect(new Set(uncast.filter((mutant) => under(mutant, entry!)).map(place)).size, source).toBe(sites);
+    }
+  });
+});
+
+describe('the gate', () => {
+  const written = (): ReturnType<typeof measure> => measure({ 'src/written.ts': WRITTEN, 'src/plain.ts': UNCAST }, parse);
+
+  it('fails a count above what is recorded as left, and names every expression', () => {
+    const measured = written();
+    expect(measured.sites).toBe(TOTAL);
+    const over = verdict(measured, TOTAL - 1);
+    expect(over.passed).toBe(false);
+    expect(over.message).toBe(
+      `${TOTAL} under an \`as\`, and ${TOTAL - 1} recorded as left: the sweep does not mutate the 1 more. Write \`x!\` for a lookup that cannot miss, put the cast on a name, or say the type on the declaration or with \`satisfies\` (ADR-0007, 2026-10-12).`,
+    );
+    expect(over.lines[0]).toBe(`2 sources, 11 \`as\` expressions and enums, outermost only; 9 of them stand over ${TOTAL} places a mutator applies.`);
+    // The most first, so the expression that hides the most is the first read.
+    expect(over.lines.slice(1, 3)).toEqual([
+      "    9  src/written.ts:8  list.filter((item) => item !== '' && !item.startsWith('#')).sort()[0]/*<*/ as string",
+      "    7  src/written.ts:12  (() => { if (kind) { held.a.trim(); } for (;;) { throw new Error('x'); } })/*<*/ as () => void",
     ]);
-    expect(castsOf(source)[1]).toMatchObject({ line: 2, column: 14, text: 'lines[lines.length - 1] as string' });
+    expect(over.lines).toHaveLength(1 + COUNTED.length);
   });
 
-  it('is not what a name, `!` or `satisfies` holds: those the sweep reads', () => {
-    const source = [
-      'const value = lines[lines.length - 1]!;',
-      "const held = { draft: 'proposed' } satisfies Record<string, string>;",
-      'const rest = text.slice(1);',
-      'const cast = rest as Phase;',
-      '',
-    ].join('\n');
-    expect(castsOf(source).map((cast) => [cast.line, cast.sites])).toEqual([[4, 0]]);
-    expect(measure({ 'src/a.ts': { source } })).toMatchObject({ casts: 1, sites: 0, rows: [] });
-  });
-
-  // One line for each of Stryker's mutators and each thing one of them leaves
-  // alone, as its sources have them (mutators/*.js of 10.0.0).
-  it.each<[string, number]>([
-    // StringLiteral: a string or a template, and not a key, a module's name or a symbol's.
-    ["'text'", 1],
-    ['`text`', 1],
-    ["{ 'key': value }", 1],
-    ["class { 'key' = 1; other = 'value'; }", 1],
-    ["{ 'method'() {} }", 1],
-    ["Symbol('name')", 0],
-    ["require('name')", 0],
-    ["import('name')", 0],
-    // BooleanLiteral, and the `!` it takes off.
-    ['true', 1],
-    ['!flag', 1],
-    // ArrayDeclaration and ObjectLiteral: an empty object is left as it is.
-    ['[]', 1],
-    ['new Array(3)', 1],
-    ['Array(3)', 1],
-    ['new Set(list)', 0],
-    ['{ field }', 1],
-    ['{}', 0],
-    // ArithmeticOperator leaves a concatenation, and EqualityOperator the operators that compare nothing.
-    ['count + 1', 1],
-    ["count + 'px'", 1],
-    ['left + right + `px`', 2],
-    ['left & right', 0],
-    ['left < right', 1],
-    ['left in right', 0],
-    // LogicalOperator and ConditionalExpression: a ternary is read through its test alone.
-    ['left ?? right', 1],
-    ['left && right', 1],
-    ['flag ? left : right', 0],
-    ['left === right ? one : two', 1],
-    // UnaryOperator, UpdateOperator, AssignmentOperator.
-    ['-count', 1],
-    ['~bits', 1],
-    ['typeof value', 0],
-    ['count++', 1],
-    ['(count += 1)', 1],
-    ["(text += 'x')", 1],
-    ["(text ||= 'x')", 2],
-    ['(count **= 2)', 0],
-    ['(count = 1)', 0],
-    // OptionalChaining and MethodExpression.
-    ['record?.field', 1],
-    ['record.field', 0],
-    ['call?.()', 1],
-    ['text.trim()', 1],
-    ['text?.trim()', 2],
-    ['Math.min(left, right)', 1],
-    ['date.setHours(1)', 1],
-    ['list.concat(more)', 0],
-    // Regex, counted wherever one is written.
-    ['/x/', 1],
-    ['1', 0],
-    // ArrowFunction, BlockStatement, and the statements CallExpression drops.
-    ['(value) => value', 1],
-    ['() => undefined', 0],
-    ['() => {}', 0],
-    ['() => { run(); }', 2],
-    ['() => { run?.(); }', 2],
-    ['function () { throw new Error(message); }', 2],
-    ['function () { throw problem; }', 1],
-    // The tests of a branch and of a loop, and a case that is not a fall-through.
-    ['function () { if (flag) return 1; return 2; }', 2],
-    ['function () { for (;;) {} }', 2],
-    ['function () { switch (kind) { case 1: return 2; case 3: default: } }', 2],
-    // What TypeScript writes around a value is read through.
-    ['value as unknown', 0],
-    ['count! + 1', 1],
-    ['[left] satisfies Kind', 1],
-    // A type is not read, whatever it is written with: it holds nothing a program runs.
-    ["value as 'draft' | `b${string}` | true", 0],
-    ["new Map<'key', Array<true>>()", 0],
-    ["(left: 'a' | 'b') => left", 1],
-    ["lines[lines.length - 1] as { readonly kind: 'x'; readonly list: readonly ['a', 'b'] }", 1],
-  ])('has, under (%s), sites to the number of %i', (expression, sites) => {
-    expect(sitesOf(`const cast = (${expression}) as Kind;\n`)).toEqual([sites]);
-  });
-
-  it('is counted over every file, by name, with the mutants a report has inside a cast', () => {
-    const span = (from: [number, number], to: [number, number]) => ({ location: { start: { line: from[0], column: from[1] }, end: { line: to[0], column: to[1] } } });
-    const measured = measure({
-      'src/b.ts': {
-        source: ['const last = lines[lines.length - 1] as string;', 'const list = [', "  'draft',", '] as const;', ''].join('\n'),
-        // In a cast that spans lines: the string on its own line, left of
-        // where the cast began, the array whole, and one that runs on into
-        // the line below, left of where the cast ended.
-        mutants: [span([3, 3], [3, 10]), span([2, 14], [4, 2]), span([3, 3], [5, 1])],
-      },
-      'src/a.ts': {
-        source: ['const cast = value as Kind;', "const table = ['draft'] as const;", "const other = ['final'];", ''].join('\n'),
-        // The array's own mutant, then one that starts before the cast, one
-        // that ends after it, one that does both, one that starts on the
-        // line above, right of where the cast begins, and one on the line below.
-        mutants: [span([2, 15], [2, 24]), span([2, 1], [2, 20]), span([2, 20], [2, 34]), span([2, 1], [2, 34]), span([1, 20], [2, 24]), span([3, 15], [3, 24])],
-      },
-    });
-    expect(measured).toEqual({
-      files: 2,
-      casts: 4,
-      sites: 5,
-      inside: 3,
-      rows: [
-        { file: 'src/a.ts', line: 2, sites: 2, text: "['draft'] as const", mutants: 1 },
-        { file: 'src/b.ts', line: 1, sites: 1, text: 'lines[lines.length - 1] as string', mutants: 0 },
-        { file: 'src/b.ts', line: 2, sites: 2, text: "[ 'draft', ] as const", mutants: 2 },
-      ],
+  it('passes a count that is what is left, or under it', () => {
+    const at = verdict(written(), TOTAL);
+    expect(at.passed).toBe(true);
+    expect(at.message).toBe(`${TOTAL} under an \`as\`, and ${TOTAL} recorded as left.`);
+    expect(verdict(written(), TOTAL + 1).passed).toBe(true);
+    expect(verdict(measure({ 'src/plain.ts': UNCAST }, parse), 0)).toEqual({
+      passed: true,
+      lines: ['1 sources, 0 `as` expressions and enums, outermost only; 0 of them stand over 0 places a mutator applies.'],
+      message: '0 under an `as`, and 0 recorded as left.',
     });
   });
 
-  it('is not taken for none where a file does not parse', () => {
-    expect(() => measure({ 'src/a.ts': { source: 'const value = 1;\n' }, 'src/broken.ts': { source: 'const = as;\n' } })).toThrow(
-      /^src\/broken\.ts does not parse, so what stands under an `as` in it was not counted: /,
+  it('says of a report whether it has a mutant under a cast, which would end what the count is for', () => {
+    const mutant = (line: number, column: number): Report['files'][string]['mutants'][number] => ({
+      id: '0',
+      status: 'Killed',
+      mutatorName: 'ArithmeticOperator',
+      location: { start: { line, column }, end: { line, column: column + 16 } },
+    });
+    const report = (mutants: Report['files'][string]['mutants']): Report => ({ files: { 'src/written.ts': { source: WRITTEN, mutants }, 'src/plain.ts': { source: UNCAST, mutants: [] } } });
+    // `words.length - 1` on line 4 is under the cast; the same span a line
+    // down is not under one.
+    expect(verdict(written(), TOTAL, report([mutant(5, 21)])).lines[1]).toBe('The report has 0 mutants of those places.');
+    // On the cast's own line, one that starts before the cast or ends after
+    // it is beside it: the cast runs from column 15 to column 53.
+    expect(verdict(written(), TOTAL, report([mutant(4, 1), mutant(4, 45)])).lines[1]).toBe('The report has 0 mutants of those places.');
+    expect(verdict(written(), TOTAL, report([mutant(4, 21)])).lines[1]).toBe(
+      'The report has 1 mutant of those places: Stryker reads under an `as` now, and this count is of something else than it was written for.',
+    );
+  });
+
+  it('refuses a source Stryker could not have parsed, by name', () => {
+    expect(() => measure({ 'src/plain.ts': UNCAST, 'src/broken.ts': 'export const = ;' }, parse)).toThrow(
+      /^src\/broken\.ts could not be parsed, so what stands under an `as` in it was not counted: /,
+    );
+  });
+
+  it('refuses to measure where the parser Stryker brings is not installed', async () => {
+    const elsewhere = pathToFileURL(path.join(path.parse(ROOT).root, 'nowhere', 'scripts', 'mutation-unmeasured.mjs')).href;
+    await expect(loadParser(elsewhere)).rejects.toThrow(
+      'Cannot find @stryker-mutator/core, on the way to the parser Stryker reads a source with (@stryker-mutator/core, then @stryker-mutator/instrumenter, then @babel/core, then @babel/parser). Nothing was measured',
     );
   });
 });
 
-describe('the count against the number recorded as left', () => {
-  const two = measure({ 'src/a.ts': { source: "const table = ['draft'] as const;\n" } });
-  const none = measure({ 'src/a.ts': { source: 'const cast = value as Kind;\n' } });
+describe('a file the configuration leaves out of the sweep', () => {
+  // One statement to a line, and the lines that declare a value from 13 on.
+  const SOURCE = [
+    "import { readFileSync } from 'node:fs';",
+    "import type { Phase } from './types.js';",
+    "export { analyse } from './runner.js';",
+    "export * from './graph.js';",
+    "export type { Edge } from './types.js';",
+    'export interface Position { line: number }',
+    "export type Stage = Phase | 'draft';",
+    'interface Local { id: string }',
+    'type Kept = Local | undefined;',
+    'declare const injected: string;',
+    'export declare function later(local: Kept): void;',
+    'export { readFileSync };',
+    "export const PREFIX = 'project:';",
+    'export function isRule(id: string): boolean { return id.startsWith(PREFIX); }',
+    'const LIMIT = 40;',
+    'export enum Mark { Pass, Fail }',
+    'export class Held {}',
+    'export default LIMIT;',
+    'void injected;',
+    '',
+  ].join('\n');
 
-  it('passes on that number and under it, and fails over it, naming each cast', () => {
-    expect(verdict(two, 2)).toMatchObject({ passed: true, message: null });
-    expect(verdict(two, 3).passed).toBe(true);
-    const failed = verdict(two, 1);
-    expect(failed.passed).toBe(false);
-    expect(failed.message).toMatch(/^2 sites under an `as`, and 1 recorded as left\. /);
-    expect(failed.lines).toEqual([
-      '1 file, 1 `as` expression: 2 sites under 1 of them, where the sweep makes no mutant. 1 is recorded as left.',
-      "  src/a.ts:1  2 sites  ['draft'] as const",
+  it('is told from a file of values by what it declares that a program runs', () => {
+    const values = valuesOf(SOURCE, parse);
+    // An import, a re-export, a type and a name declared for the compiler
+    // alone leave nothing in the JavaScript. A constant no mutator has
+    // anything to change in is a value all the same.
+    expect(values.map((value) => value.line)).toEqual([13, 14, 15, 16, 17, 18, 19]);
+    expect(values[0]).toEqual({ line: 13, text: "export const PREFIX = 'project:';" });
+    expect(valuesOf(SOURCE.split('\n').slice(0, 12).join('\n'), parse)).toEqual([]);
+  });
+
+  it('names a value by its first line, cut where it runs long', () => {
+    const [table] = valuesOf(`export const TABLE = {\n  one: 1,\n};\nexport const LONG = [${'0, '.repeat(40)}0];\n`, parse);
+    expect(table).toEqual({ line: 1, text: 'export const TABLE = {' });
+    const [, long] = valuesOf(`export const TABLE = {\n  one: 1,\n};\nexport const LONG = [${'0, '.repeat(40)}0];\n`, parse);
+    expect(long).toEqual({ line: 4, text: `export const LONG = [${'0, '.repeat(26).slice(0, 76)}...` });
+    expect(long!.text).toHaveLength(100);
+  });
+
+  it('declares no value in this repository, and Stryker makes no mutant of one', async () => {
+    const left = leftOut(await configured(), parse, ROOT);
+    // The module that re-exports the rest. The copy of spec-core is not held
+    // to this: its mutants are spec-core's sweep to kill.
+    expect(Object.keys(left)).toContain('src/index.ts');
+    expect(Object.keys(left).filter((file) => file.startsWith('src/vendor/'))).toEqual([]);
+    const instrument = await instrumenter();
+    for (const [file, values] of Object.entries(left)) {
+      expect(values, `${file} declares a value, and stryker.config.mjs leaves it out of the sweep`).toEqual([]);
+      expect(await instrument(readFileSync(path.join(ROOT, file), 'utf8')), file).toEqual([]);
+    }
+  });
+
+  it('would name the six values of src/types.ts, the file a comment once left out as holding types alone', async () => {
+    const source = readFileSync(path.join(ROOT, 'src/types.ts'), 'utf8');
+    expect(valuesOf(source, parse).map((value) => /^export (?:const|function) (\w+)/.exec(value.text)?.[1])).toEqual([
+      'DISPOSITIONS',
+      'OPENNESS_OF',
+      'EDGE_TRAITS',
+      'EDGE_KINDS',
+      'isProjectRule',
+      'PROJECT_RULE_PREFIX',
     ]);
-  });
-
-  it('says in one line that there is nothing to count', () => {
-    expect(verdict(none, 0)).toEqual({
-      passed: true,
-      lines: ['1 file, 1 `as` expression, and nothing a mutator reads under any of them.'],
-      message: null,
-    });
-  });
-
-  it('says so when a report has mutants where the script says Stryker makes none', () => {
-    const read = verdict({ ...two, inside: 2 }, 2);
-    expect(read.passed).toBe(true);
-    expect(read.lines.at(-1)).toMatch(/^The report has 2 mutants inside those expressions: this Stryker reads under an `as`/);
-    expect(verdict(two, 2).lines).toHaveLength(2);
+    expect((await (await instrumenter())(source)).length).toBeGreaterThan(0);
+    expect(Object.keys(treeSources(await configured(), ROOT))).toContain('src/types.ts');
   });
 });
 
 describe('this repository', () => {
-  const run = (...args: string[]): { code: number; out: string; err: string } => {
-    try {
-      const out = execFileSync(process.execPath, ['scripts/mutation-unmeasured.mjs', ...args], { encoding: 'utf8', stdio: 'pipe', env: { ...process.env, GITHUB_ACTIONS: '', GITHUB_STEP_SUMMARY: '' } });
-      return { code: 0, out, err: '' };
-    } catch (error) {
-      const failed = error as { status: number; stdout: string; stderr: string };
-      return { code: failed.status, out: failed.stdout, err: failed.stderr };
-    }
+  const said: string[] = [];
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllEnvs();
+    said.length = 0;
+  });
+  const listen = (): void => {
+    vi.spyOn(console, 'log').mockImplementation((line: string) => void said.push(line));
+    vi.spyOn(console, 'error').mockImplementation((line: string) => void said.push(line));
   };
 
-  it('leaves under an `as` exactly what the script records as left', async () => {
-    const { default: stryker } = (await import(pathToFileURL(path.resolve('stryker.config.mjs')).href)) as { default: { mutate: string[] } };
-    const sources = mutatedSources(stryker.mutate);
-    // Every file a shard mutates and none it does not: the vendored spec-core is spec-core's to count.
-    expect(Object.keys(sources)).toContain('src/extract.ts');
-    expect(Object.keys(sources).filter((name) => name.startsWith('src/vendor/') || name === 'src/types.ts')).toEqual([]);
-    const measured = measure(sources);
-    expect(measured.sites, verdict(measured).lines.join('\n')).toBe(LEFT);
+  it('keeps no more under an `as` than it records as left', async () => {
+    const sources = treeSources(await configured(), ROOT);
+    // What a sweep mutates: every module that declares a value, and neither
+    // the module of re-exports nor the copy of spec-core.
+    for (const file of ['src/cli.ts', 'src/extract.ts', 'src/glob.ts', 'src/types.ts']) expect(Object.keys(sources)).toContain(file);
+    expect(Object.keys(sources).filter((file) => file.startsWith('src/vendor/') || file === 'src/index.ts')).toEqual([]);
+    const result = verdict(measure(sources, parse));
+    expect(result.passed, [result.message, ...result.lines].join('\n')).toBe(true);
+    expect(LEFT).toBe(0);
   });
 
-  it('fails the run that counts more, and passes the one that does not', () => {
-    const directory = `tests/fixtures/.tmp/mutation-unmeasured-${process.pid}`;
-    mkdirSync(directory, { recursive: true });
-    try {
-      const report = (source: string): string => {
-        const file = `${directory}/mutation.json`;
-        writeFileSync(file, JSON.stringify({ files: { 'src/a.ts': { language: 'typescript', source, mutants: [] } } }));
-        return file;
-      };
-      const over = run(report("const table = ['draft'] as const;\n"));
-      expect(over.code).toBe(1);
-      expect(over.out).toContain("  src/a.ts:1  2 sites  ['draft'] as const");
-      expect(over.err).toMatch(new RegExp(`^2 sites under an \`as\`, and ${LEFT} recorded as left\\. `));
+  it("fails the sweep's score job for a merged report with more than that, and passes one without", async () => {
+    const entry = (source: string): Report['files'][string] => ({ language: 'typescript', source, mutants: [] });
+    // A report is read and the summary appended through what the run is
+    // handed, so nothing here is written to disk and no process is started.
+    const reports: Record<string, string> = {
+      'over.json': JSON.stringify({ files: { 'src/written.ts': entry(WRITTEN) } }),
+      'reports/mutation/mutation.json': JSON.stringify({ files: { 'src/plain.ts': entry(UNCAST) } }),
+    };
+    const asked: string[] = [];
+    const summary: [string, string][] = [];
+    const io = {
+      read: (file: string) => {
+        asked.push(file);
+        return reports[file]!;
+      },
+      append: (file: string, text: string) => void summary.push([file, text]),
+    };
+    listen();
+    vi.stubEnv('GITHUB_ACTIONS', 'true');
+    vi.stubEnv('GITHUB_STEP_SUMMARY', 'summary.md');
 
-      const clean = run(report("const table = ['draft'] satisfies string[];\n"));
-      expect(clean).toEqual({ code: 0, out: '1 file, 0 `as` expressions, and nothing a mutator reads under any of them.\n', err: '' });
-    } finally {
-      rmSync(directory, { recursive: true, force: true });
-    }
+    expect(await main(['over.json'], io)).toBe(1);
+    expect(said.at(-1)).toMatch(new RegExp(`^::error::${TOTAL} under an \`as\`, and 0 recorded as left: the sweep does not mutate the ${TOTAL} more\\. `));
+    expect(said[0]).toContain('The report has 0 mutants of those places.');
+
+    // With no report named, the one the merge has just written.
+    expect(await main([], io)).toBe(0);
+    expect(asked).toEqual(['over.json', 'reports/mutation/mutation.json']);
+    expect(said.at(-1)).toBe('0 under an `as`, and 0 recorded as left.');
+    expect(summary).toEqual([
+      ['summary.md', expect.stringMatching(new RegExp(`^What the sweep does not read: ${TOTAL} under an \`as\`, and 0 recorded as left: .*\\n\\n$`))],
+      ['summary.md', 'What the sweep does not read: 0 under an `as`, and 0 recorded as left.\n\n'],
+    ]);
+
+    // One report or none, or the tree: anything else is a usage error, and reads nothing.
+    expect(await main(['--report', 'x'], io)).toBe(2);
+    expect(await main(['-x'], io)).toBe(2);
+    expect(await main(['--source'], io)).toBe(2);
+    expect(await main(['over.json', 'reports/mutation/mutation.json'], io)).toBe(2);
+    expect(await main(['--sources', 'over.json'], io)).toBe(2);
+    expect(said.at(-1)).toMatch(/^usage: node scripts\/mutation-unmeasured\.mjs /);
+    expect(asked).toHaveLength(2);
+    expect(summary).toHaveLength(2);
   });
 
-  it('reads the sources on disk when asked, and refuses what it does not know', () => {
-    const sources = run('--sources');
-    expect(sources.code).toBe(0);
-    expect(sources.out).toMatch(/^\d+ files, \d+ `as` expressions, and nothing a mutator reads under any of them\.\n$/);
-    expect(run('--source')).toMatchObject({ code: 2, out: '' });
-    expect(run('a.json', 'b.json').code).toBe(2);
+  it('counts the tree when asked, and reads no report for it', async () => {
+    const asked: string[] = [];
+    listen();
+    vi.stubEnv('GITHUB_ACTIONS', '');
+    vi.stubEnv('GITHUB_STEP_SUMMARY', '');
+    expect(await main(['--sources'], { read: (file) => (asked.push(file), '{}') })).toBe(0);
+    expect(asked).toEqual([]);
+    expect(said[0]).toMatch(/^\d+ sources, \d+ `as` expressions and enums, outermost only; 0 of them stand over 0 places a mutator applies\.$/);
+    expect(said.at(-1)).toBe('0 under an `as`, and 0 recorded as left.');
   });
 
-  it('is counted by the sweep on the report its merge wrote, once the incremental file is published', () => {
-    const workflow = readFileSync('.github/workflows/mutation.yml', 'utf8');
+  it('writes no summary where no job asks for one, and marks no line for a run outside one', async () => {
+    const summary: string[] = [];
+    const io = { read: () => JSON.stringify({ files: { 'src/written.ts': { language: 'typescript', source: WRITTEN, mutants: [] } } }), append: (_file: string, text: string) => void summary.push(text) };
+    listen();
+    vi.stubEnv('GITHUB_ACTIONS', '');
+    vi.stubEnv('GITHUB_STEP_SUMMARY', '');
+    expect(await main(['over.json'], io)).toBe(1);
+    expect(said.at(-1)).toMatch(new RegExp(`^${TOTAL} under an \`as\`, and 0 recorded as left: `));
+    expect(summary).toEqual([]);
+  });
+
+  it("runs in the sweep's score job, on the report its merge wrote, once the incremental file is published, and is left out of a mutation run", () => {
+    const workflow = readFileSync(path.join(ROOT, '.github/workflows/mutation.yml'), 'utf8');
     const merge = workflow.indexOf('run: node scripts/mutation-shards.mjs merge reports/shards');
     const publish = workflow.indexOf('- name: Publish the incremental file');
     const count = workflow.indexOf('run: node scripts/mutation-unmeasured.mjs reports/mutation/mutation.json');
@@ -265,5 +445,6 @@ describe('this repository', () => {
     // After the publish: what the sweep measured is true whatever it could
     // not see, and a pull request has to be able to start from it.
     expect(count).toBeGreaterThan(publish);
+    expect(mutationSuite.test?.exclude).toContain('tests/mutation-unmeasured.test.ts');
   });
 });
