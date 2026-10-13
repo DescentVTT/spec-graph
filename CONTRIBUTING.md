@@ -144,6 +144,12 @@ held to. `node scripts/mutation-unmeasured.mjs --sources` counts what is left;
 `tests/mutation-unmeasured.test.ts` fails on any, and so does the sweep's score
 job, which counts in the report it merged (ADR-0007, 2026-10-12).
 
+A file under `src/` is mutated unless it declares no value: `src/index.ts`,
+which re-exports the rest, and the copy of spec-core, whose mutants are
+spec-core's. A file of types that comes to hold a constant or a function is
+swept from then on, and `tests/mutation-unmeasured.test.ts` fails one that
+`mutate` in `stryker.config.mjs` leaves out (ADR-0007, 2026-10-14).
+
 A sweep counts a failed test, not a test file that failed to load. A table a
 mutant breaks while its module loads takes with it every file that imports the
 module at its top, and where nothing else fails the mutant reads as survived.

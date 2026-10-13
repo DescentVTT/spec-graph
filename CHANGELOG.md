@@ -15,6 +15,38 @@ records.
 
 ### Changed
 
+- **An option that takes one value is refused given two.** The later was
+  read and the earlier went unread, with no word of it: `check --root
+  nowhere --root .` checked `.` and never said that `nowhere` is not there,
+  and `query --format sarif --format json` wrote JSON where the two the
+  other way round are refused. `--root`, `--baseline`, `--record-baseline`,
+  `--format`, `--graph-format`, `--max` and `--max-warnings` given two
+  values, and one rule given two severities by `--rule`, are exit `2` now,
+  with a line that names both: `--root is given "nowhere" and ".", and takes
+  one value: give one of the two`. The same value twice is that value once,
+  compared as typed, an option that is repeatable takes each of its values
+  as before, and `--help` and `--version` are answered first
+  ([ADR-0010](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0010-configuration-belongs-to-the-repository.md)).
+  Upgrading: where a script adds such an option to a command line that may
+  already hold it, keep the value the run should have and drop the other.
+- **`--baseline` beside `--record-baseline` is refused.** A recording writes
+  every finding of the run and opens no baseline, so the file `--baseline`
+  named went unread: `check --baseline nowhere.json --record-baseline
+  out.json` recorded and exited `0`, where `--baseline nowhere.json` alone
+  is exit `2`. The two together are exit `2` now, in either order, and
+  nothing is written. A `"baseline"` in the configuration is recorded over
+  as before. Upgrading: to record, give `--record-baseline` alone; to check
+  against a baseline, `--baseline` alone.
+- **A family given to both `--family` and `--ignore-family` is refused.**
+  The list that ignores decided, and the family's name on the other said
+  nothing: `check --family ADR --ignore-family ADR` passed over every
+  citation in prose and printed `the specification graph is consistent`,
+  exit `0`, where either option alone exits `1` on a citation nobody wrote.
+  It is exit `2` now, in either order and in any case of the name, `--family
+  ADR is given beside --ignore-family ADR, and a family's citations are read
+  or they are passed over: give one of the two`. One family asked for beside
+  another ignored is taken as before. Upgrading: take the family off the
+  option that does not say what the run should do with it.
 - **A negation is read whatever mark stands after it.** A governing phrase
   is cancelled by a negation between it and the reference, and the word was
   read only where a space or the reference followed it: `Blocked by none:

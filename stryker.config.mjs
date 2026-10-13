@@ -34,11 +34,15 @@ export default {
   // actually touched a mutated line get re-run for it.
   coverageAnalysis: 'perTest',
 
-  // types.ts is type-only and index.ts is pure re-exports: nothing to mutate.
+  // index.ts re-exports the rest and declares nothing of its own. A file is
+  // left out for that and for nothing else: types.ts was left out here as
+  // holding types alone while it declared six values, 65 mutants no sweep
+  // made (ADR-0007, 2026-10-14), and tests/mutation-unmeasured.test.ts now
+  // fails a file left out that declares one.
   // src/vendor/ is spec-core's code, copied here and checked by hash; its
   // mutants are spec-core's sweep to kill, and counting them here would pad or
   // dilute a score for code this repository does not own (spec-core ADR-0001).
-  mutate: ['src/**/*.ts', '!src/types.ts', '!src/index.ts', '!src/vendor/**'],
+  mutate: ['src/**/*.ts', '!src/index.ts', '!src/vendor/**'],
 
   // Stryker's sandbox rewrites relative paths in a tsconfig that reaches
   // outside the project. Ours does not, and the rewriter calls

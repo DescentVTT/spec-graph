@@ -246,6 +246,17 @@ OPTIONS
   decide and the earlier go unread. Either alone wins over the environment,
   and the same option twice is that option once.
 
+  An option that takes one value is refused given two, as in --root a
+  --root b: the later would be read and the earlier go unread. That is each
+  option above with a value that is not marked Repeatable, and one rule
+  given two severities by --rule. The same value twice is that value once.
+
+  A baseline to read is refused beside one to record, --baseline beside
+  --record-baseline: a recording writes every finding and opens no
+  baseline. So is one family given to both --family and --ignore-family,
+  whose citations are passed over whatever asked for them. One family asked
+  for beside another ignored is taken.
+
   A value that begins with -- reads as an option, so the option before it is
   refused as missing its value. A name that does begin so is written ./--name
   for a file, [-]-name in a pattern and \\--name for a reference target.
@@ -278,8 +289,10 @@ EXIT CODES
   An input that is set and names nothing is a 2, named on stderr, and never
   read as if it had not been given: an empty value, a family name no family
   has, a list of families no document here belongs to, a --root that is no
-  directory, a second word after rules, an option of another command. So is
-  an option beside its own opposite, of which one would go unread.
+  directory, a second word after rules, an option of another command. So
+  are two things of which one would go unread: an option beside its own
+  opposite, an option that takes one value given two, --baseline beside
+  --record-baseline, a family both asked for and ignored.
 
 CONFIGURATION
   Anything repeated on every run belongs in the repository rather than in the
@@ -422,32 +435,41 @@ function readersOf(option: string): readonly Command[] | undefined {
   return undefined;
 }
 
-interface Opposite {
-  /** The option that says the other thing. */
+interface Beside {
+  /** The option this one is not read beside. */
   readonly option: string;
   /** What the two decide between them, as the refusal says it. */
   readonly decided: string;
 }
 
 /**
- * The option that undoes this one, or nothing for an option that has none.
+ * The option beside which this one goes unread, or nothing for an option
+ * that has none.
  *
- * Given both, the later decided and the earlier went unread: a script that
- * adds `--no-color` to a line already holding `--color` was told nothing of
- * which it got, and two things of which one would go unread are refused
- * together (spec-core's ADR-0005, 2026-10-11). Either alone still wins over
- * the environment, which is what it is for.
+ * Two of the three are an option and the one that undoes it. Given both,
+ * the later decided and the earlier went unread: a script that adds
+ * `--no-color` to a line already holding `--color` was told nothing of which
+ * it got, and two things of which one would go unread are refused together
+ * (spec-core's ADR-0005, 2026-10-11). Either alone still wins over the
+ * environment, which is what it is for.
  *
- * Asked of the affirmative alone, so each pair is found once, by the option
- * that names it, and each name here decides a refusal. A function and not a
- * table, for the reason `readersOf` is one.
+ * The third is a baseline to read beside one to record. A recording writes
+ * every finding of the run and opens no baseline, so `--baseline nowhere.json
+ * --record-baseline out.json` recorded and exited 0, where the first option
+ * alone is refused for a file that is not there.
+ *
+ * Asked of the first of each pair alone, so each pair is found once, by the
+ * option that names it, and each name here decides a refusal. A function and
+ * not a table, for the reason `readersOf` is one.
  */
-function oppositeOf(option: string): Opposite | undefined {
+function unreadBeside(option: string): Beside | undefined {
   switch (option) {
     case '--color':
       return { option: '--no-color', decided: 'a report is coloured or it is not' };
     case '--ascii':
       return { option: '--no-ascii', decided: 'the glyphs are drawn one way' };
+    case '--baseline':
+      return { option: '--record-baseline', decided: 'a check holds its findings against a baseline or records them as one' };
   }
   return undefined;
 }
@@ -529,6 +551,23 @@ export function parseArgs(argv: readonly string[], cwd: string): CliOptions {
     if (!isFamilyName(value)) throw new UsageError(`${flag} expects one family's name, such as ADR, got "${value}"`);
     return value;
   };
+  // What an option that takes one value was first given, and the line for
+  // the first such option given another. The later was read and the earlier
+  // went unread: `--root nowhere --root .` checked `.` and never said that
+  // `nowhere` is not there, and `query --format sarif --format json` wrote
+  // JSON where the two the other way round are refused. The same value
+  // again is that value once, as an option that takes none is. Values are
+  // compared as they were typed: a path spelled two ways is two values to
+  // whoever reads the line. The line is thrown after the loop, with what
+  // else help and the version are answered before.
+  const taken = new Map<string, string>();
+  let second: string | null = null;
+  const once = (flag: string, value: string, key = flag, takes = 'takes one value'): string => {
+    const held = taken.get(key);
+    if (held === undefined) taken.set(key, value);
+    else if (held !== value) second ??= `${flag} is given "${held}" and "${value}", and ${takes}: give one of the two`;
+    return value;
+  };
 
   for (let i = 0; i < args.length; i += 1) {
     const arg = args[i] as string;
@@ -582,7 +621,7 @@ export function parseArgs(argv: readonly string[], cwd: string): CliOptions {
         verbose = true;
         break;
       case '--root':
-        root = filled(arg, i, 'a directory');
+        root = once(arg, filled(arg, i, 'a directory'));
         rootExplicit = true;
         i += 1;
         break;
@@ -607,11 +646,11 @@ export function parseArgs(argv: readonly string[], cwd: string): CliOptions {
         i += 1;
         break;
       case '--baseline':
-        baseline = filled(arg, i, 'a file');
+        baseline = once(arg, filled(arg, i, 'a file'));
         i += 1;
         break;
       case '--record-baseline':
-        recordBaseline = filled(arg, i, 'a file');
+        recordBaseline = once(arg, filled(arg, i, 'a file'));
         i += 1;
         break;
       case '--no-config':
@@ -630,6 +669,7 @@ export function parseArgs(argv: readonly string[], cwd: string): CliOptions {
           throw new UsageError(`--format must be human, json, sarif, markdown, gitlab or github, got "${value}"`);
         }
         format = value;
+        once(arg, value);
         i += 1;
         break;
       }
@@ -639,6 +679,7 @@ export function parseArgs(argv: readonly string[], cwd: string): CliOptions {
           throw new UsageError(`--graph-format must be dot, mermaid or json, got "${value}"`);
         }
         graphFormat = value;
+        once(arg, value);
         i += 1;
         break;
       }
@@ -661,16 +702,17 @@ export function parseArgs(argv: readonly string[], cwd: string): CliOptions {
           throw new UsageError(`unknown severity "${level}", expected one of: ${SEVERITIES.join(', ')}`);
         }
         severities[id] = level;
+        once(arg, value, `${arg} ${id}`, 'a rule has one severity');
         i += 1;
         break;
       }
       case '--max': {
-        max = parseCount(arg, next(arg, i));
+        max = parseCount(arg, once(arg, next(arg, i)));
         i += 1;
         break;
       }
       case '--max-warnings': {
-        maxWarnings = parseCount(arg, next(arg, i));
+        maxWarnings = parseCount(arg, once(arg, next(arg, i)));
         i += 1;
         break;
       }
@@ -710,9 +752,24 @@ export function parseArgs(argv: readonly string[], cwd: string): CliOptions {
     // before the pair it is half of: `query --color --no-color` is told
     // that `--color` is a check's, which is the line to act on first.
     for (const option of given) {
-      const opposite = oppositeOf(option);
-      if (opposite !== undefined && given.has(opposite.option)) {
-        throw new UsageError(`${option} is given beside ${opposite.option}, and ${opposite.decided}: give one of the two`);
+      const other = unreadBeside(option);
+      if (other !== undefined && given.has(other.option)) {
+        throw new UsageError(`${option} is given beside ${other.option}, and ${other.decided}: give one of the two`);
+      }
+    }
+    if (second !== null) throw new UsageError(second);
+    // A family on both lists is passed over, since the list that ignores is
+    // asked first, and its name on the other says nothing: `--family ADR
+    // --family RFC --ignore-family RFC` is `--family ADR`. Where it is the
+    // only name there, every citation in prose is passed over, and the check
+    // that fails without the two reported a consistent graph. Two families,
+    // one asked for and another ignored, are both read, and are taken.
+    for (const asked of families) {
+      const ignored = ignoreFamilies.find((name) => name.trim().toUpperCase() === asked.trim().toUpperCase());
+      if (ignored !== undefined) {
+        throw new UsageError(
+          `--family ${asked} is given beside --ignore-family ${ignored}, and a family's citations are read or they are passed over: give one of the two`,
+        );
       }
     }
   }

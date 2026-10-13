@@ -1133,6 +1133,22 @@ variable in `--family "$FAMILIES"` is the usual way to write one:
 - an option beside its own opposite, `--color` beside `--no-color` or
   `--ascii` beside `--no-ascii`, in either order: the later would decide and
   the earlier go unread ([Colour and glyphs](#colour-and-glyphs));
+- an option that takes one value, given two: `--root`, `--baseline`,
+  `--record-baseline`, `--format`, `--graph-format`, `--max` or
+  `--max-warnings`, and one rule given two severities by `--rule`. The later
+  would be read and the earlier go unread: `--root nowhere --root .` would
+  check `.` and never say that `nowhere` is not there. The line names both,
+  `--root is given "nowhere" and ".", and takes one value: give one of the
+  two`. The same value twice is that value once, as typed, and an option
+  that is repeatable above takes each of its values;
+- `--baseline` beside `--record-baseline`: a recording writes every finding
+  of the run and opens no baseline, so the one to read would go unread. A
+  `"baseline"` in the configuration is no option, and is recorded over as
+  before;
+- one family given to both `--family` and `--ignore-family`, whose citations
+  are passed over whatever asked for them: alone on the allowlist it would
+  leave every citation as prose. One family asked for beside another ignored
+  is taken, since both are read;
 - a value that begins with `--`, which reads as the option after one whose
   value was forgotten: `--ignore --strict` would ignore a directory called
   `--strict`, and `--record-baseline --verbose` write a file of that name.
