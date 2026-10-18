@@ -805,3 +805,209 @@ describe('a family asked for and ignored', () => {
     });
   });
 });
+
+/*
+ * A flag beside the file, and options one of which a run leaves unread
+ * where neither is the other's opposite: a family the file passes over and
+ * a flag asks for, an option a recording does not read, a journal an ignore
+ * leaves out (ADR-0010, amended 2026-10-18).
+ */
+
+describe('a flag where the file says otherwise of one family', () => {
+  it('reads the citations --family asks for, where the file passes over that family', async () => {
+    for (const listed of ['RFC', 'rfc', ' RFC ']) {
+      await withRepo('flag-over-file-family', { ...MIXED, '.spec-graph.json': `{ "ignoreFamilies": ["${listed}"] }\n` }, async (root) => {
+        const check = ['check', '--root', root];
+        // The file alone passes over the RFC nobody wrote and reports the ADR.
+        const alone = await run(...check);
+        expect(alone.code, listed).toBe(EXIT_FAILED);
+        expect(alone.out, listed).toContain('"ADR-0099"');
+        expect(alone.out, listed).not.toContain('"RFC-0099"');
+        // Asked for, the RFCs are read: the run passed over the one it asked for, and was clean.
+        for (const asked of ['RFC', 'rfc', ' RFC ']) {
+          const flagged = await run(...check, '--family', asked);
+          expect(flagged.code, `${listed} ${asked}`).toBe(EXIT_FAILED);
+          expect(flagged.out, `${listed} ${asked}`).toContain('"RFC-0099"');
+          expect(JSON.parse((await run(...check, '--family', asked, '--format', 'json')).out).suppressed, `${listed} ${asked}`).toEqual([
+            { target: 'ADR-0099', from: 'ADR-0001', by: 'family', file: 'docs/adr/0001-a.md', line: 7 },
+          ]);
+        }
+        // A family the flag does not name is as the file says.
+        expect((await run(...check, '--family', 'ADR')).out).not.toContain('"RFC-0099"');
+        expect((await run(...check, '--family', 'ADR', '--family', 'RFC')).out).toContain('2 errors');
+      });
+    }
+  });
+
+  it('passes over the family --ignore-family names, where the file lists that family, as it did', async () => {
+    await withRepo('flag-over-file-ignored', { ...MIXED, '.spec-graph.json': '{ "families": ["ADR"] }\n' }, async (root) => {
+      expect((await run('check', '--root', root)).code).toBe(EXIT_FAILED);
+      const ignored = await run('check', '--root', root, '--ignore-family', 'ADR');
+      expect(ignored.code).toBe(EXIT_OK);
+      expect(ignored.err).toBe('');
+    });
+  });
+
+  it('stops every command where one file names a family under both keys', async () => {
+    const files = { ...MIXED, '.spec-graph.json': '{ "families": ["ADR", "RFC"], "ignoreFamilies": ["rfc"] }\n' };
+    await withRepo('flag-over-file-both-keys', files, async (root) => {
+      for (const command of [['check'], ['query', 'document'], ['graph'], ['rules']]) {
+        const result = await run(...command, '--root', root);
+        expect(result.code, command[0]).toBe(EXIT_ERROR);
+        expect(result.out, command[0]).toBe('');
+        expect(result.err, command[0]).toBe(
+          'spec-graph: .spec-graph.json: "RFC" is in both "families" and "ignoreFamilies", and a family\'s citations are read or they are passed over: take it off one of the two\n' +
+            'spec-graph: 1 problem in the configuration, so nothing was checked\n  fix it, or run again with --no-config to check on defaults\n',
+        );
+      }
+      expect((await run('check', '--root', root, '--no-config')).out).toContain('2 errors');
+    });
+  });
+});
+
+/** One ADR that cites one ADR nobody wrote twice: two findings, recorded as one entry. */
+const TWICE = { 'docs/adr/0001-a.md': accepted('ADR-0001', 'See ADR-0099, and ADR-0099 again.') };
+
+describe('an option a recording does not read', () => {
+  const unread = (option: string): string =>
+    `${option} is given beside --record-baseline, and a recording writes the findings down and reports none: give one of the two`;
+  const UNREAD = [['--ratchet'], ['--strict'], ['--max', '1'], ['--max', '0'], ['--max-warnings', '0'], ['--color'], ['--no-ascii']];
+
+  it('is refused, whichever comes first, the first on the line by name', () => {
+    for (const [option, ...value] of UNREAD) {
+      expect(usage(['check', '--record-baseline', 'b.json', option!, ...value]), option).toBe(unread(option!));
+      expect(usage([option!, ...value, '--record-baseline', 'b.json']), option).toBe(unread(option!));
+    }
+    for (const format of ['sarif', 'github', 'gitlab']) {
+      expect(usage(['--record-baseline', 'b.json', '--format', format])).toBe(unread(`--format ${format}`));
+      expect(usage(['--format', format, '--record-baseline', 'b.json'])).toBe(unread(`--format ${format}`));
+    }
+    expect(usage(['--strict', '--record-baseline', 'b.json', '--format', 'sarif', '--ratchet'])).toBe(unread('--strict'));
+    expect(usage(['--record-baseline', 'b.json', '--verbose', '--strict', '--format', 'sarif'])).toBe(unread('--strict'));
+    expect(usage(['--format', 'gitlab', '--record-baseline', 'b.json', '--max', '3'])).toBe(unread('--format gitlab'));
+    // The baseline to read is named before them, as it was.
+    expect(usage(['--strict', '--record-baseline', 'b.json', '--baseline', 'a.json'])).toContain('--baseline is given beside --record-baseline, and a check holds');
+  });
+
+  it('is refused with the help or the version asked for beside it, and what a recording reads is not', async () => {
+    for (const asked of ['--help', '-h', '--version', '-v']) {
+      expect(await run('check', '--record-baseline', 'x.json', '--strict', asked), asked).toEqual({
+        code: EXIT_ERROR,
+        out: '',
+        err: `spec-graph: ${unread('--strict')}\n`,
+      });
+      expect((await run('check', '--record-baseline', 'x.json', '--format', 'gitlab', asked)).err, asked).toBe(`spec-graph: ${unread('--format gitlab')}\n`);
+    }
+    // JSON is a document of the recording, so the line is right and the help is printed.
+    expect(await run('check', '--record-baseline', 'x.json', '--format', 'json', '--help')).toEqual({ code: EXIT_OK, out: HELP, err: '' });
+  });
+
+  it('is taken where a recording reads it or it asks for what is already so, and by a check', () => {
+    const read = [['--no-color'], ['--ascii'], ['--verbose'], ['--no-config'], ['--rule', 'broken-reference=off'], ['--family', 'ADR'], ['--ignore-family', 'RFC'], ['--ignore-ref', 'x'], ['--ignore', 'drafts'], ['--history', 'x.md']];
+    for (const extra of [...read, ['--format', 'human'], ['--format', 'json'], ['--format', 'markdown']]) {
+      expect(() => parseArgs(['--record-baseline', 'b.json', ...extra], '/repo'), extra.join(' ')).not.toThrow();
+    }
+    for (const extra of [...UNREAD, ['--format', 'sarif'], ['--format', 'github'], ['--format', 'gitlab']]) {
+      expect(() => parseArgs(['check', ...extra], '/repo'), extra.join(' ')).not.toThrow();
+    }
+  });
+
+  it('writes nothing where it is refused, and what it recorded as a document where JSON is asked for', async () => {
+    const { readdir } = await import('node:fs/promises');
+    await withRepo('record-unread', TWICE, async (root) => {
+      const check = ['check', '--root', root, '--no-config', '--record-baseline', 'debt.json'];
+      expect(await run(...check, '--strict')).toEqual({ code: EXIT_ERROR, out: '', err: `spec-graph: ${unread('--strict')}\n` });
+      expect(await run(...check, '--format', 'sarif')).toEqual({ code: EXIT_ERROR, out: '', err: `spec-graph: ${unread('--format sarif')}\n` });
+      expect(await readdir(root)).toEqual(['docs']);
+      // The line where a document was asked for was what a script failed to parse.
+      expect(await run(...check, '--format', 'json')).toEqual({
+        code: EXIT_OK,
+        out: `${JSON.stringify({ version: 1, recorded: { file: 'debt.json', findings: 2, entries: 1 } }, null, 2)}\n`,
+        err: '',
+      });
+      // For a person, and for Markdown, which the line reads as already.
+      for (const format of ['human', 'markdown']) {
+        expect(await run(...check, '--format', format), format).toEqual({ code: EXIT_OK, out: 'recorded 2 findings as 1 entry in debt.json\n', err: '' });
+      }
+      // What chooses the findings is read, in the document too.
+      expect(JSON.parse((await run(...check, '--format', 'json', '--rule', 'broken-reference=off')).out)).toEqual({
+        version: 1,
+        recorded: { file: 'debt.json', findings: 0, entries: 0 },
+      });
+    });
+  });
+});
+
+describe('a journal an ignore leaves out', () => {
+  const retired =
+    '---\nstatus: superseded\nsuperseded-by: ADR-0001\n---\n\n# ADR-0002: An old decision\n\n## Open Questions\n\n- [ ] Who owns the cache?\n\nSee [gone](0099-gone.md).\n';
+  /** A live ADR, and a retired one under `docs/archive` with an open question and a link to nothing. */
+  const JOURNAL = { 'docs/adr/0001-a.md': accepted('ADR-0001', 'The decision.'), 'docs/archive/0002-b.md': retired };
+  const leftOut = (pattern: string, by: string): string =>
+    `--history "${pattern}" names only files ${by} leaves out, and a journal is read or it is left out: give one of the two`;
+
+  it('stops the run that read no journal and said nothing, beside --ignore, for every command that reads one', async () => {
+    await withRepo('history-ignored', JOURNAL, async (root) => {
+      const check = ['check', '--root', root, '--no-config'];
+      // As a journal, its question is no obligation and its link is still checked.
+      const journal = await run(...check, '--history', 'docs/archive/**');
+      expect(journal.code).toBe(EXIT_FAILED);
+      expect(journal.out).toContain('broken-reference');
+      expect(journal.out).not.toContain('orphaned-obligation');
+      // Ignored, it is not read at all.
+      expect((await run(...check, '--ignore', 'archive')).code).toBe(EXIT_OK);
+      for (const [ignore, history] of [['archive', 'docs/archive/**'], ['docs/archive/**', 'docs/archive/*.md'], ['**/0002-b.md', '**/0002-*.md']]) {
+        expect(await run(...check, '--ignore', ignore!, '--history', history!), `${ignore} ${history}`).toEqual({
+          code: EXIT_ERROR,
+          out: '',
+          err: `spec-graph: ${leftOut(history!, '--ignore')}\n`,
+        });
+      }
+      // The first pattern of several that names only what is left out.
+      expect((await run(...check, '--ignore', 'archive', '--history', 'docs/adr/**', '--history', 'docs/archive/**')).err).toBe(
+        `spec-graph: ${leftOut('docs/archive/**', '--ignore')}\n`,
+      );
+      for (const command of [['query', 'document'], ['graph']]) {
+        expect(await run(...command, '--root', root, '--no-config', '--ignore', 'archive', '--history', 'docs/archive/**'), command[0]).toEqual({
+          code: EXIT_ERROR,
+          out: '',
+          err: `spec-graph: ${leftOut('docs/archive/**', '--ignore')}\n`,
+        });
+      }
+    });
+  });
+
+  it("names the configuration's ignore where that is what is there, and both where both are", async () => {
+    await withRepo('history-ignored-configured', { ...JOURNAL, '.spec-graph.json': '{ "ignore": ["archive"] }\n' }, async (root) => {
+      expect((await run('check', '--root', root, '--history', 'docs/archive/**')).err).toBe(
+        `spec-graph: ${leftOut('docs/archive/**', '"ignore" in .spec-graph.json')}\n`,
+      );
+      expect((await run('check', '--root', root, '--ignore', 'drafts', '--history', 'docs/archive/**')).err).toBe(
+        `spec-graph: ${leftOut('docs/archive/**', '--ignore or "ignore" in .spec-graph.json')}\n`,
+      );
+    });
+  });
+
+  it('is the run\'s to find, so the help, which reads no disk, is printed beside it', async () => {
+    await withRepo('history-ignored-help', JOURNAL, async (root) => {
+      expect(await run('check', '--root', root, '--no-config', '--ignore', 'archive', '--history', 'docs/archive/**', '--help')).toEqual({
+        code: EXIT_OK,
+        out: HELP,
+        err: '',
+      });
+    });
+  });
+
+  it("takes a pattern whose files are read in part, one that matches no file, and the file's journals under an --ignore", async () => {
+    await withRepo('history-taken', JOURNAL, async (root) => {
+      const check = ['check', '--root', root, '--no-config'];
+      expect(await run(...check, '--ignore', 'archive', '--history', 'docs/**')).toMatchObject({ code: EXIT_OK, err: '' });
+      expect(await run(...check, '--ignore', 'archive', '--history', 'docs/nothing/**')).toMatchObject({ code: EXIT_OK, err: '' });
+      expect(await run(...check, '--history', 'docs/nothing/**')).toMatchObject({ code: EXIT_FAILED, err: '' });
+    });
+    await withRepo('history-taken-configured', { ...JOURNAL, '.spec-graph.json': '{ "historyPatterns": ["docs/archive/**"] }\n' }, async (root) => {
+      // The flag decides over the file: the archive is left out.
+      expect(await run('check', '--root', root, '--ignore', 'archive')).toMatchObject({ code: EXIT_OK, err: '' });
+    });
+  });
+});

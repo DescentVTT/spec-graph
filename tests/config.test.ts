@@ -116,6 +116,19 @@ describe('parsing a configuration', () => {
     ]);
   });
 
+  it('reports a family under both family keys, by the name "families" gives it, in any case and with spaces around it', () => {
+    // The list that ignores is asked first, so the name under "families" read
+    // as applied and did nothing.
+    const both = (name: string): string =>
+      `test: "${name}" is in both "families" and "ignoreFamilies", and a family's citations are read or they are passed over: take it off one of the two`;
+    expect(parseConfig(JSON.stringify({ families: ['RFC'], ignoreFamilies: ['RFC'] }), 'test').problems).toEqual([both('RFC')]);
+    expect(parseConfig(JSON.stringify({ families: ['ADR', ' rfc'], ignoreFamilies: ['KEP', 'RFC '] }), 'test').problems).toEqual([both(' rfc')]);
+    expect(parseConfig(JSON.stringify({ families: ['ADR', 'RFC'], ignoreFamilies: ['adr', 'rfc'] }), 'test').problems).toEqual([both('ADR'), both('RFC')]);
+    // One family on each list, or a name that only begins as another does, is two families.
+    expect(parseConfig(JSON.stringify({ families: ['ADR'], ignoreFamilies: ['RFC'] }), 'test').problems).toEqual([]);
+    expect(parseConfig(JSON.stringify({ families: ['ADR'], ignoreFamilies: ['ADRS'] }), 'test').problems).toEqual([]);
+  });
+
   it('takes a family name with spaces around it, and a list of none', () => {
     const { config, problems } = parseConfig(JSON.stringify({ families: [' adr ', 'S3'], ignoreFamilies: [] }), 'test');
     expect(problems).toEqual([]);

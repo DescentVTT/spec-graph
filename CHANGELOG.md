@@ -41,6 +41,47 @@ records.
   beside --version, and a run prints the help or the version: give one of
   the two`; either given twice is that one once. Upgrading: ask for one of
   the two.
+- **`--family` reads a family the configuration's `ignoreFamilies` passes
+  over.** The list that ignores was asked first, so `check --family RFC`
+  over `"ignoreFamilies": ["RFC"]` passed over every RFC it asked for and
+  printed `the specification graph is consistent`, exit `0`, where the file
+  alone fails the check. A flag says what the run does where the file says
+  otherwise, as for every other key: the family is read now, so a check
+  that passed can fail
+  ([ADR-0010](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0010-configuration-belongs-to-the-repository.md)).
+  `--ignore-family` over `"families"` passes over the family it names, as
+  before. Upgrading: run `check` with the `--family` your scripts give; a
+  citation it now reports was one the run asked for and never read.
+- **One family under both `families` and `ignoreFamilies` is a problem in
+  the configuration.** The name under `families` read as applied and did
+  nothing: `"families": ["RFC"]` beside `"ignoreFamilies": ["rfc"]` passed
+  over every citation in prose and reported a consistent graph. It stops
+  every command now, exit `2`, `"RFC" is in both "families" and
+  "ignoreFamilies", and a family's citations are read or they are passed
+  over: take it off one of the two`. Upgrading: keep the family on the list
+  that says what the repository does with it.
+- **A recording refuses the options it does not read, and writes JSON as
+  JSON.** `--record-baseline` beside `--format json` wrote the line
+  `recorded ... in ...` where a script expected a document, and `--ratchet`,
+  `--strict`, `--max`, `--max-warnings`, `--color`, `--no-ascii` and
+  `--format sarif`, `github` or `gitlab` went unread with no word of them.
+  Those are exit `2` now, nothing written, `--strict is given beside
+  --record-baseline, and a recording writes the findings down and reports
+  none: give one of the two`, with `--help` or `--version` on the line too;
+  `--format json` writes `{ "version": 1,
+  "recorded": { "file", "findings", "entries" } }`; `human` and `markdown`
+  write the line as before. Upgrading: record with the options that choose
+  the findings alone, and read the document's `recorded` where a script
+  parsed the line.
+- **A `--history` whose files an ignore leaves out is refused.** A pattern
+  marks the files a run reads, so `--ignore archive --history
+  "docs/archive/**"` read no journal, checked none of its links, and said
+  nothing. Where a `--history` typed on the line matches no file the run
+  reads and matches one an `--ignore`, or the configuration's `"ignore"`,
+  leaves out, the run is exit `2` now, naming the pattern and the ignores
+  there are. A pattern that matches no file at all is read as before.
+  Upgrading: drop the ignore that covers the journals, or the pattern that
+  names them.
 
 ## 0.17.0
 
