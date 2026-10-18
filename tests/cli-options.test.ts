@@ -102,12 +102,13 @@ describe('reading the command line', () => {
     expect(parseArgs([off, off], '/repo')[key]).toBe(false);
     // After `--` the second is a pattern, not an option.
     expect(parseArgs([on, '--', off], '/repo')).toMatchObject({ [key]: true, patterns: [off] });
-    // Help and the version are answered whatever else is on the line, as
-    // they are beside an option of another command.
-    expect(parseArgs([on, off, '--help'], '/repo').help).toBe(true);
-    expect(parseArgs([off, on, '-h'], '/repo').help).toBe(true);
-    expect(parseArgs([on, off, '--version'], '/repo').version).toBe(true);
-    expect(parseArgs([off, on, '-v'], '/repo').version).toBe(true);
+    // With the help or the version asked for beside them too, as an option
+    // of another command is.
+    expect(usage([on, off, '--help']).message).toBe(refusal);
+    expect(usage([off, on, '-h']).message).toBe(refusal);
+    expect(usage(['--version', on, off]).message).toBe(refusal);
+    expect(usage([off, '-v', on]).message).toBe(refusal);
+    expect(parseArgs([on, '--help'], '/repo').help).toBe(true);
   });
 
   it('holds every option the help lists to that: one with an opposite is refused beside it, and the rest have none', () => {
@@ -180,7 +181,7 @@ describe('reading the command line', () => {
       }
       once.push(option);
       expect(usage(twice).message, option).toBe(`${option} is given "${first}" and "${second}", and takes one value: give one of the two`);
-      expect(parseArgs([...twice, '--help'], '/repo').help, option).toBe(true);
+      expect(usage([...twice, '--help']).message, option).toBe(usage(twice).message);
     }
     expect(once).toEqual(['--root', '--baseline', '--record-baseline', '--format', '--graph-format', '--max', '--max-warnings']);
   });
@@ -212,9 +213,10 @@ describe('reading the command line', () => {
       expect(usage([...argv, '--no-color', '--color']).message, command).toBe(`--color belongs to check, not to ${command}`);
       // --ascii asks for what is already so, and is taken.
       expect(parseArgs([...argv, '--ascii'], '/repo'), command).toMatchObject({ command, ascii: true });
-      // Help and the version are answered first.
-      expect(parseArgs([...argv, '--no-ascii', '--help'], '/repo').help, command).toBe(true);
-      expect(parseArgs([...argv, '--no-ascii', '-v'], '/repo').version, command).toBe(true);
+      // With the help or the version asked for beside it too.
+      expect(usage([...argv, '--no-ascii', '--help']).message, command).toBe(`--no-ascii belongs to check, not to ${command}`);
+      expect(usage([...argv, '--no-ascii', '-v']).message, command).toBe(`--no-ascii belongs to check, not to ${command}`);
+      expect(parseArgs([...argv, '--ascii', '--help'], '/repo').help, command).toBe(true);
     }
     // A check takes it, named or not, and in a format that draws no glyph:
     // that pairs an option with an option, as --no-color beside sarif does.
@@ -258,6 +260,70 @@ describe('reading the command line', () => {
     const error = usage(['--nope']);
     expect(error).toBeInstanceOf(UsageError);
     expect(error.name).toBe('UsageError');
+  });
+});
+
+/*
+ * A line that is wrong is wrong with the help or the version asked for
+ * beside it: answered first, the help told a script nothing of the line it
+ * wrote, and the version answered it as if the line were right (spec-core's
+ * ADR-0005, 2026-10-18; ADR-0010).
+ */
+describe('the help and the version, beside a line that is wrong', () => {
+  // Each refusal the parser makes after it has read the line, and two it
+  // makes as it reads it, which were refused beside the help already.
+  const WRONG: readonly (readonly string[])[] = [
+    ['check', '--bogus'],
+    ['check', '--format', 'xml'],
+    ['graph', '--strict'],
+    ['query', 'document', '--format', 'sarif'],
+    ['query', 'document', '--format', 'markdown'],
+    ['graph', '--format', 'json'],
+    ['check', '--color', '--no-color'],
+    ['check', '--ascii', '--no-ascii'],
+    ['check', '--root', 'a', '--root', 'b'],
+    ['check', '--baseline', 'a.json', '--record-baseline', 'b.json'],
+    ['check', '--family', 'ADR', '--ignore-family', 'ADR'],
+    ['rules', 'a', 'b'],
+    ['diff', 'a.json', 'b.json', 'c.json'],
+    ['diff', '', 'b.json'],
+  ];
+  const HELP_AND_VERSION = '--help is given beside --version, and a run prints the help or the version: give one of the two';
+
+  it('is refused as it is without them, whichever is asked for and wherever it stands', () => {
+    for (const line of WRONG) {
+      const alone = usage([...line]).message;
+      for (const asked of ['--help', '-h', '--version', '-v']) {
+        expect(usage([...line, asked]).message, `${line.join(' ')} ${asked}`).toBe(alone);
+        expect(usage([line[0]!, asked, ...line.slice(1)]).message, `${asked} ${line.join(' ')}`).toBe(alone);
+      }
+    }
+  });
+
+  it('is answered where what is missing is what the help is for, and where only the run reads what is wrong', async () => {
+    for (const line of [['query'], ['diff'], ['diff', 'a.json'], ['check', '--root', 'nowhere'], ['rules', 'no-such-rule']]) {
+      expect(await run(...line, '--help'), line.join(' ')).toEqual({ code: EXIT_OK, out: HELP, err: '' });
+      expect(await run(...line, '-v'), line.join(' ')).toEqual({ code: EXIT_OK, out: `${version()}\n`, err: '' });
+    }
+    // Neither asked for, each of them is refused.
+    expect(usage(['query']).message).toContain('query needs a selector');
+    expect(usage(['diff']).message).toContain('diff compares two graph exports');
+    expect(usage(['diff', 'a.json']).message).toContain('diff compares two graph exports');
+    expect(parseArgs(['diff', 'a.json', 'b.json'], '/repo').patterns).toEqual(['a.json', 'b.json']);
+  });
+
+  it('refuses the help beside the version, in either order and either spelling', async () => {
+    for (const [a, b] of [['--help', '--version'], ['--version', '--help'], ['-h', '-v'], ['-v', '-h'], ['--help', '-v'], ['-v', '--help']] as const) {
+      expect(usage([a, b]).message, `${a} ${b}`).toBe(HELP_AND_VERSION);
+      expect(usage(['graph', a, '--documents-only', b]).message, `${a} ${b}`).toBe(HELP_AND_VERSION);
+    }
+    expect(await run('--version', '--help')).toEqual({ code: EXIT_ERROR, out: '', err: `spec-graph: ${HELP_AND_VERSION}\n` });
+    // One of them twice is that one once.
+    expect(await run('--help', '-h')).toEqual({ code: EXIT_OK, out: HELP, err: '' });
+    expect(await run('-v', '--version')).toEqual({ code: EXIT_OK, out: `${version()}\n`, err: '' });
+    // An option of another command is named first, and the two before a pair.
+    expect(usage(['graph', '--strict', '--help', '--version']).message).toBe('--strict belongs to check, not to graph');
+    expect(usage(['--color', '--no-color', '-v', '-h']).message).toBe(HELP_AND_VERSION);
   });
 });
 
@@ -340,8 +406,8 @@ describe('what the flags do to a run', () => {
     expect(await runWith({}, true, 'check', '--root', DEMO, '--color', '--no-color')).toEqual(refused);
     expect(await runWith({ FORCE_COLOR: '1' }, false, 'check', '--root', DEMO, '--no-color', '--color')).toEqual(refused);
     expect(await runWith({ NO_COLOR: '1' }, false, 'check', '--root', DEMO, '--format', 'json', '--color', '--no-color')).toEqual(refused);
-    // Help is answered first, and a command that prints no colour names --color as a check's.
-    expect(await run('check', '--color', '--no-color', '--help')).toEqual({ code: EXIT_OK, out: HELP, err: '' });
+    // Beside the help as well, and a command that prints no colour names --color as a check's.
+    expect(await run('check', '--color', '--no-color', '--help')).toEqual(refused);
     expect((await run('query', 'document', '--root', DEMO, '--color', '--no-color')).err).toBe('spec-graph: --color belongs to check, not to query\n');
     // --no-color twice, on a command that takes it, is --no-color.
     expect(await run('query', 'document', '--root', DEMO, '--no-color', '--no-color')).toEqual(await run('query', 'document', '--root', DEMO));
