@@ -629,8 +629,9 @@ export function parseArgs(argv: readonly string[], cwd: string): CliOptions {
         verbose = true;
         break;
       case '--root': {
-        // Node's resolution, as `stat` and the walk read the path: lexical,
-        // so it asks the disk nothing and folds no case.
+        // Resolved from where the line was typed and compared as text: the
+        // disk is not asked, so a link and its target are two values, and
+        // no case is folded.
         const value = filled(arg, i, 'a directory');
         once(arg, value, () => resolve(cwd, value));
         root = value;

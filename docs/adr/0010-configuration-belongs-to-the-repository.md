@@ -643,16 +643,18 @@ wrote, beside an RFC, so the plain check exits `1`:
 | `query --help`, `diff --help`, `diff a.json --help` | the help | the same |
 | `check --root nowhere --help`, `rules no-such-rule --help` | the help | the same |
 
-Two values are compared as the run reads each. A path is resolved as
-Node's `path.resolve` resolves it, from the directory the line was typed
-in, which is how `stat` and the walk read a `--root`. A baseline typed on
-the line is resolved from the root a `--root` names, wherever on the line
-that stands, and from where it was typed otherwise, which is where the run
-opens it ([ADR-0018](0018-the-configuration-file-is-the-root.md)). The
-resolution is lexical. It asks the disk nothing, so a directory and a link
-to it are two values, and it folds no case, the drive letter's included, so
-`docs` beside `DOCS` is refused on a disk that would read them as one. A
-count is the number it reads as, past the spaces a shell variable brings.
+Two values are compared as the run reads each. A path is resolved with
+Node's `path.resolve` from the directory the line was typed in, which is
+where a relative `--root` is read from. A baseline typed on the line is
+resolved from the root a `--root` names, wherever on the line that stands,
+and from where it was typed otherwise, which is where the run opens it
+([ADR-0018](0018-the-configuration-file-is-the-root.md)). The two resolved
+paths are compared as text, and the disk is not asked, so a directory and
+a link to it are two values. No case is folded: measured on Node 24.18.1,
+`path.resolve` keeps a drive letter as it was typed, `c:\x` as `c:\x`, so
+`docs` beside `DOCS`, and a drive letter in two cases, are refused on a
+disk that would read them as one. A count is the number it reads as, past
+the spaces a shell variable brings.
 `--format`, `--graph-format` and the severity of a `--rule` are read as
 they are written, so for them reading is typing. Where two values differ the
 line names both as they were typed, as before; where one value is spelled
