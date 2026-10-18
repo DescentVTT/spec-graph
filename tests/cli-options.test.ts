@@ -287,6 +287,8 @@ describe('the help and the version, beside a line that is wrong', () => {
     ['rules', 'a', 'b'],
     ['diff', 'a.json', 'b.json', 'c.json'],
     ['diff', '', 'b.json'],
+    ['check', '--record-baseline', 'b.json', '--strict'],
+    ['check', '--record-baseline', 'b.json', '--format', 'sarif'],
   ];
   const HELP_AND_VERSION = '--help is given beside --version, and a run prints the help or the version: give one of the two';
 

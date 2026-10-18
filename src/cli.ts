@@ -31,7 +31,7 @@ import {
   parseGraphExport,
   type GraphExport,
 } from './diff.js';
-import { isGlob, rebasePattern, underRoot } from './glob.js';
+import { createGlobMatcher, isGlob, rebasePattern, underRoot, walkFiles } from './glob.js';
 import { isFamilyName } from './identity.js';
 import { analyse, DEFAULT_PATTERNS, withDiagnostics, type AnalyseOptions, type AnalysisResult } from './runner.js';
 import {
@@ -187,13 +187,16 @@ OPTIONS
   --history <glob>        Files that log what was decided rather than deciding
                           it - journals, changelogs, minutes. Their links are
                           still checked; their obligations are not. Repeatable.
+                          A pattern whose files an ignore leaves out is
+                          refused: no journal it names would be read.
   --baseline <file>       Accept the findings recorded in this file and report
                           only what is new since. The file has to be there: a
                           path that reads nothing accepts nothing and says so
                           nowhere. A "baseline" in the configuration may name a
                           file not recorded yet; a path typed here may not.
   --record-baseline <f>   Write today's findings to this file as accepted debt,
-                          and exit 0 without judging them.
+                          and exit 0 without judging them. With --format json
+                          the recording is a JSON document.
   --ratchet               Also fail when a baseline entry no longer occurs, so
                           a paid-off exemption cannot outlive the defect.
   --no-config             Ignore .spec-graph.json and the package.json key.
@@ -257,18 +260,24 @@ OPTIONS
 
   A baseline to read is refused beside one to record, --baseline beside
   --record-baseline: a recording writes every finding and opens no
-  baseline. So is one family given to both --family and --ignore-family,
-  whose citations are passed over whatever asked for them. One family asked
-  for beside another ignored is taken.
+  baseline. So is each option a recording does not read, since it judges,
+  shows and colours no finding: --ratchet, --strict, --max, --max-warnings,
+  --color, --no-ascii, and --format sarif, github or gitlab. So is one
+  family given to both --family and --ignore-family, whose citations are
+  passed over whatever asked for them. One family asked for beside another
+  ignored is taken.
 
   A value that begins with -- reads as an option, so the option before it is
   refused as missing its value. A name that does begin so is written ./--name
   for a file, [-]-name in a pattern and \\--name for a reference target.
 
-  A line that is wrong is refused with --help or --version on it too, and
-  --help beside --version is refused: one of the two answers would go
-  unread. What a command still needs, a selector or two exports, is what
-  --help is for: query --help and diff --help print it.
+  A line that is wrong is refused with --help or --version on it too, an
+  option a recording does not read among them, and --help beside --version
+  is refused: one of the two answers would go unread. What a command still
+  needs, a selector or two exports, is what --help is for: query --help and
+  diff --help print it. The help reads no disk, so what only the run finds,
+  a --root that is not there or a --history an ignore leaves out, is
+  answered by it.
 
 SELECTORS
   A selector is a path through the graph.
@@ -301,8 +310,9 @@ EXIT CODES
   directory, a second word after rules, an option of another command. So
   are two things of which one would go unread: an option beside its own
   opposite, an option that takes one value given two, --baseline beside
-  --record-baseline, a family both asked for and ignored, --help beside
-  --version.
+  --record-baseline, an option a recording does not read, a family both
+  asked for and ignored, a --history whose files an ignore leaves out,
+  --help beside --version.
 
 CONFIGURATION
   Anything repeated on every run belongs in the repository rather than in the
@@ -321,12 +331,13 @@ CONFIGURATION
       "maxRelated": 3 }
 
   A flag always wins over the file, and list flags add to it rather than
-  replacing it. maxRelated has no flag: it caps how many related locations one
+  replacing it: --family RFC reads the citations "ignoreFamilies" passes
+  over. maxRelated has no flag: it caps how many related locations one
   finding lists, 8 unless set, and 0 lists none.
 
   A problem in that file stops the run with exit 2, named on stderr: invalid
-  JSON, an unknown key, a rule that does not compile, a file that is there and
-  cannot be read. A configuration that did not load checks a different
+  JSON, an unknown key, a rule that does not compile, one family in both
+  "families" and "ignoreFamilies", a file that is there and cannot be read. A configuration that did not load checks a different
   repository than the one configured, and would report that one as consistent.
   --no-config runs on defaults instead.
 
@@ -482,6 +493,32 @@ function unreadBeside(option: string): Beside | undefined {
       return { option: '--record-baseline', decided: 'a check holds its findings against a baseline or records them as one' };
   }
   return undefined;
+}
+
+/**
+ * Whether a recording leaves this option of a check unread.
+ *
+ * A recording writes every finding of the run down and judges none, shows
+ * none and colours nothing: `--record-baseline debt.json --strict` recorded
+ * what the line without `--strict` records, and said it was strict. Each of
+ * these is refused beside it, as `--baseline` is (spec-core's ADR-0005,
+ * 2026-10-11). The options a recording does read are not here: the ones that
+ * choose what is found, `--rule` turning a rule off among them, `--verbose`,
+ * which names the configuration read, and `--no-color` and `--ascii`, which
+ * ask for what is already so. A function and not a table, for the reason
+ * `readersOf` is one.
+ */
+function unreadByRecording(option: string): boolean {
+  switch (option) {
+    case '--ratchet':
+    case '--strict':
+    case '--max':
+    case '--max-warnings':
+    case '--color':
+    case '--no-ascii':
+      return true;
+  }
+  return false;
 }
 
 /** `a`, `a or b`, `a, b or c`: one name or more in a sentence, with the word that joins the last. */
@@ -824,6 +861,19 @@ export function parseArgs(argv: readonly string[], cwd: string): CliOptions {
       );
     }
   }
+  // Three formats are reports of findings, and a recording reports none:
+  // what it wrote in their place was the line for a person, which is none
+  // of the three. JSON is written as a document of what was recorded, and
+  // Markdown is the line, which reads as Markdown already. Refused beside
+  // the help and the version as every other wrong line is.
+  if (recordBaseline !== null) {
+    for (const option of given) {
+      const unread = unreadByRecording(option) ? option : option === '--format' && (format === 'sarif' || format === 'github' || format === 'gitlab') ? `--format ${format}` : null;
+      if (unread !== null) {
+        throw new UsageError(`${unread} is given beside --record-baseline, and a recording writes the findings down and reports none: give one of the two`);
+      }
+    }
+  }
 
   // The second word given to `rules` was dropped, so `rules a b` listed `a`
   // and said nothing of `b`.
@@ -1100,8 +1150,20 @@ async function run(io: CliIO, err: (text: string) => void): Promise<number> {
 
   // The list the check is held against, once it has read the documents, and
   // the families taken out on purpose, which that list is not held to.
+  //
+  // A flag says what the run does where the file says otherwise. The list
+  // that ignores is asked first, so `--family RFC` over "ignoreFamilies":
+  // ["RFC"] passed over every RFC it asked for, and the run reported a
+  // consistent graph where the file alone fails it: a family a flag asks for
+  // is taken off the file's list of those to pass over. The other way needs
+  // nothing: `--ignore-family ADR` over "families": ["ADR"] passes over the
+  // ADRs, as the flag says (ADR-0010, 2026-10-18).
+  const asked = options.families.map((family) => family.trim().toUpperCase());
   const families = [...(file.families ?? []), ...options.families];
-  const ignoreFamilies = [...(file.ignoreFamilies ?? []), ...options.ignoreFamilies];
+  const ignoreFamilies = [
+    ...(file.ignoreFamilies ?? []).filter((family) => !asked.includes(family.trim().toUpperCase())),
+    ...options.ignoreFamilies,
+  ];
   const analyseOptions: AnalyseOptions = {
     root,
     patterns,
@@ -1135,6 +1197,32 @@ async function run(io: CliIO, err: (text: string) => void): Promise<number> {
       }\n  looked under ${root}\n`,
     );
     return EXIT_ERROR;
+  }
+
+  // A journal named on the line and never read. A `--history` pattern marks
+  // the files the run reads, so one whose files an ignore leaves out marked
+  // nothing and said nothing: `--ignore archive --history "docs/archive/**"`
+  // read no journal, and the archive's links went unchecked with the rest of
+  // it. Beside an `--ignore` one of the two goes unread, and beside the
+  // file's "ignore" the flag cannot say what the run does: either way the run
+  // stops, naming the ignores there are. The walk that finds it is made once,
+  // and only for a pattern that matched nothing read; one that matches no
+  // file at all is as it was. With no ignore that walk is the run's own, so
+  // it finds nothing more and names no ignore (ADR-0010, 2026-10-18).
+  const ignores = [...(typed.ignore.length > 0 ? ['--ignore'] : []), ...((file.ignore ?? []).length > 0 ? [`"ignore" in ${loaded.source}`] : [])];
+  let unignored: readonly string[] | undefined;
+  for (const [at, pattern] of typed.history.entries()) {
+    const marks = createGlobMatcher([pattern]);
+    if (result.files.some(marks)) continue;
+    // A mutant that plants a name in this list prunes a directory of that
+    // name, which no repository has: equivalent, and left untested.
+    unignored ??= (await walkFiles({ root, patterns, ignore: [] })).map((walk) => walk.path);
+    if (unignored.some(marks)) {
+      err(
+        `spec-graph: --history "${options.historyPatterns[at]!}" names only files ${listed(ignores, 'or')} leaves out, and a journal is read or it is left out: give one of the two\n`,
+      );
+      return EXIT_ERROR;
+    }
   }
 
   switch (options.command) {
@@ -1246,8 +1334,14 @@ async function run(io: CliIO, err: (text: string) => void): Promise<number> {
           return EXIT_ERROR;
         }
         const entries = (JSON.parse(text) as Baseline).findings.length;
+        // A document asked for is a document: the line in its place was what
+        // a script handed `--format json` failed to parse. No `ok` in it,
+        // since a recording judges nothing.
+        const recorded = { file: options.recordBaseline, findings: result.diagnostics.length, entries };
         out(
-          `recorded ${count(result.diagnostics.length, 'finding')} as ${count(entries, 'entry', 'entries')} in ${options.recordBaseline}\n`,
+          options.format === 'json'
+            ? `${JSON.stringify({ version: 1, recorded }, null, 2)}\n`
+            : `recorded ${count(recorded.findings, 'finding')} as ${count(entries, 'entry', 'entries')} in ${recorded.file}\n`,
         );
         return EXIT_OK;
       }
