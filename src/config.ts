@@ -231,6 +231,19 @@ function readFields(raw: Record<string, unknown>, source: string): LoadedConfig 
 
   config.families = families('families');
   config.ignoreFamilies = families('ignoreFamilies');
+  // A family on both lists is passed over, since the list that ignores is
+  // asked first, and its name on the other reads as applied and does
+  // nothing: "families": ["RFC"] beside "ignoreFamilies": ["RFC"] passed
+  // over every citation in prose, and the check that fails without the two
+  // reported a consistent graph. The command line refuses the same two
+  // options given together, and a file is held to what a line is. A name no
+  // family has is reported above, and once is enough.
+  const ignored = new Set((config.ignoreFamilies ?? []).map((name) => name.trim().toUpperCase()));
+  for (const name of config.families ?? []) {
+    if (isFamilyName(name) && ignored.has(name.trim().toUpperCase())) {
+      problems.push(`${source}: "${name}" is in both "families" and "ignoreFamilies", and a family's citations are read or they are passed over: take it off one of the two`);
+    }
+  }
   config.historyPatterns = strings('historyPatterns');
 
   if (raw['baseline'] !== undefined) {

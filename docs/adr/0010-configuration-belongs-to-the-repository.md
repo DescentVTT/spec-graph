@@ -618,6 +618,114 @@ An empty name given to `diff` resolved to the directory the run was started
 in, and the refusal was the read's, `cannot read : EISDIR`. It is `diff
 expects a graph export on each side, got "" for the first`.
 
+**A flag and a file that disagree, and what a recording reads.** *Amended
+again 2026-10-18.* The amendment of 2026-10-14 left two things measured
+and undecided: a family on both lists where the configuration holds one of
+them, and every option a recording does not read, which it took as an
+option beside an option. Measured on main at 4574727, 0.17.0, through the
+launcher (Windows 11, Node 24.18.1), over an ADR that cites an ADR and an
+RFC nobody wrote, beside an RFC, so the plain check exits `1` on two
+findings, and over a live ADR beside a retired one under `docs/archive`
+that holds an open question and a link to nothing:
+
+| Given | 0.17.0 | Now |
+| --- | --- | --- |
+| `--family RFC` (or `rfc`) over `"ignoreFamilies": ["RFC"]` | exit `0`, consistent: the RFC asked for passed over | exit `1`, the RFC nobody wrote |
+| `--family ADR` over the same | exit `1`, the RFCs passed over | the same |
+| `--ignore-family ADR` over `"families": ["ADR"]` | exit `0`, consistent | the same |
+| `--ignore-family RFC` or `ADR` over `"families": ["ADR", "RFC"]` | exit `1` | the same |
+| `"families": ["RFC"]` beside `"ignoreFamilies": ["rfc"]` | exit `0`, consistent | exit `2`, a problem in the configuration, for every command |
+| `"families": ["ADR", "RFC"]` beside `"ignoreFamilies": ["RFC"]` | exit `1`, the RFCs passed over | exit `2`, the same |
+| `--record-baseline` beside `--format json` | exit `0`, the line `recorded 2 findings as 2 entries in b.json` | exit `0`, a JSON document |
+| The same beside `--format sarif`, `github` or `gitlab` | exit `0`, the line | exit `2`, nothing written |
+| The same beside `--format human` or `markdown` | exit `0`, the line | the same |
+| The same beside `--ratchet`, `--strict`, `--max 1`, `--max 0`, `--max-warnings 0`, `--color` or `--no-ascii` | exit `0`, recorded as without it | exit `2`, nothing written |
+| The same beside `--verbose` | exit `0`, and `configuration: .spec-graph.json` on stderr where a file was read | the same |
+| The same beside `--no-color`, `--ascii`, `--rule broken-reference=off`, `--family ADR` or `--ignore-ref RFC-0099` | exit `0`, recorded as the option reads | the same |
+| `--ignore archive --history "docs/archive/**"`; `--ignore "docs/archive/**"` or `"**/JOURNAL.md"` beside the same journals | exit `0`, consistent, and no journal read | exit `2`, the line below |
+| `--history "docs/archive/**"` over `"ignore": ["archive"]` | exit `0`, consistent | exit `2` |
+| `"historyPatterns": ["docs/archive/**"]` under `--ignore archive` | exit `0` | the same |
+| `--history "docs/nothing/**"`, which matches no file | as without it | the same |
+| `check --format json --max 1`, `check --format sarif --color` | exit `1`, the document | the same |
+
+**A flag says what the run does where the file says otherwise**, for the
+two family keys as for every other. The list that ignores is asked first,
+so `--family RFC` over `"ignoreFamilies": ["RFC"]` passed over every RFC it
+asked for, and reported a consistent graph where the file alone fails the
+check: a family a flag asks for is now taken off the file's list of those
+to pass over, in any case of its name. The other way round the flag already
+decided. `--ignore-family ADR` over `"families": ["ADR"]` passes over the
+ADRs and leaves the list nothing it allows, which is what the flag asks:
+a name on `--ignore-family` that covers every family the corpus has is
+asked for by name (the amendment of 2026-10-12).
+
+**One file that names a family under both keys is a broken configuration.**
+The list that ignores decided there too, and the name under `"families"`
+read as applied and did nothing, as `--family ADR --ignore-family ADR` did
+on the command line. It is a problem of the file, exit `2` before anything
+is read, for every command, in the words the command line has:
+
+```text
+spec-graph: .spec-graph.json: "RFC" is in both "families" and "ignoreFamilies", and a family's citations are read or they are passed over: take it off one of the two
+```
+
+**A recording reads what chooses the findings, and refuses what would judge
+or show them.** It writes every finding of the run down and judges none,
+shows none and colours nothing. `--ratchet`, `--strict`, `--max`,
+`--max-warnings`, `--color` and `--no-ascii` beside `--record-baseline` are
+refused, whichever comes first, as `--baseline` is:
+
+```text
+spec-graph: --strict is given beside --record-baseline, and a recording writes the findings down and reports none: give one of the two
+```
+
+`--max 0`, no limit, is refused with the rest: it says how many findings
+are shown, and a recording shows none. `--format sarif`, `github` and
+`gitlab` are refused the same way, naming the format: each is a report of
+findings, and what a recording wrote in its place was the line, which is
+none of the three. A document asked for is a document: `--format json`
+writes what was recorded,
+
+```json
+{ "version": 1, "recorded": { "file": "b.json", "findings": 2, "entries": 2 } }
+```
+
+with no `ok`, since a recording judges nothing; `--format markdown` writes
+the line, which is Markdown already, and `human` the line as before.
+`--verbose` is read, since a recording names the configuration it read
+under it as every command does; `--no-color` and `--ascii` ask for what is
+already so; and `--rule`, the families and the ignores choose what is
+recorded. The rule for a format of a check stays as it was: `--format json
+--max 3` pairs an option with an option, and the report is written.
+
+**A journal an ignore leaves out is refused.** A `--history` pattern marks
+the files a run reads, so one whose files an ignore leaves out marked
+nothing and said nothing: the archive's open question was not checked as
+an obligation, which is what `--history` is for, nor was its link checked,
+which is what `--history` keeps. Beside `--ignore` one of the two goes
+unread, and over the file's `"ignore"` the flag cannot say what the run
+does, which is asked for and not delivered (spec-core's ADR-0005,
+2026-10-09). A pattern typed on the line that matches no file the run
+reads, and matches one the patterns reach once every ignore is set aside,
+stops the run with exit `2`, for each command that reads `--history`:
+
+```text
+spec-graph: --history "docs/archive/**" names only files --ignore leaves out, and a journal is read or it is left out: give one of the two
+```
+
+The line names the ignores there are, `--ignore`, `"ignore" in
+.spec-graph.json`, or both joined by `or`, and not which of them left the
+files out: telling them apart is one more walk for each. The walk that
+finds it is made once, only for a pattern that matched nothing read. A
+pattern that matches no file at all, a typo or a journal not written yet,
+is read as before, which is the question the family contract left open for
+a pattern of several (2026-10-11), and a pattern some of whose files are
+read is read for those. `"historyPatterns"` in the file under an `--ignore`
+is the flag deciding, and the files are left out.
+
+Those are input refused that was accepted, and a check that passed that
+can fail, so they arrive in a minor release.
+
 ## What this does not fix
 
 The "greedy prefix" flood is narrower than it looks, and worth stating precisely

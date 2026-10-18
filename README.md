@@ -623,6 +623,19 @@ silenced the whole lot, including the links, and a journal full of 404s is
 exactly what this tool is for. See
 [ADR-0011](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0011-a-record-is-not-a-specification.md).
 
+So the two are not given together. A `--history` pattern that matches no file
+the run reads, where the files it names are left out by `--ignore` or by
+`"ignore"` in the configuration, stops the run with exit `2`, since no journal
+it names would be read:
+
+```text
+spec-graph: --history "docs/archive/**" names only files --ignore leaves out, and a journal is read or it is left out: give one of the two
+```
+
+A pattern that matches no file at all is read as before, and `historyPatterns`
+in the configuration under an `--ignore` is the flag deciding: the files are
+left out.
+
 ## The query language
 
 The two flagship rules are not hand-written traversals. They are selectors,
@@ -783,6 +796,20 @@ git add .spec-graph-baseline.json
 }
 ```
 
+A recording writes every finding down and judges none, so the options that
+judge, show or colour a report are refused beside it, exit `2`: `--ratchet`,
+`--strict`, `--max`, `--max-warnings`, `--color`, `--no-ascii`, and `--format`
+`sarif`, `github` or `gitlab`, each a report of findings, of which a recording
+makes none. `--format json` writes what was recorded as a document,
+
+```json
+{ "version": 1, "recorded": { "file": ".spec-graph-baseline.json", "findings": 2, "entries": 2 } }
+```
+
+and `--format markdown` the line, which reads as Markdown already. The options
+that choose what is found, `--rule` among them, are read by a recording as by a
+check.
+
 CI is green from the first commit, every specification written afterwards is
 checked in full, and a new finding fails the build. When debt is paid, the run
 says so:
@@ -872,7 +899,8 @@ SARIF — and is 8 unless set; `0` lists none.
 
 A broken config stops the run with exit `2`, each problem named on stderr:
 invalid JSON, a value of the wrong type, an unknown key, a rule that does not
-compile, a family name no family has, a file that is there and cannot be read.
+compile, a family name no family has, a family in both `families` and
+`ignoreFamilies`, a file that is there and cannot be read.
 Why a mistake stops the run:
 
 - A configuration that did not load checks a different repository than the one
@@ -1040,6 +1068,14 @@ A list whose every name has a document sees none of them. `ignoreFamilies`
 needs no such check: a name on it passes over citations of that family alone,
 so a mistyped one passes over nothing and the run reports more, not less.
 
+A family is read or passed over, not both. The list that ignores is asked
+first, so a name on both lists passed over the family whatever the other said:
+one family under both keys of the file is a problem in it, exit `2`, as
+`--family` beside `--ignore-family` is on the command line. A flag says what
+the run does where the file says otherwise: `--family RFC` over
+`"ignoreFamilies": ["RFC"]` reads the RFCs' citations, and `--ignore-family ADR`
+over `"families": ["ADR"]` passes over the ADRs'.
+
 Both are consulted only after resolution has already failed, so `RFC 0001` still
 resolves to your local RFC-0001 with `RFC` on the ignore list. No configuration
 can delete an edge. See
@@ -1144,7 +1180,12 @@ variable in `--family "$FAMILIES"` is the usual way to write one:
 - `--baseline` beside `--record-baseline`: a recording writes every finding
   of the run and opens no baseline, so the one to read would go unread. A
   `"baseline"` in the configuration is no option, and is recorded over as
-  before;
+  before. So are the options a recording does not read: `--ratchet`,
+  `--strict`, `--max`, `--max-warnings`, `--color`, `--no-ascii`, and
+  `--format sarif`, `github` or `gitlab`
+  ([Adopting this on a repository that predates it](#adopting-this-on-a-repository-that-predates-it));
+- a `--history` pattern whose files an ignore leaves out, so that no journal
+  it names is read ([Journals, changelogs and minutes](#journals-changelogs-and-minutes));
 - one family given to both `--family` and `--ignore-family`, whose citations
   are passed over whatever asked for them: alone on the allowlist it would
   leave every citation as prose. One family asked for beside another ignored
