@@ -1148,8 +1148,11 @@ variable in `--family "$FAMILIES"` is the usual way to write one:
   would be read and the earlier go unread: `--root nowhere --root .` would
   check `.` and never say that `nowhere` is not there. The line names both,
   `--root is given "nowhere" and ".", and takes one value: give one of the
-  two`. The same value twice is that value once, as typed, and an option
-  that is repeatable above takes each of its values;
+  two`. Two values are compared as each is read, so one value twice is that
+  value once however it is spelled: `--root .` beside `--root ./` names one
+  directory, a baseline is a path resolved as the root is, and `--max 1`
+  beside `--max " 1"` is one number. An option that is repeatable above
+  takes each of its values;
 - `--baseline` beside `--record-baseline`: a recording writes every finding
   of the run and opens no baseline, so the one to read would go unread. A
   `"baseline"` in the configuration is no option, and is recorded over as
@@ -1164,7 +1167,17 @@ variable in `--family "$FAMILIES"` is the usual way to write one:
   A name that does begin so is written `./--name` for a file, `[-]-name` in
   a pattern and `\--name` for a reference target;
 - a configuration file that is there and cannot be read, a directory called
-  `.spec-graph.json` among them.
+  `.spec-graph.json` among them;
+- `--help` beside `--version`, in either order: one of the two answers would
+  go unread.
+
+Each of those the command line can tell from itself is refused with
+`--help` or `--version` on the line too, as an option nobody knows always
+was: answered first, the help told a script nothing of the line it wrote,
+and the version answered as if the line were right. What a command still
+needs, a selector or two exports, is what the help is for, so `query --help`
+and `diff --help` print it; and so does a line only the run would find
+wrong, `--root nowhere --help`, since the help reads no disk.
 
 An option belongs to the commands that read it. Any other command refuses it
 by name, `--strict belongs to check, not to query`, rather than run as if the
@@ -1226,8 +1239,8 @@ that adds `--no-color` to a line already holding `--color` would be told
 nothing of which it got. Those are the two pairs the command line has; no
 other option has an opposite to be given beside. Either of a pair alone wins
 over the environment, which is what it is for, and the same option given
-twice is that option once. `--help` and `--version` are answered whatever
-else is on the line.
+twice is that option once. A pair is refused with `--help` or `--version`
+on the line as well.
 
 Without either, `SPEC_GRAPH_ASCII` set to anything but `0`, `false` or nothing
 asks for ASCII; and without that, a Windows console that sets neither
@@ -1271,13 +1284,13 @@ steps:
   - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
     with:
       persist-credentials: false
-  - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+  - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
     with:
       node-version: '24'
   - run: npm ci
   - run: npx --no-install @descent-vtt/spec-graph --format sarif > spec-graph.sarif
     continue-on-error: true
-  - uses: github/codeql-action/upload-sarif@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
+  - uses: github/codeql-action/upload-sarif@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
     with:
       sarif_file: spec-graph.sarif
 ```
