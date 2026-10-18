@@ -237,7 +237,8 @@ function readFields(raw: Record<string, unknown>, source: string): LoadedConfig 
   // over every citation in prose, and the check that fails without the two
   // reported a consistent graph. The command line refuses the same two
   // options given together, and a file is held to what a line is. A name no
-  // family has is reported above, and once is enough.
+  // family has is reported above, and once is enough. A name planted in
+  // either fallback is none, so it is never on both lists: equivalent.
   const ignored = new Set((config.ignoreFamilies ?? []).map((name) => name.trim().toUpperCase()));
   for (const name of config.families ?? []) {
     if (isFamilyName(name) && ignored.has(name.trim().toUpperCase())) {

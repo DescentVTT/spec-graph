@@ -773,7 +773,7 @@ describe('a family asked for and ignored', () => {
 
 describe('a flag where the file says otherwise of one family', () => {
   it('reads the citations --family asks for, where the file passes over that family', async () => {
-    for (const listed of ['RFC', 'rfc']) {
+    for (const listed of ['RFC', 'rfc', ' RFC ']) {
       await withRepo('flag-over-file-family', { ...MIXED, '.spec-graph.json': `{ "ignoreFamilies": ["${listed}"] }\n` }, async (root) => {
         const check = ['check', '--root', root];
         // The file alone passes over the RFC nobody wrote and reports the ADR.
@@ -841,6 +841,7 @@ describe('an option a recording does not read', () => {
       expect(usage(['--format', format, '--record-baseline', 'b.json'])).toBe(unread(`--format ${format}`));
     }
     expect(usage(['--strict', '--record-baseline', 'b.json', '--format', 'sarif', '--ratchet'])).toBe(unread('--strict'));
+    expect(usage(['--record-baseline', 'b.json', '--verbose', '--strict', '--format', 'sarif'])).toBe(unread('--strict'));
     expect(usage(['--format', 'gitlab', '--record-baseline', 'b.json', '--max', '3'])).toBe(unread('--format gitlab'));
     // The baseline to read is named before them, as it was.
     expect(usage(['--strict', '--record-baseline', 'b.json', '--baseline', 'a.json'])).toContain('--baseline is given beside --record-baseline, and a check holds');
