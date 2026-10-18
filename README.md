@@ -462,9 +462,18 @@ A phrase governs a reference when it stands no more than 40 characters before
 it, in the same statement: a sentence, a paragraph, a list item or a table cell.
 
 - A negation between the two - `owned by nobody` - cancels it, whatever mark
-  stands after the word: `blocked by none: [ADR-0002](0002.md)` is a citation
-  and no more. A hyphen joins the word to the next, which names a thing, so
-  `blocked by the no-op in` cancels nothing.
+  stands before or after the word: `blocked by none: [ADR-0002](0002.md)` and
+  `blocked by:none` are each a citation and no more, and so is a code span
+  that holds nothing but the word, `` blocked by `none` ``. A hyphen joins the
+  word to the next, which names a thing, so `blocked by the no-op in` cancels
+  nothing; `no-one` is `no one`, and cancels.
+- So does a negation just before the phrase: `not blocked by`, `never
+  deferred to`, `has not been superseded by`, `doesn't depend on`, `no longer
+  blocked by`. Only a space and a word of tense or doubt (`be`, `been`, `is`,
+  `yet`, `longer`, `necessarily` and a few more) stand between: `not only
+  blocked by`, `nothing but blocked by`, the option `"never" blocked by` and
+  `Not in this release: deferred to` each state the relation, and are read as
+  they state it.
 - A sentence written in Chinese ends at `。`, `？`, `！` or `；`, with a space
   after it or none, so `Deferred to later。另見 ADR-0002` hands nothing to
   ADR-0002. A stop only ends a statement sooner: it reads less, never more.
