@@ -196,6 +196,99 @@ so `Not blocked by` is a `blocked-by` edge. A mark against the front of the
 word leaves it unread, `by:none`. And `no-one` is not on the list of words,
 so the hyphen makes it a name.
 
+*Amended 2026-10-18.* **A negation is read before the phrase, against any
+mark, and in code.** The three things left as they were, and a fourth,
+measured on main at 4574727, 0.17.0, through the launcher: one document for
+each sentence, citing a second, and the relation `graph` exports for it.
+
+| Written | 0.17.0 | Now |
+| --- | --- | --- |
+| `Not blocked by`, `This is not blocked by`, `No longer blocked by`, `Not even blocked by` | `blocked-by` | a citation |
+| `Never deferred to`, `Not yet deferred to`, `It was never deferred to` | `delegates-to` | a citation |
+| `It isn't blocked by` (and with `’`), `Neither blocked by [ADR-0002] nor`, `Done without being blocked by`, `Nobody is blocked by` | `blocked-by` | a citation |
+| `This doesn't depend on` | `depends-on` | a citation |
+| `It has not been superseded by`, `It hasn't been superseded by` | the cited document supersedes this one | a citation |
+| `Not blocked by ADR-0002.`, a bare identifier | `blocked-by` | a citation |
+| `Blocked by:none`, and `none` between two em dashes | `blocked-by` | a citation |
+| `Deferred to no-one: see` | `delegates-to` | a citation, as `no one` was |
+| ``Blocked by `none`:`` | `blocked-by` | a citation, as `**none**` was |
+| `Not only blocked by`, `Not just blocked by`, `Nothing but blocked by` | `blocked-by` | the same |
+| `Not in this release: deferred to`, `Not blocked by the cache, but deferred to` | `delegates-to` | the same |
+| `The "never" option is blocked by`, `The option "never" blocked by`, `"Not now" is blocked by` | `blocked-by` | the same |
+| `Not the cache; blocked by`, `Cannot ship; blocked by` | `blocked-by` | the same |
+| `Blocked by the no-op in`, ``Blocked by the `--no-cache` flag in`` | `blocked-by` | the same |
+| `Blocked by the "none" option in` | a citation | the same |
+
+The rule above, that a verb does not reach across a negation, already
+covers the mark: `by:none` has the word between the phrase and the
+reference, and the word was missed only because the pattern wanted a space
+before it. It begins now where it ends, after anything but a letter, a digit
+or a hyphen, and the hyphen is the exception at the front as at the end:
+`the anti-none rule` names a thing. The other three the rule does not
+cover, and each is decided here with what it trades.
+
+**A negation just before the phrase cancels it.** "It has not been
+superseded by [ADR-0002]" made ADR-0002 the successor of the document that
+says it has none, and a superseded document's open questions are orphaned
+and its premises stale: the worst inference a sentence can be read into.
+The negation is the last word before the phrase, or before words that carry
+a tense or leave the relation in doubt and claim nothing of their own: `be`,
+`been`, `being`, `is`, `are`, `was`, `were`, `yet`, `longer`, `ever`,
+`even`, `currently`, `actually`, `really`, `necessarily`, `always`. The
+words are the list above with `no one` and a contraction, `isn't` or
+`doesn’t`, and `cannot`. Only a space stands between: a quote mark keeps a
+quoted word to itself, so the option `"never"` is a name. A straight quote
+and apostrophe are kept for that in the text a phrase is read from, as the
+curly ones always were, and where one stands beside a space it now counts
+toward the 40 characters a phrase reaches, as a curly one did.
+
+What it trades. The false positive it removes is a relation the sentence
+denies. The false negative it adds is a negation that belongs to another
+clause, with nothing but a comma before the phrase, since a comma is blanked
+in that text as it was: "both or neither, because [ADR-0002] says so" and
+"if not, blocked by [ADR-0002]" each state the relation and are citations
+now. Keeping the comma would stop those two, and it moves the reach of
+every phrase across a comma by a character: measured that way, relations a
+phrase reached by a character or two went too, `per tick`, `per cent` and
+`per unit` read as premises and `blocks` in "frozen blocks were run" read
+as a verb, and the window is not this amendment's to move. `not only`, `not just`, `not merely` and `nothing but` state the
+relation and are read as relations, by the word that stands between.
+
+**`no-one` is `no one`.** The hyphen that makes `no-op` a name makes
+`no-one` the British spelling of a word on the list. It trades nothing
+found: no sentence measured used `no-one` to name a thing.
+
+**A code span that holds nothing but a negation word cancels.** The
+structure mask blanks code, which keeps a phrase or a link written in code
+from being read, and hid the one word ``Blocked by `none`:`` denies with,
+where `**none**` was read. A span whose whole content is a word on the list
+is read as that word, before the phrase or after it. The false negative it
+trades is a value called `none`, ``deferred to the `none` policy's owner
+in``, which is now a citation; a span that holds more, `` `--no-cache` `` or
+`` `none of it` ``, is code as it was.
+
+Measured on the Markdown of the family's five repositories: 576 relations,
+none changed. On three other repositories nobody wrote for spec-graph,
+16,355 relations, of which 33 gave way to 28 citations, the other five
+merging with a citation of the same document already there, from seven
+sentences written several times over: four deny the relation read from them ("never amends
+its own code", "never depends on", a table row's "Not superseded by",
+"Nothing blocks it"), one read a premise from the negated "because" of
+"not because it is broad", one read `per` in "no per-wall" as a premise,
+and one is the miss above, "both or neither, because". Six relations that
+said the opposite of their sentence, or nothing, for one that a sentence
+stated: the direction this ADR is for.
+
+A check that passed can fail, so it arrives in a minor release. Four
+checks, measured on both builds:
+
+| The corpus | 0.17.0 | Now |
+| --- | --- | --- |
+| An open question in a superseded document, "Not yet deferred to" a live one | exit `0` | exit `1`, `orphaned-obligation` |
+| An open question in a live document, "Not blocked by" a retired one | exit `1`, `ghost-handover` | exit `0` |
+| A live document that "doesn't depend on" a retired one | exit `1`, `stale-premise` | exit `0` |
+| An accepted document that "has not been superseded by" another | exit `1`, `live-supersession` | exit `0` |
+
 ## Open Questions
 
 - [ ] Should the default include patterns be widened, or is naming the fix in

@@ -11,6 +11,30 @@ the family's
 [versioning policy](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0009-versions-before-1-0.md)
 records.
 
+## Unreleased
+
+### Changed
+
+- **A negation before the phrase cancels it, as one after it does.** `Not
+  blocked by [ADR-0002](0002.md)` was a `blocked-by` edge, `This doesn't
+  depend on` a dependency, and `It has not been superseded by [ADR-0002]`
+  made ADR-0002 the successor of the document that says it has none. A
+  negation as the last word before the phrase, or before a word of tense or
+  doubt such as `been`, `yet`, `longer` or `necessarily`, makes the
+  reference a citation now, contractions and `cannot` among them. `not
+  only`, `nothing but`, a quoted `"never"` and `Not in this release:
+  deferred to` state the relation and are read as before. And a negation is
+  read whatever mark stands before it, `blocked by:none`; `no-one` is read
+  as `no one`; and a code span that holds nothing but the word, ``blocked by
+  `none`:``, is read as the word, as `**none**` was. A `ghost-handover`,
+  `stale-premise` or a supersession such a sentence caused goes; an open
+  question in a retired document read as handed on by such a sentence is an
+  `orphaned-obligation`, so a check that passed can fail
+  ([ADR-0006](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0006-false-positives-cost-more.md)).
+  Upgrading: run `check`; where it now reports an `orphaned-obligation`, the
+  question is owed by nobody, as its sentence says: close it, or hand it to a
+  live document in so many words.
+
 ## 0.17.0
 
 Two things of which one went unread are refused, exit 2: an option that

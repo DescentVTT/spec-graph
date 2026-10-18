@@ -273,6 +273,10 @@ const CORPUS: Record<string, string> = {
     '<!-- <!-- nested --> -->',
     '``` <!-- a fence that is not one --> ```',
     Array.from({ length: 200 }, (_, k) => '`'.repeat(k + 2)).join(' '),
+    // A negation between two runs one backtick apart, where every length of
+    // the first is tried against the second and none closes it.
+    `${'`'.repeat(5000)} none ${'`'.repeat(4999)}`,
+    `${'`none` '.repeat(2000)}blocked by [ADR-0001](0001-target.md).`,
     '<!-- '.repeat(2000),
   ].join('\n'),
 };

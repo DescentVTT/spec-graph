@@ -453,8 +453,50 @@ const VERB_RULES: readonly { kind: EdgeKind; inverted: boolean; phrases: readonl
  * where the reference begins, and `nobody[ADR-7]` has nothing after it. A
  * hyphen is not one. It joins the word to the next, and "the no-op" or "the
  * never-ending migration" names a thing and denies nothing (ADR-0006).
+ *
+ * The word begins where it ends, after anything but a letter, a digit or a
+ * hyphen, so `Blocked by:none` and `none` between two em dashes are read as
+ * `by none` is. `no-one` is `no one` written with a hyphen, and on the list
+ * for that: the hyphen that makes `no-op` a name makes `no-one` a word
+ * (ADR-0006, 2026-10-18).
  */
-const NEGATION = /(?:^|\s)(?:no|not|nobody|none|never|neither|nor|nothing|without)(?![\p{L}\p{N}-])/u;
+const NEGATION = /(?:^|[^\p{L}\p{N}-])(?:no|not|no-one|nobody|none|never|neither|nor|nothing|without)(?![\p{L}\p{N}-])/u;
+
+/**
+ * A negation that stands before a governing phrase, which cancels it as one
+ * after it does: "Not blocked by [ADR-7]", "it has not been superseded by
+ * [ADR-7]" and "this doesn't depend on [ADR-7]" each deny the relation the
+ * phrase would state (ADR-0006, 2026-10-18).
+ *
+ * It is the last word before the phrase, or before a few words that carry a
+ * verb's tense, or leave the relation in doubt, and no claim of their own:
+ * `be`, `been`, `is`, `yet`, `longer`, `necessarily` and the like, so "no
+ * longer blocked by", "not yet deferred to" and "not necessarily blocked
+ * by" are read, and "not only blocked by" and "nothing but blocked by",
+ * which state the relation, are not. Only a space stands between, so a
+ * mark keeps the word to itself: the option `"never" blocked by` states the
+ * relation, as "Not in this release: deferred to" does. A comma is blanked
+ * before this is read, as it was, so "If not, blocked by" is cancelled: a
+ * miss, kept so that a comma moves no phrase's reach. A contraction is a
+ * negation, `isn't` and `doesn’t`, and so is `cannot`. Tested against the
+ * text just before the phrase, which ends with the space before it.
+ */
+const NEGATED_BEFORE =
+  /(?:^|[^\p{L}\p{N}-])(?:no|not|no one|no-one|nobody|none|never|neither|nor|nothing|without|cannot|\p{L}+n['’]t)(?: (?:be|been|being|is|are|was|were|yet|longer|ever|even|currently|actually|really|necessarily|always))* $/u;
+
+/**
+ * A code span that holds nothing but a negation word: `` `none` ``.
+ *
+ * The structure mask blanks code, which is right for a phrase or a link
+ * written in it, and hid the one word a sentence denies with: ``Blocked by
+ * `none`: [ADR-7]`` was a `blocked-by` edge where `**none**` was a citation.
+ * Read as a negation, a span naming a value called `none` costs a relation
+ * the sentence states, which is the miss ADR-0006 prefers to a relation it
+ * denies. The backreference matches a closing run as long as the opening,
+ * which is what ends a span, and each start is a run's first backtick, so a
+ * run is tried once for each length it has: linear in the text.
+ */
+const NEGATION_IN_CODE = /(?<!`)(`+) ?(no|not|no-one|nobody|none|never|neither|nor|nothing|without) ?\1(?!`)/giu;
 
 /** How close a governing phrase must sit to the reference it governs. */
 const VERB_WINDOW = 40;
@@ -1373,6 +1415,7 @@ function extractReferences(context: ReferenceContext): ReferenceCandidate[] {
   // than a typed edge and a neutral citation beside it.
   const linked = new Set<string>();
   const links = referenceLinks(scanned);
+  const words = withNegationsInCode(scanned);
   for (const link of links) {
     if (link.form === 'definition') continue;
     if (isClaimed(claimed, link.start)) continue;
@@ -1382,7 +1425,7 @@ function extractReferences(context: ReferenceContext): ReferenceCandidate[] {
 
     const owner = ownerOf(items, link.start) ?? documentAt(link.start).id;
     const section = sectionPathAt(scanned, link.start);
-    const classified = classifyReference(scanned.masks.structure, link.start, link.end, section);
+    const classified = classifyReference(words, link.start, link.end, section);
 
     linked.add(normaliseRef(stripAnchor(target)));
     out.push({
@@ -1405,7 +1448,7 @@ function extractReferences(context: ReferenceContext): ReferenceCandidate[] {
     if (isClaimed(claimed, bare.start)) continue;
     const owner = ownerOf(items, bare.start) ?? documentAt(bare.start).id;
     const section = sectionPathAt(scanned, bare.start);
-    const classified = classifyReference(scanned.masks.structure, bare.start, bare.end, section);
+    const classified = classifyReference(words, bare.start, bare.end, section);
     out.push({
       kind: classified.kind,
       from: owner,
@@ -1536,8 +1579,10 @@ export function classifyReference(
     const distance = before.length - end;
     if (distance > VERB_WINDOW) continue;
     // What sits between the phrase and the reference has to be connective. A
-    // negation in there reverses the claim the phrase would otherwise make.
+    // negation in there reverses the claim the phrase would otherwise make,
+    // and so does one just before the phrase.
     if (NEGATION.test(before.slice(end))) continue;
+    if (NEGATED_BEFORE.test(before.slice(0, m.index))) continue;
     // Always found: the pattern was compiled from this table's own keys, and a
     // lower-cased search matches them only as written. The check is for types.
     const rule = VERB_LOOKUP.get(phrase);
@@ -1592,6 +1637,13 @@ const STATEMENT_BREAK = /[.?!;]\s|[。？！；]|\n\s*\n|\n\s*[-*+>#]|\|/g;
  * The search stops at the last boundary: a governing phrase in the *previous*
  * sentence does not govern this reference. "We deferred that to ADR-3. See also
  * [ADR-9]." must not read as a delegation to ADR-9.
+ *
+ * Emphasis, brackets and commas are blanked. A straight quote and a straight
+ * apostrophe are kept, as the curly ones always were, since a negation
+ * before a phrase is read by what stands against it: a quoted `"never"`
+ * names a word, and `isn't` is one word. Kept, each counts toward the
+ * distance a phrase reaches where it stands beside a space, as a curly one
+ * did (ADR-0006, 2026-10-18).
  */
 function sentenceBefore(text: string, start: number): string {
   const window = text.slice(Math.max(0, start - 160), start);
@@ -1600,7 +1652,7 @@ function sentenceBefore(text: string, start: number): string {
   return window
     .slice(cut)
     .toLowerCase()
-    .replace(/[`*_~"'()\[\],]/g, ' ')
+    .replace(/[`*_~()\[\],]/g, ' ')
     .replace(/\s+/g, ' ');
 }
 
@@ -1619,6 +1671,30 @@ function sentenceAfter(text: string, end: number): string {
   const stop = /[.?!;\n|。？！；]/.exec(window);
   const cut = stop ? window.slice(0, stop.index) : window;
   return cut.toLowerCase().replace(/[`*_~"'()\[\],]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * The structure mask, with the word of each code span that holds nothing
+ * but a negation written back where the span was: what a reference's
+ * phrase and its negation are read from.
+ *
+ * A word written back over itself changes nothing, so the backticks the
+ * scanner read as text, and so left in the structure, need no telling apart
+ * from a span. A span inside a code block can be written back too: a block
+ * is blank lines in the structure, which end a statement before any
+ * reference after it reads back so far.
+ */
+function withNegationsInCode(scanned: ScannedDocument): string {
+  const { structure, prose } = scanned.masks;
+  let text = '';
+  let cursor = 0;
+  for (const m of prose.matchAll(NEGATION_IN_CODE)) {
+    const word = m[2]!;
+    const at = m.index + m[0].indexOf(word);
+    text += structure.slice(cursor, at) + word;
+    cursor = at + word.length;
+  }
+  return text + structure.slice(cursor);
 }
 
 interface BareReference {

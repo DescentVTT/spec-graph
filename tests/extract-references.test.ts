@@ -289,8 +289,132 @@ describe('a governing phrase', () => {
     expect(reading(text)).toEqual(REFERENCES);
   });
 
-  it('is cancelled by a negation after it, and not by one before it', () => {
+  it('is not cancelled by a negation before it that the words between take apart', () => {
+    // "Not in this release" denies the release, and the delegation stands.
     expect(reading('# A\n\nNot in this release: deferred to [ADR-0002](0002-b.md).\n')).toEqual(DELEGATES);
+  });
+
+  // Each denies the relation its phrase would state, and each was the
+  // relation (ADR-0006, 2026-10-18).
+  it.each([
+    'Not blocked by [ADR-0002](0002-b.md).',
+    'This is not blocked by [ADR-0002](0002-b.md).',
+    'Never deferred to [ADR-0002](0002-b.md).',
+    'No longer blocked by [ADR-0002](0002-b.md).',
+    'Not yet deferred to [ADR-0002](0002-b.md).',
+    'It is not currently blocked by [ADR-0002](0002-b.md).',
+    'Not necessarily blocked by [ADR-0002](0002-b.md).',
+    "It isn't blocked by [ADR-0002](0002-b.md).",
+    'It isn’t blocked by [ADR-0002](0002-b.md).',
+    "This doesn't depend on [ADR-0002](0002-b.md).",
+    'This cannot depend on [ADR-0002](0002-b.md).',
+    'It has not been superseded by [ADR-0002](0002-b.md).',
+    'It has not yet been superseded by [ADR-0002](0002-b.md).',
+    "It hasn't been superseded by [ADR-0002](0002-b.md).",
+    'It was never deferred to [ADR-0002](0002-b.md).',
+    'Neither blocked by [ADR-0002](0002-b.md) nor by the cache.',
+    'Done without being blocked by [ADR-0002](0002-b.md).',
+    'Nobody is blocked by [ADR-0002](0002-b.md).',
+    'No one is blocked by [ADR-0002](0002-b.md).',
+    'Not even blocked by [ADR-0002](0002-b.md).',
+    'None is blocked by [ADR-0002](0002-b.md).',
+    'Nothing was blocked by [ADR-0002](0002-b.md).',
+    'It is neither late nor blocked by [ADR-0002](0002-b.md).',
+    'It must not be blocked by [ADR-0002](0002-b.md).',
+    'None are blocked by [ADR-0002](0002-b.md).',
+    'None were deferred to [ADR-0002](0002-b.md).',
+    'It was not ever blocked by [ADR-0002](0002-b.md).',
+    'It is not actually blocked by [ADR-0002](0002-b.md).',
+    'Not really blocked by [ADR-0002](0002-b.md).',
+    'Not always blocked by [ADR-0002](0002-b.md).',
+    '**Not** blocked by [ADR-0002](0002-b.md).',
+    'The phrase "not blocked by" in [ADR-0002](0002-b.md).',
+  ])('is cancelled by a negation just before it: %s', (sentence) => {
+    expect(reading(`# A\n\n${sentence}\n`)).toEqual(REFERENCES);
+  });
+
+  it('is cancelled by a negation before it in prose, as in a link', () => {
+    const bare = (text: string) => {
+      const found = extract(`# A\n\n${text}\n`).references.find((reference) => reference.target === 'ADR-0002');
+      return found && { kind: found.kind, inverted: found.inverted };
+    };
+    expect(bare('Not blocked by ADR-0002.')).toEqual(REFERENCES);
+    expect(bare('Blocked by ADR-0002.')).toEqual({ kind: 'blocked-by', inverted: false });
+    expect(bare('Blocked by `none`: ADR-0002.')).toEqual(REFERENCES);
+  });
+
+  // Each states the relation, beside a word that reads as a negation alone.
+  it.each([
+    ['Not only blocked by [ADR-0002](0002-b.md), but late as well.', 'blocked-by'],
+    ['Not just blocked by [ADR-0002](0002-b.md).', 'blocked-by'],
+    ['Not merely deferred to [ADR-0002](0002-b.md).', 'delegates-to'],
+    ['Nothing but blocked by [ADR-0002](0002-b.md).', 'blocked-by'],
+    ['The option "never" blocked by [ADR-0002](0002-b.md).', 'blocked-by'],
+    ["The option 'never' blocked by [ADR-0002](0002-b.md).", 'blocked-by'],
+    ['The option “never” blocked by [ADR-0002](0002-b.md).', 'blocked-by'],
+    ['"Not now" is blocked by [ADR-0002](0002-b.md).', 'blocked-by'],
+    ['The "No Silent Failures" policy is blocked by [ADR-0002](0002-b.md).', 'blocked-by'],
+    ['Not the cache; blocked by [ADR-0002](0002-b.md).', 'blocked-by'],
+    ['Not blocked by the cache, but deferred to [ADR-0002](0002-b.md).', 'delegates-to'],
+    ['The cannot-fail path is blocked by [ADR-0002](0002-b.md).', 'blocked-by'],
+    ['Its snot blocked by [ADR-0002](0002-b.md).', 'blocked-by'],
+    ['The do-nothing blocked by [ADR-0002](0002-b.md) is ours.', 'blocked-by'],
+    ['Deferred to the knot team in [ADR-0002](0002-b.md).', 'delegates-to'],
+    ['Blocked by the casino rollout in [ADR-0002](0002-b.md).', 'blocked-by'],
+  ])('is not cancelled by a negation the sentence does not use on it: %s', (sentence, kind) => {
+    expect(reading(`# A\n\n${sentence}\n`)).toEqual({ kind, inverted: false });
+  });
+
+  it('is cancelled by a negation with a mark against its front, as against its end', () => {
+    // `by:none` was a blocked-by edge, where `by none:` was a citation.
+    expect(reading('# A\n\nBlocked by:none [ADR-0002](0002-b.md).\n')).toEqual(REFERENCES);
+    expect(reading('# A\n\nBlocked by—none—[ADR-0002](0002-b.md).\n')).toEqual(REFERENCES);
+    expect(reading('# A\n\nDeferred to (nobody) [ADR-0002](0002-b.md).\n')).toEqual(REFERENCES);
+    expect(reading('# A\n\nBlocked by "none": [ADR-0002](0002-b.md).\n')).toEqual(REFERENCES);
+    // A hyphen joins the word to the one before it, as to the one after.
+    expect(reading('# A\n\nBlocked by the anti-none rule in [ADR-0002](0002-b.md).\n')).toEqual({ kind: 'blocked-by', inverted: false });
+    // And a digit, as one after it does.
+    expect(reading('# A\n\nBlocked by the 2none limit in [ADR-0002](0002-b.md).\n')).toEqual({ kind: 'blocked-by', inverted: false });
+  });
+
+  it('reads no-one as no one', () => {
+    expect(reading('# A\n\nDeferred to no-one: see [ADR-0002](0002-b.md).\n')).toEqual(REFERENCES);
+    expect(reading('# A\n\nDeferred to no one: see [ADR-0002](0002-b.md).\n')).toEqual(REFERENCES);
+    expect(reading('# A\n\nNo-one is blocked by [ADR-0002](0002-b.md).\n')).toEqual(REFERENCES);
+    // The hyphen still makes a name of what is not on the list.
+    expect(reading('# A\n\nBlocked by the no-op in [ADR-0002](0002-b.md).\n')).toEqual({ kind: 'blocked-by', inverted: false });
+  });
+
+  it('is cancelled by a code span that holds nothing but a negation, as by the word in bold', () => {
+    expect(reading('# A\n\nBlocked by `none`: [ADR-0002](0002-b.md).\n')).toEqual(REFERENCES);
+    expect(reading('# A\n\nBlocked by **none**: [ADR-0002](0002-b.md).\n')).toEqual(REFERENCES);
+    expect(reading('# A\n\nBlocked by `` none ``: [ADR-0002](0002-b.md).\n')).toEqual(REFERENCES);
+    expect(reading('# A\n\nDeferred to `NOBODY` yet: [ADR-0002](0002-b.md).\n')).toEqual(REFERENCES);
+    expect(reading('# A\n\n`Never` deferred to [ADR-0002](0002-b.md).\n')).toEqual(REFERENCES);
+    // Where it stands in its span, apart from a word its backtick is written against.
+    expect(reading('# A\n\nDeferred to the board`none` in [ADR-0002](0002-b.md).\n')).toEqual(REFERENCES);
+    // The miss this trades: a value called `none` is read as the word.
+    expect(reading('# A\n\nDeferred to the `none` policy owner in [ADR-0002](0002-b.md).\n')).toEqual(REFERENCES);
+  });
+
+  it('is not cancelled by code that holds more than a negation', () => {
+    const BLOCKED = { kind: 'blocked-by', inverted: false } as const;
+    expect(reading('# A\n\nBlocked by the `--no-cache` flag in [ADR-0002](0002-b.md).\n')).toEqual(BLOCKED);
+    expect(reading('# A\n\nBlocked by `none of it` in [ADR-0002](0002-b.md).\n')).toEqual(BLOCKED);
+    // A phrase written in code is still no phrase.
+    expect(reading('# A\n\n`blocked by` [ADR-0002](0002-b.md).\n')).toEqual(REFERENCES);
+    // Each span is read where it stands, the rest of the text with it.
+    expect(reading('# A\n\nThe `x` and `none` flags. Blocked by the cache in [ADR-0002](0002-b.md).\n')).toEqual(BLOCKED);
+    // A word written back leaves every offset after it where it was.
+    expect(reading('# A\n\nUse `none` here. Deferred to [ADR-0002](0002-b.md).\n')).toEqual(DELEGATES);
+    expect(reading('# A\n\nThe `none` flag and `` never `` too. Deferred to [ADR-0002](0002-b.md).\n')).toEqual(DELEGATES);
+  });
+
+  it('trades a miss where a comma ends the clause a negation is in', () => {
+    // A comma is blanked as it was, so the word before it stands against the
+    // phrase: each states the relation, and each is a citation now.
+    expect(reading('# A\n\nShip it Monday; if not, blocked by [ADR-0002](0002-b.md).\n')).toEqual(REFERENCES);
+    expect(reading('# A\n\nBoth or neither, because [ADR-0002](0002-b.md) says so.\n')).toEqual(REFERENCES);
   });
 
   it('is cancelled by a negation the reference follows with no space between', () => {
