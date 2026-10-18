@@ -11,7 +11,15 @@ the family's
 [versioning policy](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0009-versions-before-1-0.md)
 records.
 
-## Unreleased
+## 0.18.0
+
+Two values for an option that takes one are compared as each is read, a
+wrong command line is refused with `--help` or `--version` on it, and
+`--help` beside `--version` is refused. A flag that asks for a family the
+configuration ignores reads it, and a recording or a `--history` refuses
+what it would leave unread. And a negation just before a phrase cancels
+it, as one after it did: `Not blocked by [ADR-0002](0002.md)` was a
+`blocked-by` edge, the opposite of its sentence.
 
 ### Changed
 
