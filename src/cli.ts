@@ -570,8 +570,9 @@ export function parseArgs(argv: readonly string[], cwd: string): CliOptions {
   // `--root ./` names one directory and is taken once (spec-core's ADR-0005,
   // 2026-10-18). Each is read once the whole line has been, since a
   // baseline typed beside `--root` is read from the root, wherever on the
-  // line the root stands.
-  const valued: { readonly flag: string; readonly key: string; readonly typed: string; readonly read: () => string | number; readonly takes: string }[] = [];
+  // line the root stands. A mutant that seeds this list with a string holds
+  // it under no option's key, where no value is compared with it: equivalent.
+  const valued:{ readonly flag: string; readonly key: string; readonly typed: string; readonly read: () => string | number; readonly takes: string }[] = [];
   const once = (flag: string, typed: string, read: () => string | number, key = flag, takes = 'takes one value'): void => {
     valued.push({ flag, key, typed, read, takes });
   };
