@@ -11,6 +11,37 @@ the family's
 [versioning policy](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0009-versions-before-1-0.md)
 records.
 
+## Unreleased
+
+### Changed
+
+- **Two values for an option that takes one are compared as each is
+  read.** They were compared as typed, so `check --root . --root ./` was
+  refused, exit `2`, for naming one directory two ways. A path is resolved
+  now as the run reads it, a baseline from the root a `--root` names, and a
+  count is the number it reads as, so `.` beside `./`, `held.json` beside
+  `./held.json` and `1` beside `" 1"` are each one value, taken once. Two
+  that read as two are refused as before
+  ([ADR-0010](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0010-configuration-belongs-to-the-repository.md)).
+  Upgrading: nothing to do; a line refused for this runs now.
+- **A wrong command line is refused with `--help` or `--version` on it.**
+  Every refusal the command line makes of itself was answered with the help
+  or the version instead where either was on the line, as `--root a --root
+  b --help` printed the help, exit `0`: a pair beside its opposite, two
+  values, `--baseline` beside `--record-baseline`, a family asked for and
+  ignored, an option of another command, a format a command does not write,
+  `rules a b` and `diff` given three exports or an empty one. Each is exit
+  `2` now with the line it has without them, as an option nobody knows
+  always was. `query --help` and `diff --help` still print the help, and so
+  does a line only the run would refuse, `--root nowhere --help`. Upgrading:
+  where a script asks for the help or the version on a line it builds, mend
+  the line the refusal names, or ask with `--help` or `--version` alone.
+- **`--help` beside `--version` is refused.** The help was printed and the
+  version went unread, in either order. It is exit `2` now, `--help is given
+  beside --version, and a run prints the help or the version: give one of
+  the two`; either given twice is that one once. Upgrading: ask for one of
+  the two.
+
 ## 0.17.0
 
 Two things of which one went unread are refused, exit 2: an option that
