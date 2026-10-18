@@ -618,6 +618,77 @@ An empty name given to `diff` resolved to the directory the run was started
 in, and the refusal was the read's, `cannot read : EISDIR`. It is `diff
 expects a graph export on each side, got "" for the first`.
 
+**A value is compared as it is read, and a wrong line is wrong beside
+`--help`.** *Amended 2026-10-18.* The amendment of 2026-10-14 compared two
+values as they were typed, and answered `--help` and `--version` before
+every refusal made once the line was read. The family's contract was
+amended the other way on both, and on a third thing
+([spec-core's ADR-0005](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0005-the-family-contract.md),
+2026-10-18). Measured on main at 4574727, 0.17.0, through the launcher
+(Windows 11, Node 24.18.1), over an ADR that cites an ADR and an RFC nobody
+wrote, beside an RFC, so the plain check exits `1`:
+
+| Given | 0.17.0 | Now |
+| --- | --- | --- |
+| `check --root . --root ./`; `docs` beside `docs/`, `./docs`, `docs/adr/..` or its absolute path | exit `2`: `--root is given "." and "./"` | exit `1`, the check of the one directory |
+| `--baseline held.json --baseline ./held.json`, and the same of `--record-baseline` | exit `2` | the run with the one file |
+| `--max 1 --max " 1"`, `--max-warnings 0 --max-warnings " 0"` | exit `2` | the run with the one number |
+| `--root docs --root DOCS`, `--root nowhere --root .` | exit `2` | the same |
+| `--format json --format JSON`, `--rule broken-reference=OFF` | exit `2`, a value no option takes | the same |
+| A pair, two values, the baseline pair or a family asked for and ignored, beside `--help`, `-h`, `--version` or `-v` | the help, the version | exit `2`, the line each has without them |
+| An option of another command, `--format sarif` or `markdown` of a query, `--format json` of `graph`, `rules a b`, `diff` given three exports or an empty one, beside the same | the help, the version | exit `2`, the same |
+| `--help --version`, `--version --help`, `-h -v`, `-v -h` | the help | exit `2`, the line below |
+| `--help -h`, `--version -v` | the help, the version | the same |
+| `check --help --bogus`, `--format xml --help`, `--root "" --help` | exit `2` | the same |
+| `query --help`, `diff --help`, `diff a.json --help` | the help | the same |
+| `check --root nowhere --help`, `rules no-such-rule --help` | the help | the same |
+
+Two values are compared as the run reads each. A path is resolved with
+Node's `path.resolve` from the directory the line was typed in, which is
+where a relative `--root` is read from. A baseline typed on the line is
+resolved from the root a `--root` names, wherever on the line that stands,
+and from where it was typed otherwise, which is where the run opens it
+([ADR-0018](0018-the-configuration-file-is-the-root.md)). The two resolved
+paths are compared as text, and the disk is not asked, so a directory and
+a link to it are two values. No case is folded: measured on Node 24.18.1,
+`path.resolve` keeps a drive letter as it was typed, `c:\x` as `c:\x`, so
+`docs` beside `DOCS`, and a drive letter in two cases, are refused on a
+disk that would read them as one. A count is the number it reads as, past
+the spaces a shell variable brings.
+`--format`, `--graph-format` and the severity of a `--rule` are read as
+they are written, so for them reading is typing. Where two values differ the
+line names both as they were typed, as before; where one value is spelled
+two ways the run is the one either spelling asks for.
+
+A refusal the command line makes of itself is made with `--help` or
+`--version` on the line, as one of an option nobody knows always was:
+answered first, the help told a script nothing of the line it wrote, and
+the version answered as if the line were right. The contract's amendment
+has spec-graph answering the help first for the refusals 0.15.0 to 0.17.0
+added, and only for those; measured, it did so for every refusal made once
+the line was read, the older ones in the table's seventh row among them,
+and those are refused beside it as well. Two things are still answered.
+What a command lacks, a selector or a second export, is what the help is
+asked for, and a person types `diff --help` before knowing that it takes
+two. And what only the run reads, a `--root` that is not there or a word
+after `rules` that names no rule, is no fault of the line until the disk or
+the configuration is read, and the help reads neither.
+
+`--help` beside `--version` asks for two answers of which one would go
+unread, and is refused, whichever comes first and however either is
+spelled:
+
+```text
+spec-graph: --help is given beside --version, and a run prints the help or the version: give one of the two
+```
+
+The line names the help first, as the line for a pair names the option
+that turns a thing on. It is said after an option of another command and
+before a pair, and either of the two given twice is that one once.
+
+Those are input refused that was accepted, beside input taken that was
+refused, and arrive in a minor release.
+
 **A flag and a file that disagree, and what a recording reads.** *Amended
 again 2026-10-18.* The amendment of 2026-10-14 left two things measured
 and undecided: a family on both lists where the configuration holds one of
@@ -722,6 +793,15 @@ is read as before, which is the question the family contract left open for
 a pattern of several (2026-10-11), and a pattern some of whose files are
 read is read for those. `"historyPatterns"` in the file under an `--ignore`
 is the flag deciding, and the files are left out.
+
+The recording's refusals are ones the command line makes of itself, so
+each is made with `--help` or `--version` on the line too, as the
+amendment above has it: `--record-baseline debt.json --strict --help` is
+refused, and `--record-baseline debt.json --format json --help`, which
+asks for nothing a recording leaves unread, prints the help. A journal an
+ignore leaves out is the run's to find, once the walk is made, and the
+help reads no disk: `--ignore archive --history "docs/archive/**" --help`
+prints the help, as `--root nowhere --help` does.
 
 Those are input refused that was accepted, and a check that passed that
 can fail, so they arrive in a minor release.

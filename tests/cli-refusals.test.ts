@@ -185,9 +185,12 @@ describe('a second word given to rules', () => {
     expect(parseArgs(['graph', 'a.md', 'b.md'], '/repo').patterns).toEqual(['a.md', 'b.md']);
   });
 
-  it('does not stand between a person and the help or the version', async () => {
-    expect(await run('rules', 'a', 'b', '--help')).toEqual({ code: EXIT_OK, out: HELP, err: '' });
-    expect((await run('rules', 'a', 'b', '--version')).code).toBe(EXIT_OK);
+  it('is refused with the help or the version asked for beside it', async () => {
+    const refused = { code: EXIT_ERROR, out: '', err: 'spec-graph: rules takes one rule id, got 2: a, b\n' };
+    expect(await run('rules', 'a', 'b', '--help')).toEqual(refused);
+    expect(await run('rules', 'a', 'b', '--version')).toEqual(refused);
+    // One word is a rule's id to be looked up, which the help does not do.
+    expect(await run('rules', 'no-such-rule', '--help')).toEqual({ code: EXIT_OK, out: HELP, err: '' });
   });
 });
 
@@ -206,9 +209,17 @@ describe('--format json asked of a command that writes none', () => {
     }
   });
 
-  it('does not stand between a person and the help or the version', async () => {
-    expect(await run('graph', '--format', 'json', '--help')).toEqual({ code: EXIT_OK, out: HELP, err: '' });
-    expect((await run('rules', '--format', 'json', '--version')).code).toBe(EXIT_OK);
+  it('is refused with the help or the version asked for beside it', async () => {
+    expect(await run('graph', '--format', 'json', '--help')).toEqual({
+      code: EXIT_ERROR,
+      out: '',
+      err: 'spec-graph: --format json belongs to check, query or diff, not to graph: graph writes JSON with --graph-format json\n',
+    });
+    expect(await run('rules', '--format', 'json', '--version')).toEqual({
+      code: EXIT_ERROR,
+      out: '',
+      err: 'spec-graph: --format json belongs to check, query or diff, not to rules: rules lists the rules as text\n',
+    });
   });
 });
 

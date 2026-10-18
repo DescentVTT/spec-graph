@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
@@ -452,9 +453,13 @@ describe('an option given to a command that does not read it', () => {
     expect(parseArgs(['graph', '--verbose'], '/repo').verbose).toBe(true);
   });
 
-  it('does not stand between a person and the help or the version', async () => {
-    expect(await run('graph', '--strict', '--help')).toEqual({ code: EXIT_OK, out: HELP, err: '' });
-    expect((await run('diff', '--root', 'docs', '--version')).code).toBe(EXIT_OK);
+  it('is refused with the help or the version asked for beside it', async () => {
+    expect(await run('graph', '--strict', '--help')).toEqual({ code: EXIT_ERROR, out: '', err: 'spec-graph: --strict belongs to check, not to graph\n' });
+    expect(await run('diff', '--root', 'docs', '--version')).toEqual({
+      code: EXIT_ERROR,
+      out: '',
+      err: 'spec-graph: --root belongs to check, query, graph or rules, not to diff\n',
+    });
   });
 });
 
@@ -518,9 +523,12 @@ describe('an empty name given to diff', () => {
     expect(usage(['diff', '', 'b.json', 'c.json'])).toContain('diff compares two graph exports');
   });
 
-  it('does not stand between a person and the help or the version', async () => {
-    expect(await run('diff', '', 'b.json', '--help')).toEqual({ code: EXIT_OK, out: HELP, err: '' });
-    expect((await run('diff', '', 'b.json', '--version')).code).toBe(EXIT_OK);
+  it('is refused with the help or the version asked for beside it', async () => {
+    const refused = { code: EXIT_ERROR, out: '', err: 'spec-graph: diff expects a graph export on each side, got "" for the first\n' };
+    expect(await run('diff', '', 'b.json', '--help')).toEqual(refused);
+    expect(await run('diff', '', 'b.json', '--version')).toEqual(refused);
+    // The second side not given yet is what the help is asked for; an empty one is given.
+    expect(await run('diff', '', '--help')).toEqual(refused);
   });
 });
 
@@ -578,9 +586,36 @@ describe('an option that takes one value, given two', () => {
     expect(parseArgs(['--baseline', 'a.json', '--max', '1', '--max-warnings', '2'], '/repo')).toMatchObject({ baseline: 'a.json', max: 1, maxWarnings: 2 });
   });
 
-  it('compares the values as they were typed: a path spelled two ways is two values', () => {
-    expect(usage(['--root', '.', '--root', './'])).toBe(twice('--root', '.', './'));
-    expect(usage(['--max', '1', '--max', ' 1'])).toBe(twice('--max', '1', ' 1'));
+  it('compares two values as each is read: one directory spelled two ways is one value, taken once', () => {
+    // A path is resolved as Node resolves it, from where the line was typed.
+    for (const spelled of ['./', 'docs/..', resolve('/repo')]) {
+      expect(parseArgs(['--root', '.', '--root', spelled], '/repo'), spelled).toMatchObject({ rootExplicit: true });
+    }
+    for (const spelled of ['docs/', './docs', 'docs/adr/..', resolve('/repo', 'docs')]) {
+      expect(parseArgs(['check', '--root', 'docs', '--root', spelled, '--root', 'docs'], '/repo'), spelled).toMatchObject({ rootExplicit: true });
+    }
+    // Two directories are two values however close their names.
+    expect(usage(['--root', 'docs', '--root', 'docs/adr'])).toBe(twice('--root', 'docs', 'docs/adr'));
+    expect(usage(['--root', '.', '--root', './', '--root', '..'])).toBe(twice('--root', '.', '..'));
+    expect(usage(['--root', resolve('/repo'), '--root', resolve('/elsewhere')])).toBe(twice('--root', resolve('/repo'), resolve('/elsewhere')));
+    // A count is the number it reads as, the spaces a shell variable brings aside.
+    expect(parseArgs(['--max', '1', '--max', ' 1', '--max', '1 '], '/repo').max).toBe(1);
+    expect(parseArgs(['--max-warnings', '0', '--max-warnings', ' 0'], '/repo').maxWarnings).toBe(0);
+    expect(usage(['--max', '1', '--max', ' 2'])).toBe(twice('--max', '1', ' 2'));
+    expect(usage(['--max-warnings', ' 0', '--max-warnings', '1'])).toBe(twice('--max-warnings', ' 0', '1'));
+  });
+
+  it('reads a baseline typed on the line from the root a --root names, wherever on the line it stands', () => {
+    for (const option of ['--baseline', '--record-baseline']) {
+      // From where the line was typed, which is the root when none is named.
+      expect(() => parseArgs([option, 'a.json', option, './a.json', option, 'docs/../a.json'], '/repo'), option).not.toThrow();
+      expect(() => parseArgs([option, 'a.json', option, resolve('/repo', 'a.json')], '/repo'), option).not.toThrow();
+      expect(usage([option, 'a.json', option, 'b.json'])).toBe(twice(option, 'a.json', 'b.json'));
+      // From the root a --root names, before the baselines or after them.
+      expect(() => parseArgs(['--root', 'docs', option, 'a.json', option, resolve('/repo', 'docs', 'a.json')], '/repo'), option).not.toThrow();
+      expect(() => parseArgs([option, 'a.json', option, resolve('/repo', 'docs', 'a.json'), '--root', 'docs'], '/repo'), option).not.toThrow();
+      expect(usage(['--root', 'docs', option, 'a.json', option, resolve('/repo', 'a.json')])).toBe(twice(option, 'a.json', resolve('/repo', 'a.json')));
+    }
   });
 
   it('leaves a list a list: every value of an option that is repeatable is read', () => {
@@ -615,12 +650,17 @@ describe('an option that takes one value, given two', () => {
     expect(usage(['--max', '1', '--max', 'x'])).toBe('--max expects a non-negative whole number, got "x"');
   });
 
-  it('does not stand between a person and the help or the version', async () => {
+  it('is refused with the help or the version asked for beside it', async () => {
+    const refused = (line: string): Run => ({ code: EXIT_ERROR, out: '', err: `spec-graph: ${line}\n` });
     for (const asked of ['--help', '-h', '--version', '-v']) {
-      expect((await run('check', '--root', 'a', '--root', 'b', asked)).code, asked).toBe(EXIT_OK);
-      expect((await run('check', '--rule', 'broken-reference=off', '--rule', 'broken-reference=error', asked)).code, asked).toBe(EXIT_OK);
+      expect(await run('check', '--root', 'a', '--root', 'b', asked), asked).toEqual(refused(twice('--root', 'a', 'b')));
+      expect(await run('check', '--rule', 'broken-reference=off', '--rule', 'broken-reference=error', asked), asked).toEqual(
+        refused(twice('--rule', 'broken-reference=off', 'broken-reference=error', 'a rule has one severity')),
+      );
     }
-    expect((await run('--format', 'json', '--format', 'human', '--help')).out).toBe(HELP);
+    expect(await run('--format', 'json', '--format', 'human', '--help')).toEqual(refused(twice('--format', 'json', 'human')));
+    // One value twice, however spelled, is no wrong line, and the help is printed.
+    expect(await run('check', '--root', '.', '--root', './', '--help')).toEqual({ code: EXIT_OK, out: HELP, err: '' });
   });
 
   it('is a pattern after --, not an option', () => {
@@ -637,8 +677,10 @@ describe('an option that takes one value, given two', () => {
       expect(await run('query', 'document', '--no-config', '--root', root, '--format', 'sarif', '--format', 'json')).toEqual(
         refused(twice('--format', 'sarif', 'json')),
       );
-      // Once, the option is read as it was.
+      // Once, the option is read as it was, however the one directory is spelled.
       expect((await run('check', '--no-config', '--root', root, '--root', root)).code).toBe(EXIT_FAILED);
+      const once = await run('check', '--no-config', '--root', root);
+      expect(timeless((await run('check', '--no-config', '--root', root, '--root', `./${root}/`)).out)).toBe(timeless(once.out));
       expect((await run('check', '--no-config', '--root', root, '--max', '1', '--max', '1')).out).toContain('1 more');
     });
   });
@@ -668,10 +710,10 @@ describe('a baseline to read, beside one to record', () => {
     expect(parseArgs(['--baseline', 'a.json', '--ratchet'], '/repo')).toMatchObject({ baseline: 'a.json', ratchet: true });
   });
 
-  it('is said after an option of another command, and does not stand before the help or the version', async () => {
+  it('is said after an option of another command, and with the help or the version asked for beside it', async () => {
     expect(usage(['query', 'document', '--baseline', 'a.json', '--record-baseline', 'b.json'])).toBe('--baseline belongs to check, not to query');
     for (const asked of ['--help', '-h', '--version', '-v']) {
-      expect((await run('check', '--baseline', 'a.json', '--record-baseline', 'b.json', asked)).code, asked).toBe(EXIT_OK);
+      expect(await run('check', '--baseline', 'a.json', '--record-baseline', 'b.json', asked), asked).toEqual({ code: EXIT_ERROR, out: '', err: `spec-graph: ${REFUSAL}\n` });
     }
   });
 
@@ -734,12 +776,12 @@ describe('a family asked for and ignored', () => {
     expect(parseArgs(['--ignore-family', 'ADR'], '/repo')).toMatchObject({ families: [], ignoreFamilies: ['ADR'] });
   });
 
-  it('is said after an option of another command, and does not stand before the help or the version', async () => {
+  it('is said after an option of another command, and with the help or the version asked for beside it', async () => {
     expect(usage(['graph', '--family', 'ADR', '--ignore-family', 'ADR'])).toBe('--family belongs to check, not to graph');
     expect(usage(['--baseline', 'a.json', '--record-baseline', 'b.json', '--family', 'ADR', '--ignore-family', 'ADR'])).toContain('--baseline is given beside --record-baseline');
     expect(usage(['--max', '1', '--max', '2', '--family', 'ADR', '--ignore-family', 'ADR'])).toContain('--max is given "1" and "2"');
     for (const asked of ['--help', '-h', '--version', '-v']) {
-      expect((await run('check', '--family', 'ADR', '--ignore-family', 'ADR', asked)).code, asked).toBe(EXIT_OK);
+      expect(await run('check', '--family', 'ADR', '--ignore-family', 'ADR', asked), asked).toEqual({ code: EXIT_ERROR, out: '', err: `spec-graph: ${both('ADR', 'ADR')}\n` });
     }
   });
 
@@ -847,6 +889,19 @@ describe('an option a recording does not read', () => {
     expect(usage(['--strict', '--record-baseline', 'b.json', '--baseline', 'a.json'])).toContain('--baseline is given beside --record-baseline, and a check holds');
   });
 
+  it('is refused with the help or the version asked for beside it, and what a recording reads is not', async () => {
+    for (const asked of ['--help', '-h', '--version', '-v']) {
+      expect(await run('check', '--record-baseline', 'x.json', '--strict', asked), asked).toEqual({
+        code: EXIT_ERROR,
+        out: '',
+        err: `spec-graph: ${unread('--strict')}\n`,
+      });
+      expect((await run('check', '--record-baseline', 'x.json', '--format', 'gitlab', asked)).err, asked).toBe(`spec-graph: ${unread('--format gitlab')}\n`);
+    }
+    // JSON is a document of the recording, so the line is right and the help is printed.
+    expect(await run('check', '--record-baseline', 'x.json', '--format', 'json', '--help')).toEqual({ code: EXIT_OK, out: HELP, err: '' });
+  });
+
   it('is taken where a recording reads it or it asks for what is already so, and by a check', () => {
     const read = [['--no-color'], ['--ascii'], ['--verbose'], ['--no-config'], ['--rule', 'broken-reference=off'], ['--family', 'ADR'], ['--ignore-family', 'RFC'], ['--ignore-ref', 'x'], ['--ignore', 'drafts'], ['--history', 'x.md']];
     for (const extra of [...read, ['--format', 'human'], ['--format', 'json'], ['--format', 'markdown']]) {
@@ -930,6 +985,16 @@ describe('a journal an ignore leaves out', () => {
       expect((await run('check', '--root', root, '--ignore', 'drafts', '--history', 'docs/archive/**')).err).toBe(
         `spec-graph: ${leftOut('docs/archive/**', '--ignore or "ignore" in .spec-graph.json')}\n`,
       );
+    });
+  });
+
+  it('is the run\'s to find, so the help, which reads no disk, is printed beside it', async () => {
+    await withRepo('history-ignored-help', JOURNAL, async (root) => {
+      expect(await run('check', '--root', root, '--no-config', '--ignore', 'archive', '--history', 'docs/archive/**', '--help')).toEqual({
+        code: EXIT_OK,
+        out: HELP,
+        err: '',
+      });
     });
   });
 

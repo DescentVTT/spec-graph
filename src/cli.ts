@@ -11,6 +11,8 @@
  * and an error nothing here expected never as findings.
  */
 
+import { resolve } from 'node:path';
+
 import {
   applyBaseline,
   EMPTY_BASELINE,
@@ -252,7 +254,9 @@ OPTIONS
   An option that takes one value is refused given two, as in --root a
   --root b: the later would be read and the earlier go unread. That is each
   option above with a value that is not marked Repeatable, and one rule
-  given two severities by --rule. The same value twice is that value once.
+  given two severities by --rule. Two values are compared as each is read,
+  so one value twice is that value once however it is spelled: --root .
+  beside --root ./ names one directory.
 
   A baseline to read is refused beside one to record, --baseline beside
   --record-baseline: a recording writes every finding and opens no
@@ -266,6 +270,14 @@ OPTIONS
   A value that begins with -- reads as an option, so the option before it is
   refused as missing its value. A name that does begin so is written ./--name
   for a file, [-]-name in a pattern and \\--name for a reference target.
+
+  A line that is wrong is refused with --help or --version on it too, an
+  option a recording does not read among them, and --help beside --version
+  is refused: one of the two answers would go unread. What a command still
+  needs, a selector or two exports, is what --help is for: query --help and
+  diff --help print it. The help reads no disk, so what only the run finds,
+  a --root that is not there or a --history an ignore leaves out, is
+  answered by it.
 
 SELECTORS
   A selector is a path through the graph.
@@ -299,7 +311,8 @@ EXIT CODES
   are two things of which one would go unread: an option beside its own
   opposite, an option that takes one value given two, --baseline beside
   --record-baseline, an option a recording does not read, a family both
-  asked for and ignored, a --history whose files an ignore leaves out.
+  asked for and ignored, a --history whose files an ignore leaves out,
+  --help beside --version.
 
 CONFIGURATION
   Anything repeated on every run belongs in the repository rather than in the
@@ -585,22 +598,20 @@ export function parseArgs(argv: readonly string[], cwd: string): CliOptions {
     if (!isFamilyName(value)) throw new UsageError(`${flag} expects one family's name, such as ADR, got "${value}"`);
     return value;
   };
-  // What an option that takes one value was first given, and the line for
-  // the first such option given another. The later was read and the earlier
+  // What each option that takes one value was given, in the order given, and
+  // what the run reads it as. Given two, the later was read and the earlier
   // went unread: `--root nowhere --root .` checked `.` and never said that
   // `nowhere` is not there, and `query --format sarif --format json` wrote
-  // JSON where the two the other way round are refused. The same value
-  // again is that value once, as an option that takes none is. Values are
-  // compared as they were typed: a path spelled two ways is two values to
-  // whoever reads the line. The line is thrown after the loop, with what
-  // else help and the version are answered before.
-  const taken = new Map<string, string>();
-  let second: string | null = null;
-  const once = (flag: string, value: string, key = flag, takes = 'takes one value'): string => {
-    const held = taken.get(key);
-    if (held === undefined) taken.set(key, value);
-    else if (held !== value) second ??= `${flag} is given "${held}" and "${value}", and ${takes}: give one of the two`;
-    return value;
+  // JSON where the two the other way round are refused. Two values are
+  // compared as each is read, not as it is written, so `--root .` beside
+  // `--root ./` names one directory and is taken once (spec-core's ADR-0005,
+  // 2026-10-18). Each is read once the whole line has been, since a
+  // baseline typed beside `--root` is read from the root, wherever on the
+  // line the root stands. A mutant that seeds this list with a string holds
+  // it under no option's key, where no value is compared with it: equivalent.
+  const valued:{ readonly flag: string; readonly key: string; readonly typed: string; readonly read: () => string | number; readonly takes: string }[] = [];
+  const once = (flag: string, typed: string, read: () => string | number, key = flag, takes = 'takes one value'): void => {
+    valued.push({ flag, key, typed, read, takes });
   };
 
   for (let i = 0; i < args.length; i += 1) {
@@ -654,11 +665,17 @@ export function parseArgs(argv: readonly string[], cwd: string): CliOptions {
       case '--explain':
         verbose = true;
         break;
-      case '--root':
-        root = once(arg, filled(arg, i, 'a directory'));
+      case '--root': {
+        // Resolved from where the line was typed and compared as text: the
+        // disk is not asked, so a link and its target are two values, and
+        // no case is folded.
+        const value = filled(arg, i, 'a directory');
+        once(arg, value, () => resolve(cwd, value));
+        root = value;
         rootExplicit = true;
         i += 1;
         break;
+      }
       case '--ignore':
         ignore.push(next(arg, i));
         i += 1;
@@ -679,14 +696,22 @@ export function parseArgs(argv: readonly string[], cwd: string): CliOptions {
         historyPatterns.push(next(arg, i));
         i += 1;
         break;
-      case '--baseline':
-        baseline = once(arg, filled(arg, i, 'a file'));
+      // A baseline typed here is read from the root where `--root` names one,
+      // and from where it was typed otherwise, which is the root's default.
+      case '--baseline': {
+        const value = filled(arg, i, 'a file');
+        once(arg, value, () => resolve(cwd, root, value));
+        baseline = value;
         i += 1;
         break;
-      case '--record-baseline':
-        recordBaseline = once(arg, filled(arg, i, 'a file'));
+      }
+      case '--record-baseline': {
+        const value = filled(arg, i, 'a file');
+        once(arg, value, () => resolve(cwd, root, value));
+        recordBaseline = value;
         i += 1;
         break;
+      }
       case '--no-config':
         noConfig = true;
         break;
@@ -703,7 +728,7 @@ export function parseArgs(argv: readonly string[], cwd: string): CliOptions {
           throw new UsageError(`--format must be human, json, sarif, markdown, gitlab or github, got "${value}"`);
         }
         format = value;
-        once(arg, value);
+        once(arg, value, () => value);
         i += 1;
         break;
       }
@@ -713,7 +738,7 @@ export function parseArgs(argv: readonly string[], cwd: string): CliOptions {
           throw new UsageError(`--graph-format must be dot, mermaid or json, got "${value}"`);
         }
         graphFormat = value;
-        once(arg, value);
+        once(arg, value, () => value);
         i += 1;
         break;
       }
@@ -736,17 +761,27 @@ export function parseArgs(argv: readonly string[], cwd: string): CliOptions {
           throw new UsageError(`unknown severity "${level}", expected one of: ${SEVERITIES.join(', ')}`);
         }
         severities[id] = level;
-        once(arg, value, `${arg} ${id}`, 'a rule has one severity');
+        // The id is the key and is read as written, so the severity alone
+        // tells two values apart, and it is read as written too.
+        once(arg, value, () => value, `${arg} ${id}`, 'a rule has one severity');
         i += 1;
         break;
       }
+      // A count is read past the spaces a shell variable brings, so ` 1` is
+      // the `1` it reads as.
       case '--max': {
-        max = parseCount(arg, once(arg, next(arg, i)));
+        const value = next(arg, i);
+        const count = parseCount(arg, value);
+        once(arg, value, () => count);
+        max = count;
         i += 1;
         break;
       }
       case '--max-warnings': {
-        maxWarnings = parseCount(arg, once(arg, next(arg, i)));
+        const value = next(arg, i);
+        const count = parseCount(arg, value);
+        once(arg, value, () => count);
+        maxWarnings = count;
         i += 1;
         break;
       }
@@ -755,78 +790,98 @@ export function parseArgs(argv: readonly string[], cwd: string): CliOptions {
     }
   }
 
+  // A line that is wrong is refused with `--help` or `--version` on it, as an
+  // option nobody knows always was: answered first, the help told a script
+  // nothing of the line it had written, and the version answered it as if
+  // the line were right (spec-core's ADR-0005, 2026-10-18). What a command
+  // still lacks, a selector or an export, is what the help is asked for, and
+  // is refused only where neither is asked.
+
   // SARIF, GitHub's workflow commands and GitLab's Code Quality are reports
   // about findings, and only `check` produces those. Falling back to JSON would
   // hand a pipeline something its uploader rejects with a message about a
   // schema rather than about the command that was run. Markdown is for a pull
   // request, which reads a check or a diff.
-  if ((format === 'sarif' || format === 'gitlab' || format === 'github') && command !== 'check' && !help && !version) {
+  if ((format === 'sarif' || format === 'gitlab' || format === 'github') && command !== 'check') {
     throw new UsageError(`--format ${format} reports findings, so it belongs to check, not to ${command}`);
   }
-  if (format === 'markdown' && command !== 'check' && command !== 'diff' && !help && !version) {
+  if (format === 'markdown' && command !== 'check' && command !== 'diff') {
     throw new UsageError(`--format markdown is a report for a pull request, so it belongs to check or diff, not to ${command}`);
   }
 
   // JSON is refused where the other reports are, and for the reason above:
   // `graph --format json` wrote DOT and `rules --format json` a list, each
   // with exit 0, to whatever was waiting for JSON.
-  if (format === 'json' && (command === 'graph' || command === 'rules') && !help && !version) {
+  if (format === 'json' && (command === 'graph' || command === 'rules')) {
     const instead = command === 'graph' ? 'graph writes JSON with --graph-format json' : 'rules lists the rules as text';
     throw new UsageError(`--format json belongs to check, query or diff, not to ${command}: ${instead}`);
   }
 
-  if (!help && !version) {
+  for (const option of given) {
+    const readers = readersOf(option);
+    if (readers !== undefined && !readers.includes(command)) {
+      throw new UsageError(`${option} belongs to ${listed(readers, 'or')}, not to ${command}`);
+    }
+  }
+  // Two answers, of which one would go unread: the help was printed and the
+  // version was not, whichever came first.
+  if (help && version) {
+    throw new UsageError('--help is given beside --version, and a run prints the help or the version: give one of the two');
+  }
+  // After the loop above, so that an option of another command is named
+  // before the pair it is half of: `query --color --no-color` is told that
+  // `--color` is a check's, which is the line to act on first.
+  for (const option of given) {
+    const other = unreadBeside(option);
+    if (other !== undefined && given.has(other.option)) {
+      throw new UsageError(`${option} is given beside ${other.option}, and ${other.decided}: give one of the two`);
+    }
+  }
+  // Each value is held to the first its option was given, so the line names
+  // the first two that read as two, wherever on it they stand.
+  const firstOf = new Map<string, (typeof valued)[number]>();
+  for (const value of valued) {
+    const held = firstOf.get(value.key);
+    if (held === undefined) firstOf.set(value.key, value);
+    else if (held.read() !== value.read()) {
+      throw new UsageError(`${value.flag} is given "${held.typed}" and "${value.typed}", and ${value.takes}: give one of the two`);
+    }
+  }
+  // A family on both lists is passed over, since the list that ignores is
+  // asked first, and its name on the other says nothing: `--family ADR
+  // --family RFC --ignore-family RFC` is `--family ADR`. Where it is the
+  // only name there, every citation in prose is passed over, and the check
+  // that fails without the two reported a consistent graph. Two families,
+  // one asked for and another ignored, are both read, and are taken.
+  for (const asked of families) {
+    const ignored = ignoreFamilies.find((name) => name.trim().toUpperCase() === asked.trim().toUpperCase());
+    if (ignored !== undefined) {
+      throw new UsageError(
+        `--family ${asked} is given beside --ignore-family ${ignored}, and a family's citations are read or they are passed over: give one of the two`,
+      );
+    }
+  }
+  // Three formats are reports of findings, and a recording reports none:
+  // what it wrote in their place was the line for a person, which is none
+  // of the three. JSON is written as a document of what was recorded, and
+  // Markdown is the line, which reads as Markdown already. Refused beside
+  // the help and the version as every other wrong line is.
+  if (recordBaseline !== null) {
     for (const option of given) {
-      const readers = readersOf(option);
-      if (readers !== undefined && !readers.includes(command)) {
-        throw new UsageError(`${option} belongs to ${listed(readers, 'or')}, not to ${command}`);
-      }
-    }
-    // After the loop above, so that an option of another command is named
-    // before the pair it is half of: `query --color --no-color` is told
-    // that `--color` is a check's, which is the line to act on first.
-    for (const option of given) {
-      const other = unreadBeside(option);
-      if (other !== undefined && given.has(other.option)) {
-        throw new UsageError(`${option} is given beside ${other.option}, and ${other.decided}: give one of the two`);
-      }
-    }
-    if (second !== null) throw new UsageError(second);
-    // A family on both lists is passed over, since the list that ignores is
-    // asked first, and its name on the other says nothing: `--family ADR
-    // --family RFC --ignore-family RFC` is `--family ADR`. Where it is the
-    // only name there, every citation in prose is passed over, and the check
-    // that fails without the two reported a consistent graph. Two families,
-    // one asked for and another ignored, are both read, and are taken.
-    for (const asked of families) {
-      const ignored = ignoreFamilies.find((name) => name.trim().toUpperCase() === asked.trim().toUpperCase());
-      if (ignored !== undefined) {
-        throw new UsageError(
-          `--family ${asked} is given beside --ignore-family ${ignored}, and a family's citations are read or they are passed over: give one of the two`,
-        );
-      }
-    }
-    // Three formats are reports of findings, and a recording reports none:
-    // what it wrote in their place was the line for a person, which is none
-    // of the three. JSON is written as a document of what was recorded, and
-    // Markdown is the line, which reads as Markdown already.
-    if (recordBaseline !== null) {
-      for (const option of given) {
-        const unread = unreadByRecording(option) ? option : option === '--format' && (format === 'sarif' || format === 'github' || format === 'gitlab') ? `--format ${format}` : null;
-        if (unread !== null) {
-          throw new UsageError(`${unread} is given beside --record-baseline, and a recording writes the findings down and reports none: give one of the two`);
-        }
+      const unread = unreadByRecording(option) ? option : option === '--format' && (format === 'sarif' || format === 'github' || format === 'gitlab') ? `--format ${format}` : null;
+      if (unread !== null) {
+        throw new UsageError(`${unread} is given beside --record-baseline, and a recording writes the findings down and reports none: give one of the two`);
       }
     }
   }
 
   // The second word given to `rules` was dropped, so `rules a b` listed `a`
   // and said nothing of `b`.
-  if (command === 'rules' && patterns.length > 1 && !help && !version) {
+  if (command === 'rules' && patterns.length > 1) {
     throw new UsageError(`rules takes one rule id, got ${patterns.length}: ${patterns.join(', ')}`);
   }
 
-  if (command === 'diff' && patterns.length !== 2 && !help && !version) {
+  if (command === 'diff' && (patterns.length > 2 || (patterns.length < 2 && !help && !version))) {
     throw new UsageError(
       'diff compares two graph exports, for example:\n  spec-graph diff base.json head.json\n  (make each with spec-graph graph --graph-format json)',
     );
@@ -835,7 +890,7 @@ export function parseArgs(argv: readonly string[], cwd: string): CliOptions {
   // An empty name resolved to the directory the run was started in, and the
   // refusal was the read's: `cannot read : EISDIR`.
   const blank = patterns.findIndex((path) => path.trim() === '');
-  if (command === 'diff' && blank !== -1 && !help && !version) {
+  if (command === 'diff' && blank !== -1) {
     throw new UsageError(`diff expects a graph export on each side, got "${patterns[blank] as string}" for the ${blank === 0 ? 'first' : 'second'}`);
   }
 
@@ -1591,7 +1646,6 @@ async function runDiff(
   err: (text: string) => void,
 ): Promise<number> {
   const { readFile } = await import('node:fs/promises');
-  const { resolve } = await import('node:path');
   const sides: GraphExport[] = [];
   for (const path of paths) {
     let raw: string;
