@@ -53,7 +53,7 @@ export class QuickestFirst extends BaseSequencer {
  * The same suite as the normal run, minus the coverage instrumentation and its
  * thresholds: Stryker measures its own coverage per test, and leaving v8
  * coverage on would slow every one of the thousands of mutant runs for a number
- * nobody reads.
+ * nobody reads. It runs in the order above and names its reporter.
  *
  * The CLI tests drive `main()` in process rather than spawning
  * `node bin/spec-graph.js`, so unlike a subprocess end-to-end suite they load
@@ -76,5 +76,14 @@ export default defineConfig({
     testTimeout: 30_000,
     hookTimeout: 30_000,
     sequence: { sequencer: QuickestFirst },
+    // Named, so that vitest adds none of its own. A suite that names none
+    // gets vitest's github-actions reporter beside the default one on a
+    // runner, and it appends a summary of each run to the step's: one a
+    // mutant, about 200 bytes each, some 3,450 of them in the largest shard
+    // of main's sweep of 29c7b8a: about two thirds of the 1MiB GitHub uploads
+    // of a step's summary. The default reporter writes to the worker's
+    // output, as it did, which Stryker shows only for a worker that exits
+    // unexpectedly.
+    reporters: ['default'],
   },
 });
