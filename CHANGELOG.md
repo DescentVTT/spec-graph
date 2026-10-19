@@ -11,7 +11,13 @@ the family's
 [versioning policy](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0009-versions-before-1-0.md)
 records.
 
-## Unreleased
+## 0.19.0
+
+A comma ends the clause a negation before a phrase is in, so
+`if not, blocked by [ADR-0002](0002.md)` is the relation it states. A
+library caller's own directory is where a relative `--root` is read
+from, a drive letter names its volume in either case on Windows, and a
+`\` in a root or a baseline is a separator wherever the run starts.
 
 ### Changed
 
