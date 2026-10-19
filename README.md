@@ -894,6 +894,9 @@ reports, byte for byte, because every path here is relative to the root.
 - A path typed on the command line stays relative to where you typed it, brace
   alternative by brace alternative: `{/docs,x}` typed in `sub` is `/docs` or
   `sub/x`.
+- A `\` in a root or a baseline is a separator on every host, as in a pattern,
+  so `--baseline sub\held.json` typed at the root and `..\sub\held.json`
+  typed in `docs` are one file, `sub/held.json`, on Linux as on Windows.
 
 See [ADR-0018](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0018-the-configuration-file-is-the-root.md).
 
@@ -1189,8 +1192,10 @@ variable in `--family "$FAMILIES"` is the usual way to write one:
   two`. Two values are compared as each is read, so one value twice is that
   value once however it is spelled: `--root .` beside `--root ./` names one
   directory, a baseline is a path resolved as the root is, and `--max 1`
-  beside `--max " 1"` is one number. An option that is repeatable above
-  takes each of its values;
+  beside `--max " 1"` is one number. On Windows a drive letter names its
+  volume in either case, so `--root C:\x` beside `--root c:\x` is one
+  directory; past the letter two names are two, `C:\x` beside `C:\X`. An
+  option that is repeatable above takes each of its values;
 - `--baseline` beside `--record-baseline`: a recording writes every finding
   of the run and opens no baseline, so the one to read would go unread. A
   `"baseline"` in the configuration is no option, and is recorded over as
@@ -1514,6 +1519,12 @@ const ghosts = query(graph, 'item[openness=open] -delegates-to-> document[phase=
 
 The graph, the scanner, the selector engine and every vocabulary table are
 exported. Reporters, editor extensions and custom rules are all first-class.
+
+The command line is `main`, which takes the line and the directory it was
+typed in: `await main({ argv: ['check', '--root', 'docs'], cwd })` reads
+`docs`, its configuration and any baseline beside it from `cwd`, and walks
+up from `cwd` for a configuration where no `--root` is given. Left out,
+`cwd` is the process's working directory, as for the `spec-graph` command.
 
 ## Design
 

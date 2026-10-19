@@ -588,8 +588,13 @@ export async function walkFiles(options: WalkOptions): Promise<WalkedFile[]> {
  * An absolute path already names one place, and joining it under the root names
  * another: `--baseline /tmp/b.json` read `<root>/tmp/b.json`, found nothing
  * there, and accepted nothing without saying so.
+ *
+ * A `\` is a separator here as it is in an absolute path and in a pattern. Kept
+ * as a character of the name, `sub\b.json` typed at the root read another file
+ * on Linux than `..\sub\b.json` typed one directory down, which the command
+ * line had already read as `sub/b.json`.
  */
 export function underRoot(root: string, relative: string): string {
   if (isAbsolutePath(relative)) return toPosix(relative);
-  return joinPosix(toPosix(root), relative);
+  return joinPosix(toPosix(root), toPosix(relative));
 }

@@ -27,6 +27,25 @@ export function isAbsolutePath(value: string): boolean {
   return ABSOLUTE.test(value);
 }
 
+// A drive letter in lower case, at the start of a path or after the prefix
+// of a device path, `\\?\` or `\\.\`, as Node's `path.resolve` writes either.
+const LOWER_DRIVE = /^(\\\\[?.]\\)?([a-z]):/;
+
+/**
+ * A resolved path with its drive letter in upper case, for telling two paths
+ * apart.
+ *
+ * Windows reads a drive letter in either case as one volume (Microsoft's
+ * *Naming Files, Paths, and Namespaces*, *Naming Conventions*), and
+ * `path.resolve` keeps the case it was typed in, so `C:\x` beside `c:\x` were
+ * two values. Only the letter is folded: whether two names past it are one
+ * directory is the disk's to say. A path Node resolves on any other host
+ * starts with `/`, so nothing there is changed.
+ */
+export function foldDriveLetter(resolved: string): string {
+  return resolved.replace(LOWER_DRIVE, (_drive, device: string | undefined, letter: string) => `${device ?? ''}${letter.toUpperCase()}:`);
+}
+
 /** Removes `.` and `..` segments. Leading `..` are preserved. */
 export function normalisePosix(value: string): string {
   const absolute = value.startsWith('/');

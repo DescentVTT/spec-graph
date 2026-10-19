@@ -32,6 +32,36 @@ records.
   one the sentence states. A negation set off by commas from the phrase it
   denies, `Never, ever, blocked by`, is read as the relation too: write it
   without the commas.
+- **A relative `--root` is read from the directory `main` is given.** The
+  library's `main({ argv, cwd })` compared two values of `--root` from
+  `cwd`, and read the one it kept from the process's own directory: `check
+  --root docs` checked another tree's `docs`, a `--record-baseline` beside
+  it was written there, and where that directory had no `docs` the root was
+  not there. The root, its configuration and its baselines are read from
+  `cwd` now, and a relative `cwd` is read from the process's directory, so
+  the walk for a configuration from it goes up to the repository as it does
+  from that directory, where it stopped at the top of the relative path.
+  The `spec-graph` command is as it was
+  ([ADR-0010](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0010-configuration-belongs-to-the-repository.md)).
+  Upgrading: a caller that passed a `cwd` other than the directory it meant
+  `--root` from passes that directory, or an absolute `--root`.
+- **On Windows a drive letter names its volume in either case.** `--root
+  C:\x` beside `--root c:\x` was refused, exit `2`, as two directories, and
+  so were two baselines written so, and `C:docs` beside `c:docs`. Each is
+  one value now, taken once; past the letter two names are compared as
+  before, so `C:\x` beside `C:\X` is still refused (spec-core's ADR-0005,
+  2026-10-19). Upgrading: nothing to do; a line refused for this runs now.
+- **A `\` in a baseline or a root is a separator wherever the run starts.**
+  On Linux `--baseline 'sub\held.json'` typed at the root read a file of
+  that name, and `'..\sub\held.json'` typed one directory down read
+  `sub/held.json`; a `"baseline"` in the configuration was read as the
+  first, and two baselines that differed only so were refused as two. Each
+  reads `sub/held.json` now, as an absolute path and a pattern did already,
+  and a `--root` with a `\` is asked of the disk as it is walked. Windows
+  reads every one as before
+  ([ADR-0018](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0018-the-configuration-file-is-the-root.md)).
+  Upgrading: on Linux, rename a baseline whose file name holds a `\`; a
+  check that read it reads the path the `\` spells now.
 
 ## 0.18.0
 

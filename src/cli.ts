@@ -56,7 +56,7 @@ import {
   RULE_IDS,
   RULE_QUERIES,
 } from './rules.js';
-import { isAbsolutePath, joinPosix, toPosix } from './paths.js';
+import { foldDriveLetter, isAbsolutePath, joinPosix, toPosix } from './paths.js';
 import { formatRef } from './source.js';
 import { execute, parseQuery, QueryError, renderMatch, type Match, type QuerySpec } from './select.js';
 import { isProjectRule, type AnyRuleId, type RuleId, type Severity, type SpecNode } from './types.js';
@@ -256,7 +256,8 @@ OPTIONS
   option above with a value that is not marked Repeatable, and one rule
   given two severities by --rule. Two values are compared as each is read,
   so one value twice is that value once however it is spelled: --root .
-  beside --root ./ names one directory.
+  beside --root ./ names one directory, and so on Windows does C:\\x beside
+  c:\\x, a drive letter naming its volume in either case.
 
   A baseline to read is refused beside one to record, --baseline beside
   --record-baseline: a recording writes every finding and opens no
@@ -605,7 +606,9 @@ export function parseArgs(argv: readonly string[], cwd: string): CliOptions {
   // JSON where the two the other way round are refused. Two values are
   // compared as each is read, not as it is written, so `--root .` beside
   // `--root ./` names one directory and is taken once (spec-core's ADR-0005,
-  // 2026-10-18). Each is read once the whole line has been, since a
+  // 2026-10-18), and so do `C:\x` and `c:\x` on Windows, where a drive letter
+  // names its volume in either case (the same, 2026-10-19). Each is read
+  // once the whole line has been, since a
   // baseline typed beside `--root` is read from the root, wherever on the
   // line the root stands. A mutant that seeds this list with a string holds
   // it under no option's key, where no value is compared with it: equivalent.
@@ -666,11 +669,12 @@ export function parseArgs(argv: readonly string[], cwd: string): CliOptions {
         verbose = true;
         break;
       case '--root': {
-        // Resolved from where the line was typed and compared as text: the
-        // disk is not asked, so a link and its target are two values, and
-        // no case is folded.
+        // Resolved from where the line was typed, with a `\` read as the run
+        // reads it, and compared as text past the drive letter: the disk is
+        // not asked, so a link and its target are two values, and no other
+        // case is folded.
         const value = filled(arg, i, 'a directory');
-        once(arg, value, () => resolve(cwd, value));
+        once(arg, value, () => foldDriveLetter(resolve(cwd, toPosix(value))));
         root = value;
         rootExplicit = true;
         i += 1;
@@ -700,14 +704,14 @@ export function parseArgs(argv: readonly string[], cwd: string): CliOptions {
       // and from where it was typed otherwise, which is the root's default.
       case '--baseline': {
         const value = filled(arg, i, 'a file');
-        once(arg, value, () => resolve(cwd, root, value));
+        once(arg, value, () => foldDriveLetter(resolve(cwd, toPosix(root), toPosix(value))));
         baseline = value;
         i += 1;
         break;
       }
       case '--record-baseline': {
         const value = filled(arg, i, 'a file');
-        once(arg, value, () => resolve(cwd, root, value));
+        once(arg, value, () => foldDriveLetter(resolve(cwd, toPosix(root), toPosix(value))));
         recordBaseline = value;
         i += 1;
         break;
@@ -1038,6 +1042,14 @@ async function run(io: CliIO, err: (text: string) => void): Promise<number> {
   // it can compare exports from a checkout it is not running in.
   if (options.command === 'diff') return runDiff(options.patterns as readonly [string, string], cwd, options.format, out, err);
 
+  // Where the run starts: the root a `--root` names, or the directory the
+  // line was typed in. Either is read from that directory, which a caller of
+  // the library names with `io.cwd`, and where two values of `--root` were
+  // compared: left relative, the disk read it from Node's own directory, so
+  // `--root docs` checked, and recorded a baseline into, another tree than
+  // the caller's. A `\` is a separator, as the walk has always read it.
+  const start = resolve(cwd, toPosix(options.root));
+
   // A root that was named is a directory, for every command that reads one.
   // `rules --root` with a path that is not there listed the built-in rules and
   // exited 0, as if the repository declared none, and the others said only
@@ -1046,7 +1058,7 @@ async function run(io: CliIO, err: (text: string) => void): Promise<number> {
     const { stat } = await import('node:fs/promises');
     // A path that cannot be reached reads as one that is not there: either
     // way there is nothing under it to read.
-    const found = await stat(options.root).catch(() => null);
+    const found = await stat(start).catch(() => null);
     if (found === null || !found.isDirectory()) {
       err(`spec-graph: --root "${options.root}" is not ${found === null ? 'there' : 'a directory'}\n`);
       return EXIT_ERROR;
@@ -1064,10 +1076,10 @@ async function run(io: CliIO, err: (text: string) => void): Promise<number> {
   // Read before `rules` prints anything, so that command lists the conventions
   // this repository will actually check rather than the ones spec-graph ships.
   const loaded = options.noConfig
-    ? { config: {} as SpecGraphConfig, source: null, problems: [], root: options.root }
+    ? { config: {} as SpecGraphConfig, source: null, problems: [], root: start }
     : options.rootExplicit
-      ? { ...loadConfig(options.root), root: options.root }
-      : discoverConfig(options.root);
+      ? { ...loadConfig(start), root: start }
+      : discoverConfig(start);
   for (const problem of loaded.problems) err(`spec-graph: ${problem}\n`);
   // A configuration that did not load means a run against a different
   // repository than the one configured - other patterns, other rules, other
@@ -1088,7 +1100,7 @@ async function run(io: CliIO, err: (text: string) => void): Promise<number> {
   // How far the root moved up. Everything a repository declares about itself is
   // relative to the root; everything typed on the command line is relative to
   // where it was typed, and this is what keeps those two readings apart.
-  const here = below(root, options.root);
+  const here = below(root, start);
 
   // A `--rule` naming a project rule that does not exist is a flag that
   // silently does nothing, and nothing in the output would distinguish that
@@ -1190,11 +1202,13 @@ async function run(io: CliIO, err: (text: string) => void): Promise<number> {
     return EXIT_ERROR;
   }
 
+  // A root that was named is named as it was typed, as every other refusal
+  // of it is; the one discovery found is named as it was found.
   if (result.files.length === 0) {
     err(
       `spec-graph: no specifications matched ${
         patterns.map((p) => `"${p}"`).join(', ')
-      }\n  looked under ${root}\n`,
+      }\n  looked under ${options.rootExplicit ? options.root : root}\n`,
     );
     return EXIT_ERROR;
   }
@@ -1439,6 +1453,11 @@ async function run(io: CliIO, err: (text: string) => void): Promise<number> {
  * arithmetic.
  */
 function below(root: string, from: string): string {
+  // `from` is where the run starts as `path.resolve` gives it, which ends in
+  // no separator but at a filesystem root, `/` or `C:\`, and there `below` is
+  // `''` whether the strip takes every slash, takes one, or writes a word in
+  // their place: the mutants of this line are equivalent since the run
+  // resolves where it starts. The strip stays for a path passed as typed.
   const start = toPosix(from).replace(/[/]+$/, '');
   // The prefix test only guards a root that is neither `start` nor above it,
   // which nothing returns; for `start` itself, slicing past its end is `''`

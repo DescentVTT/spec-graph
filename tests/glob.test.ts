@@ -694,6 +694,13 @@ describe('resolving a path against the root', () => {
     expect(underRoot('/repo', './docs/../b.json')).toBe('/repo/b.json');
   });
 
+  it('reads a backslash in a relative path as a separator, as it does in an absolute one', () => {
+    // Kept as a character, `sub\b.json` typed at the root named another file
+    // on Linux than the same path typed one directory down.
+    expect(underRoot('/repo', 'sub\\b.json')).toBe('/repo/sub/b.json');
+    expect(underRoot('/repo', 'docs\\..\\b.json')).toBe('/repo/b.json');
+  });
+
   it('leaves an absolute path where it points, in either platform spelling', () => {
     // `--baseline /tmp/b.json` used to read `<root>/tmp/b.json`: a write that
     // lands where nobody looks, and a read that accepts nothing without saying
