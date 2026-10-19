@@ -410,11 +410,52 @@ describe('a governing phrase', () => {
     expect(reading('# A\n\nThe `none` flag and `` never `` too. Deferred to [ADR-0002](0002-b.md).\n')).toEqual(DELEGATES);
   });
 
-  it('trades a miss where a comma ends the clause a negation is in', () => {
-    // A comma is blanked as it was, so the word before it stands against the
-    // phrase: each states the relation, and each is a citation now.
-    expect(reading('# A\n\nShip it Monday; if not, blocked by [ADR-0002](0002-b.md).\n')).toEqual(REFERENCES);
-    expect(reading('# A\n\nBoth or neither, because [ADR-0002](0002-b.md) says so.\n')).toEqual(REFERENCES);
+  // Each states the relation, and was a citation while the comma was blanked
+  // and the negation before it stood against the phrase (ADR-0006, 2026-10-19).
+  it.each([
+    ['Ship it Monday; if not, blocked by [ADR-0002](0002-b.md).', 'blocked-by', false],
+    ['Both or neither, because [ADR-0002](0002-b.md) says so.', 'assumes', false],
+    ['No, blocked by [ADR-0002](0002-b.md).', 'blocked-by', false],
+    ['Not yet, deferred to [ADR-0002](0002-b.md).', 'delegates-to', false],
+    ['Owner: nobody, deferred to [ADR-0002](0002-b.md).', 'delegates-to', false],
+    ['Ready or not, depends on [ADR-0002](0002-b.md).', 'depends-on', false],
+    ['Like it or not, superseded by [ADR-0002](0002-b.md).', 'supersedes', true],
+  ])('is not cancelled by a negation a comma keeps from it: %s', (sentence, kind, inverted) => {
+    expect(reading(`# A\n\n${sentence}\n`)).toEqual({ kind, inverted });
+  });
+
+  it('is cancelled by a negation with no comma between the two, wherever else a comma stands', () => {
+    expect(reading('# A\n\nThis is, however, not blocked by [ADR-0002](0002-b.md).\n')).toEqual(REFERENCES);
+    expect(reading('# A\n\nNo, not blocked by [ADR-0002](0002-b.md).\n')).toEqual(REFERENCES);
+    expect(reading('# A\n\nShip it, but not yet deferred to [ADR-0002](0002-b.md).\n')).toEqual(REFERENCES);
+    expect(reading('# A\n\nNo longer blocked by [ADR-0002](0002-b.md), nor by the cache.\n')).toEqual(REFERENCES);
+  });
+
+  it('trades a relation where a comma sets a negation apart from the phrase it denies', () => {
+    // An emphatic negation set off by commas denies what it stands before,
+    // and is read as a clause of its own (ADR-0006, 2026-10-19).
+    expect(reading('# A\n\nNever, ever, blocked by [ADR-0002](0002-b.md).\n')).toEqual({ kind: 'blocked-by', inverted: false });
+  });
+
+  it('is cancelled by a negation between it and the reference, with a comma on either side of the negation', () => {
+    // A negation after the phrase is read as it was: a comma moves nothing there.
+    expect(reading('# A\n\nBlocked by none, see [ADR-0002](0002-b.md).\n')).toEqual(REFERENCES);
+    expect(reading('# A\n\nBlocked by, as far as anyone knows, none of [ADR-0002](0002-b.md).\n')).toEqual(REFERENCES);
+    expect(reading('# A\n\nSuperseded by, as of today, nothing, though [ADR-0002](0002-b.md) proposes to.\n')).toEqual(REFERENCES);
+    // And the miss that keeps: a negation set off by commas on both sides.
+    expect(reading('# A\n\nDeferred to, but not owned by, [ADR-0002](0002-b.md).\n')).toEqual(REFERENCES);
+    const bare = extract('# A\n\nBlocked by ADR-0003, not ADR-0002.\n').references.find((reference) => reference.target === 'ADR-0002');
+    expect(bare && { kind: bare.kind, inverted: bare.inverted }).toEqual(REFERENCES);
+  });
+
+  it('counts a comma toward no phrase reach', () => {
+    // A comma and the space after it are one character, as a space alone is:
+    // 40 so, and 43 were each comma one more.
+    const within = ' the shards, the queue, the cache, the log ';
+    expect(within.replaceAll(', ', ' ')).toHaveLength(40);
+    const beyond = within.replace('log', 'logs');
+    expect(reading(`# A\n\nDeferred to${within}[ADR-0002](0002-b.md).\n`)).toEqual(DELEGATES);
+    expect(reading(`# A\n\nDeferred to${beyond}[ADR-0002](0002-b.md).\n`)).toEqual(REFERENCES);
   });
 
   it('is cancelled by a negation the reference follows with no space between', () => {

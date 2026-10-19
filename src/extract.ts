@@ -475,11 +475,12 @@ const NEGATION = /(?:^|[^\p{L}\p{N}-])(?:no|not|no-one|nobody|none|never|neither
  * by" are read, and "not only blocked by" and "nothing but blocked by",
  * which state the relation, are not. Only a space stands between, so a
  * mark keeps the word to itself: the option `"never" blocked by` states the
- * relation, as "Not in this release: deferred to" does. A comma is blanked
- * before this is read, as it was, so "If not, blocked by" is cancelled: a
- * miss, kept so that a comma moves no phrase's reach. A contraction is a
- * negation, `isn't` and `doesn’t`, and so is `cannot`. Tested against the
- * text just before the phrase, which ends with the space before it.
+ * relation, as "Not in this release: deferred to" does. A comma does too,
+ * and ends the clause the word belongs to: "If not, blocked by" and "both
+ * or neither, because" state the relation, where with the comma blanked
+ * they were cancelled (ADR-0006, 2026-10-19). A contraction is a negation,
+ * `isn't` and `doesn’t`, and so is `cannot`. Tested against the text just
+ * before the phrase, which ends with the space or the comma before it.
  */
 const NEGATED_BEFORE =
   /(?:^|[^\p{L}\p{N}-])(?:no|not|no one|no-one|nobody|none|never|neither|nor|nothing|without|cannot|\p{L}+n['’]t)(?: (?:be|been|being|is|are|was|were|yet|longer|ever|even|currently|actually|really|necessarily|always))* $/u;
@@ -1564,7 +1565,7 @@ export function classifyReference(
   end: number,
   section: readonly string[],
 ): Classification {
-  const before = sentenceBefore(text, start);
+  const { words: before, commas } = sentenceBefore(text, start);
 
   // Left to right, so the last match within the window is the nearest one - and
   // the nearest governing phrase is the one that governs. `matchAll`, not a
@@ -1580,9 +1581,10 @@ export function classifyReference(
     if (distance > VERB_WINDOW) continue;
     // What sits between the phrase and the reference has to be connective. A
     // negation in there reverses the claim the phrase would otherwise make,
-    // and so does one just before the phrase.
+    // and so does one just before the phrase, where no comma ends its clause
+    // first.
     if (NEGATION.test(before.slice(end))) continue;
-    if (NEGATED_BEFORE.test(before.slice(0, m.index))) continue;
+    if (NEGATED_BEFORE.test(commas.slice(0, m.index))) continue;
     // Always found: the pattern was compiled from this table's own keys, and a
     // lower-cased search matches them only as written. The check is for types.
     const rule = VERB_LOOKUP.get(phrase);
@@ -1644,16 +1646,25 @@ const STATEMENT_BREAK = /[.?!;]\s|[。？！；]|\n\s*\n|\n\s*[-*+>#]|\|/g;
  * names a word, and `isn't` is one word. Kept, each counts toward the
  * distance a phrase reaches where it stands beside a space, as a curly one
  * did (ADR-0006, 2026-10-18).
+ *
+ * The same text is given a second time with each run of spaces that held a
+ * comma written as the comma: one character either way, so the two line up
+ * and a comma counts toward no phrase's reach, and a negation before a
+ * phrase is read from the second, where a comma keeps the two apart
+ * (ADR-0006, 2026-10-19).
  */
-function sentenceBefore(text: string, start: number): string {
+function sentenceBefore(text: string, start: number): { readonly words: string; readonly commas: string } {
   const window = text.slice(Math.max(0, start - 160), start);
   let cut = 0;
   for (const m of window.matchAll(STATEMENT_BREAK)) cut = m.index + m[0].length;
-  return window
+  const statement = window
     .slice(cut)
     .toLowerCase()
-    .replace(/[`*_~()\[\],]/g, ' ')
-    .replace(/\s+/g, ' ');
+    .replace(/[`*_~()\[\]]/g, ' ');
+  return {
+    words: statement.replace(/[\s,]+/g, ' '),
+    commas: statement.replace(/[\s,]+/g, (run) => (run.includes(',') ? ',' : ' ')),
+  };
 }
 
 /**

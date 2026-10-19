@@ -473,7 +473,9 @@ it, in the same statement: a sentence, a paragraph, a list item or a table cell.
   `yet`, `longer`, `necessarily` and a few more) stand between: `not only
   blocked by`, `nothing but blocked by`, the option `"never" blocked by` and
   `Not in this release: deferred to` each state the relation, and are read as
-  they state it.
+  they state it. So do `if not, blocked by` and `both or neither, because`: a
+  comma ends the clause the negation is in, and counts toward no phrase's 40
+  characters.
 - A sentence written in Chinese ends at `。`, `？`, `！` or `；`, with a space
   after it or none, so `Deferred to later。另見 ADR-0002` hands nothing to
   ADR-0002. A stop only ends a statement sooner: it reads less, never more.
