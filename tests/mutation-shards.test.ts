@@ -9,6 +9,7 @@
  *
  * The order the sweep runs a mutant's test files in is held here too
  * (vitest.mutation.config.ts): it is the sweep's, and no mutant is under it.
+ * So is what the sweep reports, as vitest resolves it from that file.
  */
 
 import { execFileSync } from 'node:child_process';
@@ -16,8 +17,8 @@ import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { minimatch } from 'minimatch';
-import { describe, expect, it } from 'vitest';
-import { BaseSequencer, type TestSpecification, type Vitest } from 'vitest/node';
+import { describe, expect, it, vi } from 'vitest';
+import { BaseSequencer, resolveConfig, type TestSpecification, type Vitest } from 'vitest/node';
 
 import unitSuite from '../vitest.config.js';
 import mutationSuite, { QuickestFirst } from '../vitest.mutation.config.js';
@@ -478,7 +479,7 @@ describe("the order a mutant's test files run in", () => {
 
   it("is the sweep's alone, over the suite `npm test` runs less the three files no mutant reaches", () => {
     const unit = unitSuite.test!;
-    const { exclude, sequence, ...sweep } = mutationSuite.test!;
+    const { exclude, sequence, reporters, ...sweep } = mutationSuite.test!;
     expect(sequence).toEqual({ sequencer: QuickestFirst });
     // `npm test` reports every failure and runs its files side by side:
     // vitest's order is the one for that.
@@ -490,6 +491,39 @@ describe("the order a mutant's test files run in", () => {
       hookTimeout: unit.hookTimeout,
     });
     expect(exclude).toEqual(['tests/mutation-shards.test.ts', 'tests/mutation-unmeasured.test.ts', 'tests/bin.test.ts', '**/node_modules/**']);
+    // So is the reporter it names, which the tests below hold to what vitest
+    // makes of it.
+    expect(reporters).toEqual(['default']);
+    expect(unit.reporters).toBeUndefined();
+  });
+});
+
+describe('what the sweep reports', () => {
+  /**
+   * The reporters vitest gives a run of a suite on a GitHub runner, where
+   * every step has GITHUB_ACTIONS set to true, resolved by vitest itself, as
+   * Stryker's runner has it resolve them: it names none of its own.
+   */
+  async function onARunner(suite: typeof unitSuite): Promise<string[]> {
+    vi.stubEnv('GITHUB_ACTIONS', 'true');
+    try {
+      const { vitestConfig } = await resolveConfig({ ...suite.test, config: false, root: path.join(import.meta.dirname, '..') });
+      return vitestConfig.reporters.map((reporter) => (Array.isArray(reporter) ? String(reporter[0]) : 'inline'));
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  }
+
+  it("is vitest's default reporter alone, so that no mutant's run adds a summary to the step's", async () => {
+    // Where a suite names none, vitest adds its github-actions reporter on a
+    // runner, and it appends a summary of every run to the step's own: some
+    // 3,450 of them in the largest shard of main's sweep of 29c7b8a, about two
+    // thirds of the 1MiB GitHub uploads a step (vitest.mutation.config.ts).
+    expect(await onARunner(mutationSuite)).toEqual(['default']);
+  });
+
+  it('and not the suite `npm test` runs, whose run on a runner keeps the annotations and the summary vitest gives it', async () => {
+    expect(await onARunner(unitSuite)).toContain('github-actions');
   });
 });
 
