@@ -806,6 +806,80 @@ prints the help, as `--root nowhere --help` does.
 Those are input refused that was accepted, and a check that passed that
 can fail, so they arrive in a minor release.
 
+**A path is read from where the line was typed, a drive letter names its
+volume in either case, and a `\` is a separator wherever the run starts.**
+*Amended 2026-10-19.* The amendment of 2026-10-18 compared two values of
+`--root`, `--baseline` and `--record-baseline` as Node's `path.resolve`
+reads each from the directory the line was typed in, folding no case, and
+three readings of a path were left as they were. Measured on main at
+29c7b8a, 0.18.0, through the launcher on Windows 11 (Node 24.18.1) and in
+a `node:24-slim` container (Node 24.21.0), and through `main` with a `cwd`
+of its own, over an ADR that cites one nobody wrote, so the plain check
+exits `1`:
+
+| Given | 0.18.0 | Now |
+| --- | --- | --- |
+| `main({ cwd })`, Node in another directory that has a clean `docs`: `check --root docs` | exit `0`, the other `docs` checked | exit `1`, the caller's |
+| The same, where Node's directory has no `docs` | exit `2`, `--root "docs" is not there` | exit `1` |
+| The same, `--root docs --record-baseline rec.json` | written into the other `docs` | written into the caller's |
+| The same, `rules --root .` | no project rule: the other directory's configuration | the caller's project rules |
+| The same, `--root <the caller's docs, absolute> --root docs` | taken as one, and the other `docs` checked | taken as one, the caller's checked |
+| `main({ cwd: 'docs' })`, Node in the repository, no `--root` | no configuration: the walk stopped at `docs` | the repository's |
+| Windows: `--root C:\x --root c:\x`, in either order; the same of `--baseline` and `--record-baseline`; `C:docs` beside `c:docs` | exit `2`, two values | taken as one |
+| Windows: `--root C:\x --root c:\x --help` | exit `2` | the help |
+| Windows: `--root C:\x --root C:\X` | exit `2` | the same |
+| Linux: `--baseline 'sub\held.json'` typed at the root | the file `sub\held.json`, and exit `2` where there is none | `sub/held.json` |
+| Linux: `--baseline '../sub\held.json'` or `'..\sub\held.json'` typed one directory down | `sub/held.json` | the same |
+| Linux: `--baseline 'sub\held.json' --baseline sub/held.json` | exit `2`, two values | taken as one |
+| Linux: `--record-baseline 'out\b.json'` at the root | the file `out\b.json` written | `out/b.json`, and exit `2` where `out` is not there |
+| Linux: `"baseline": "sub\\held.json"` in the configuration | the file `sub\held.json` | `sub/held.json` |
+| Linux: `--root '.\docs'` beside a directory of that name | asked of the disk as `.\docs`, walked as `./docs` | `./docs` for both |
+| The launcher, and `main` with no `cwd` | from the working directory | the same |
+
+**`cwd` is where the line was typed.** `main` takes the directory a line
+was typed in as `cwd`, and the launcher gives the process's own. The
+comparison of two values read from there, and the run did not: `stat`,
+the configuration and the walk were handed the root as it was typed, which
+Node reads from its own directory. So a caller's `--root docs` checked
+another tree's `docs`, recorded a baseline into it, and was not there where
+that directory had none. The root is resolved from `cwd` now, once, before
+anything is read, and so is the directory the walk for a configuration
+starts from. A `cwd` that is itself relative is read from Node's
+directory, as every relative path is, so that walk goes up to the
+repository as it would from that directory, where it stopped at the top
+of the relative path and read no configuration above it. A root that was
+named is still named as it was typed in what the run says of it.
+
+**A drive letter names its volume in either case**, on Windows, as the
+family's contract has it
+([spec-core's ADR-0005](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0005-the-family-contract.md),
+2026-10-19). `path.resolve` keeps the case a drive letter was typed in, so
+the comparison folds the letter, at the start of the resolved path or after
+`\\?\` or `\\.\`, before it compares two values. Past the letter it
+compares as before, `C:\x` beside `C:\X` refused: the contract leaves it to
+the disk whether two names are one directory. Node resolves a path on any
+other host to one that starts with `/`, so nothing is folded there, and
+`C:x` beside `c:x` on Linux are two relative names, refused as two.
+
+**A `\` in a root or a baseline is a separator, wherever the run starts.**
+A baseline typed below the root was joined to it with each `\` read as a
+`/`, one typed at the root was read as typed, and the configuration's was
+read as typed too, so on Linux `sub\held.json` at the root named a file of
+that name and `..\sub\held.json` one directory down named `sub/held.json`.
+The comparison kept the `\` in both, so two values it refused as two were,
+below the root, one file. A root was asked of the disk as typed and walked
+with each `\` a `/`, so `--root '.\docs'` passed the check that it is a
+directory on one directory and checked another. A `\` is a separator now
+in every root and baseline the run reads, typed or configured, as it was
+in an absolute baseline and is in a pattern
+([ADR-0022](0022-globs-are-the-family-path-dialect.md)), and the comparison
+reads each so. Windows reads a `\` as a separator itself, so nothing it
+reads changes; on Linux a file or directory whose name holds one cannot be
+a root or a baseline, as it cannot be named by a pattern.
+
+Those are input taken that was refused, and runs that read another
+directory or file than they did, so they arrive in a minor release.
+
 ## What this does not fix
 
 The "greedy prefix" flood is narrower than it looks, and worth stating precisely

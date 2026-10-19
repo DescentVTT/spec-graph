@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { extnamePosix, normalisePosix, resolveFrom } from '../src/paths.js';
+import { extnamePosix, foldDriveLetter, normalisePosix, resolveFrom } from '../src/paths.js';
 
 /**
  * The POSIX path arithmetic the API exports, held to what each function's
@@ -38,5 +38,29 @@ describe('the extension of a path', () => {
     expect(extnamePosix('docs/README')).toBe('');
     expect(extnamePosix('docs.v2/README')).toBe('');
     expect(extnamePosix('docs/.gitignore')).toBe('');
+  });
+});
+
+describe('a drive letter, folded for a comparison', () => {
+  it('is one volume in either case, as Windows reads it, outright and in a device path', () => {
+    expect(foldDriveLetter('c:\\x')).toBe('C:\\x');
+    expect(foldDriveLetter('C:\\x')).toBe('C:\\x');
+    expect(foldDriveLetter('d:')).toBe('D:');
+    expect(foldDriveLetter('\\\\?\\c:\\x')).toBe('\\\\?\\C:\\x');
+    expect(foldDriveLetter('\\\\.\\e:\\')).toBe('\\\\.\\E:\\');
+  });
+
+  it('folds nothing past the letter, whose case is the disk to say', () => {
+    expect(foldDriveLetter('c:\\Docs\\adr')).toBe('C:\\Docs\\adr');
+    expect(foldDriveLetter('C:\\x')).not.toBe(foldDriveLetter('C:\\X'));
+  });
+
+  it('leaves alone a path that does not start with one: a POSIX path, a share, a name with a colon in it', () => {
+    expect(foldDriveLetter('/tmp/a:b')).toBe('/tmp/a:b');
+    expect(foldDriveLetter('/c:/x')).toBe('/c:/x');
+    expect(foldDriveLetter('\\\\server\\c:\\x')).toBe('\\\\server\\c:\\x');
+    expect(foldDriveLetter('\\\\?\\unc\\server\\share')).toBe('\\\\?\\unc\\server\\share');
+    expect(foldDriveLetter('cd:\\x')).toBe('cd:\\x');
+    expect(foldDriveLetter('docs')).toBe('docs');
   });
 });

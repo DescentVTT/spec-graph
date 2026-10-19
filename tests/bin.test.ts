@@ -89,3 +89,30 @@ describe('the launcher', () => {
     });
   });
 });
+
+describe('the library entry, given a relative cwd', () => {
+  // A process of its own, since what is told apart is Node's own directory,
+  // which a test in this process cannot move: the directory a relative `cwd`
+  // is read from, and where the walk for a configuration goes from there.
+  it('walks up from it as from the directory it names, to the repository the process runs in', async () => {
+    const { mkdir, rm, writeFile } = await import('node:fs/promises');
+    const { resolve } = await import('node:path');
+    const { pathToFileURL } = await import('node:url');
+    if (!existsSync('dist/cli.js')) execFileSync(process.execPath, ['node_modules/typescript/bin/tsc', '-p', 'tsconfig.build.json']);
+    const root = resolve(`tests/fixtures/.tmp/bin-relative-cwd-${process.pid}`);
+    await rm(root, { recursive: true, force: true });
+    await mkdir(`${root}/.git`, { recursive: true });
+    await mkdir(`${root}/docs`, { recursive: true });
+    await writeFile(`${root}/.spec-graph.json`, '{ "rules": { "no-draft": { "query": "document[phase=draft]", "message": "{0} is a draft" } } }\n');
+    try {
+      const entry = pathToFileURL(resolve('dist/cli.js')).href;
+      const script = `const { main } = await import(${JSON.stringify(entry)}); process.exitCode = await main({ cwd: 'docs', argv: ['rules'] });`;
+      const result = spawnSync(process.execPath, ['--input-type=module', '-e', script], { cwd: root, encoding: 'utf8' });
+      expect(result.status, result.stderr).toBe(0);
+      // It stopped at the top of the relative path, `docs`, and read none.
+      expect(result.stdout).toContain('project:no-draft');
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+});

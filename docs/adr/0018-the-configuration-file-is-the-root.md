@@ -136,6 +136,17 @@ matched as a whole path: `--history 0002.md` typed in `docs` named the root's
 alone. So is an absolute path: it was never relative to anywhere, so moving the
 root cannot change what it means.
 
+*Amended 2026-10-19.* A baseline is read the same wherever the run starts.
+Joined to the directory it was typed in, its `\` were read as separators,
+and typed at the root it was named as typed, so on Linux `sub\held.json`
+at the root was a file of that name and `..\sub\held.json` typed in `docs`
+was `sub/held.json`. A `\` in a baseline is a separator at the root as it
+is below it, in a configured one too, and in a `--root`, which was walked
+so already. And "where it was typed" is the `cwd` a caller of the library
+gives `main`, from which a relative `--root` was compared and not read
+([ADR-0010](0010-configuration-belongs-to-the-repository.md), 2026-10-19,
+has both, measured).
+
 ### `--verbose` names the file the way the reader would have to type it
 
 ```text

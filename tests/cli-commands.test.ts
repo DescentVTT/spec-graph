@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs';
-import { basename } from 'node:path';
+import { basename, resolve } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
@@ -274,6 +274,108 @@ describe('paths typed below the root', () => {
       expect(await files(absolute(root), 'vendor')).toEqual(['vendor/0001.md']);
       expect(await files(absolute(root), 'docs/vendor')).toEqual(['docs/vendor/0002.md']);
       expect(await files(absolute(`${root}/docs`), 'vendor')).toEqual(['docs/vendor/0002.md']);
+    });
+  });
+});
+
+describe('a root and a baseline read from where the line was typed', () => {
+  /**
+   * A repository whose documents are under `notes`, a name the repository
+   * running these tests does not have at its top: a relative root read from
+   * Node's own directory is not there, and nothing is written outside this
+   * process's directory whichever way it is read.
+   */
+  const CALLER = {
+    '.spec-graph.json': '{ "patterns": ["notes/*.md"] }\n',
+    'notes/.spec-graph.json': '{ "patterns": ["*.md"], "rules": { "no-draft": { "query": "document[phase=draft]", "message": "{0} is a draft" } } }\n',
+    'notes/0001.md': '# ADR-0001: One\n\nstatus: accepted\n\nThis builds on [ADR-0099](0099.md).\n',
+    'notes/deep/keep.txt': '',
+    'sub/keep.txt': '',
+    'out/keep.txt': '',
+  };
+  const posix = (path: string): string => path.replaceAll('\\', '/');
+
+  it('reads a relative --root from the directory the caller names, not from the one Node runs in', async () => {
+    const { access } = await import('node:fs/promises');
+    await withRepo('cli-caller-root', CALLER, async (root) => {
+      const caller = absolute(root);
+      const checked = await runIn(caller, 'check', '--root', 'notes');
+      expect(checked.code, checked.err).toBe(EXIT_FAILED);
+      expect(checked.out).toContain('"0099.md" does not resolve');
+      // Its configuration is the one there, and so are the rules it declares.
+      expect((await runIn(caller, 'rules', '--root', 'notes')).out).toContain('project:no-draft');
+      // Two spellings of it are one value, and the run reads the one compared.
+      expect((await runIn(caller, 'check', '--root', `${caller}/notes`, '--root', 'notes')).code).toBe(EXIT_FAILED);
+      // A baseline beside it is recorded into the caller's tree and read back from there.
+      const recorded = await runIn(caller, 'check', '--root', 'notes', '--record-baseline', 'held.json');
+      expect(recorded.code, recorded.err).toBe(EXIT_OK);
+      await access(`${root}/notes/held.json`);
+      expect((await runIn(caller, 'check', '--root', 'notes', '--baseline', 'held.json')).code).toBe(EXIT_OK);
+      expect((await runIn(caller, 'check', '--root', 'notes', '--no-config', '*.md')).code).toBe(EXIT_FAILED);
+      // A root that is not there under the caller's directory is said as it was typed.
+      expect(await runIn(caller, 'check', '--root', 'nowhere')).toEqual({ code: EXIT_ERROR, out: '', err: 'spec-graph: --root "nowhere" is not there\n' });
+    });
+  });
+
+  it('names a root that was named as it was typed, and one found above as it was found', async () => {
+    await withRepo('cli-caller-looked', CALLER, async (root) => {
+      const named = await runIn(absolute(root), 'check', '--root', 'notes', 'nothing/*.md');
+      expect(named.err).toBe('spec-graph: no specifications matched "nothing/*.md"\n  looked under notes\n');
+      const found = await runIn(absolute(`${root}/notes/deep`), 'check', 'nothing/*.md');
+      expect(found.err).toBe(`spec-graph: no specifications matched "deep/nothing/*.md"\n  looked under ${posix(resolve(root, 'notes'))}\n`);
+    });
+  });
+
+  it('reads a backslash in a baseline as a separator, wherever the run starts', async () => {
+    const { access, writeFile } = await import('node:fs/promises');
+    await withRepo('cli-caller-backslash', CALLER, async (root) => {
+      const top = absolute(root);
+      // Below the root, which the configuration at the top makes the root.
+      const sub = absolute(`${root}/sub`);
+      expect((await runIn(top, 'check', '--record-baseline', 'sub/b.json')).code).toBe(EXIT_OK);
+      const code = async (cwd: string, ...argv: string[]): Promise<number> => (await runIn(cwd, 'check', ...argv)).code;
+      // Kept as a character at the root, this named a file on Linux that the
+      // same path typed one directory down did not.
+      expect(await code(top, '--baseline', 'sub\\b.json')).toBe(EXIT_OK);
+      expect(await code(sub, '--baseline', '..\\sub\\b.json')).toBe(EXIT_OK);
+      expect(await code(sub, '--baseline', '.\\b.json')).toBe(EXIT_OK);
+      // Two spellings of one file are one value, as they are one file.
+      expect(await code(top, '--baseline', '.\\sub\\b.json', '--baseline', 'sub/b.json')).toBe(EXIT_OK);
+      // A recording is written where the same path would be read.
+      expect(await code(top, '--record-baseline', 'out\\b.json')).toBe(EXIT_OK);
+      await access(`${root}/out/b.json`);
+      // The configuration's own path reads the same from the root and below it.
+      await writeFile(`${root}/.spec-graph.json`, '{ "patterns": ["notes/*.md"], "baseline": "sub\\\\b.json" }\n');
+      expect(await code(top)).toBe(EXIT_OK);
+      expect(await code(sub)).toBe(EXIT_OK);
+      // A file that is not there is not there, however it is spelled.
+      const missing = await runIn(top, 'check', '--baseline', 'sub\\c.json');
+      expect(missing.code).toBe(EXIT_ERROR);
+      expect(missing.err).toContain('cannot read the baseline sub\\c.json');
+    });
+  });
+
+  it.runIf(process.platform === 'win32')('takes a root and a baseline written with a drive letter in either case as one, on Windows', async () => {
+    await withRepo('cli-caller-drive', CALLER, async (root) => {
+      const notes = resolve(root, 'notes');
+      const upper = `${notes[0]!.toUpperCase()}${notes.slice(1)}`;
+      const lower = `${notes[0]!.toLowerCase()}${notes.slice(1)}`;
+      expect((await run('check', '--root', upper, '--root', lower)).code).toBe(EXIT_FAILED);
+      const recorded = await run('check', '--root', lower, '--record-baseline', `${upper}\\held.json`, '--record-baseline', `${lower}\\held.json`);
+      expect(recorded.code, recorded.err).toBe(EXIT_OK);
+      expect((await run('check', '--root', upper, '--baseline', `${lower}\\held.json`, '--baseline', `${upper}\\held.json`)).code).toBe(EXIT_OK);
+      // Past the letter a name is the disk's to compare, and two are refused.
+      expect((await run('check', '--root', upper, '--root', upper.toUpperCase())).code).toBe(EXIT_ERROR);
+    });
+  });
+
+  it('reads a backslash in a root as the walk reads it', async () => {
+    await withRepo('cli-caller-root-backslash', CALLER, async (root) => {
+      const typed = `${root}\\notes`;
+      const checked = await run('check', '--root', typed);
+      expect(checked.code, checked.err).toBe(EXIT_FAILED);
+      expect(checked.out).toContain('"0099.md" does not resolve');
+      expect((await run('check', '--root', typed, '--root', `${root}/notes`)).code).toBe(EXIT_FAILED);
     });
   });
 });

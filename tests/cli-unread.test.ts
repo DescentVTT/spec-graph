@@ -618,6 +618,33 @@ describe('an option that takes one value, given two', () => {
     }
   });
 
+  it('compares a drive letter in either case as one volume on Windows, and nothing past the letter', () => {
+    // Node keeps the case a drive letter is typed in, and Windows reads either
+    // as one volume. Elsewhere `C:` and `c:` are two names a directory can have.
+    const windows = process.platform === 'win32';
+    for (const option of ['--root', '--baseline', '--record-baseline']) {
+      for (const [upper, lower] of [
+        ['C:\\x\\a', 'c:\\x\\a'],
+        ['C:x', 'c:x'],
+      ] as const) {
+        if (windows) expect(parseArgs([option, upper, option, lower], '/repo'), `${option} ${lower}`).toMatchObject({ command: 'check' });
+        else expect(usage([option, upper, option, lower])).toBe(twice(option, upper, lower));
+      }
+      expect(usage([option, 'C:\\x\\a', option, 'C:\\X\\a'])).toBe(twice(option, 'C:\\x\\a', 'C:\\X\\a'));
+      expect(usage([option, 'c:\\x', option, 'd:\\x'])).toBe(twice(option, 'c:\\x', 'd:\\x'));
+    }
+  });
+
+  it('reads a backslash in a path as a separator, as the run reads it', () => {
+    expect(parseArgs(['--root', 'a\\docs', '--root', 'a/docs'], '/repo')).toMatchObject({ root: 'a/docs' });
+    for (const option of ['--baseline', '--record-baseline']) {
+      expect(() => parseArgs([option, 'sub\\b.json', option, 'sub/b.json'], '/repo'), option).not.toThrow();
+      // From the root a --root names, however its separators were typed.
+      expect(() => parseArgs(['--root', 'a\\docs', option, 'b.json', option, resolve('/repo', 'a', 'docs', 'b.json')], '/repo'), option).not.toThrow();
+      expect(usage([option, 'sub\\b.json', option, 'sub\\c.json'])).toBe(twice(option, 'sub\\b.json', 'sub\\c.json'));
+    }
+  });
+
   it('leaves a list a list: every value of an option that is repeatable is read', () => {
     expect(parseArgs(['--ignore', 'a', '--ignore', 'b', '--ignore', 'a'], '/repo').ignore).toEqual(['a', 'b', 'a']);
     expect(parseArgs(['--ignore-ref', 'a', '--ignore-ref', 'b'], '/repo').ignoreReferences).toEqual(['a', 'b']);
