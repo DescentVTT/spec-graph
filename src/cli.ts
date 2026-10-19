@@ -1453,6 +1453,11 @@ async function run(io: CliIO, err: (text: string) => void): Promise<number> {
  * arithmetic.
  */
 function below(root: string, from: string): string {
+  // `from` is where the run starts as `path.resolve` gives it, which ends in
+  // no separator but at a filesystem root, `/` or `C:\`, and there `below` is
+  // `''` whether the strip takes every slash, takes one, or writes a word in
+  // their place: the mutants of this line are equivalent since the run
+  // resolves where it starts. The strip stays for a path passed as typed.
   const start = toPosix(from).replace(/[/]+$/, '');
   // The prefix test only guards a root that is neither `start` nor above it,
   // which nothing returns; for `start` itself, slicing past its end is `''`
