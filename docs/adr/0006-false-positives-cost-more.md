@@ -245,8 +245,8 @@ toward the 40 characters a phrase reaches, as a curly one did.
 What it trades. The false positive it removes is a relation the sentence
 denies. The false negative it adds is a negation that belongs to another
 clause, with nothing but a comma before the phrase, since a comma is blanked
-in that text as it was: "both or neither, because [ADR-0002] says so" and
-"if not, blocked by [ADR-0002]" each state the relation and are citations
+in that text as it was: `both or neither, because [ADR-0002] says so` and
+`if not, blocked by [ADR-0002]` each state the relation and are citations
 now. Keeping the comma would stop those two, and it moves the reach of
 every phrase across a comma by a character: measured that way, relations a
 phrase reached by a character or two went too, `per tick`, `per cent` and
@@ -288,6 +288,92 @@ checks, measured on both builds:
 | An open question in a live document, "Not blocked by" a retired one | exit `1`, `ghost-handover` | exit `0` |
 | A live document that "doesn't depend on" a retired one | exit `1`, `stale-premise` | exit `0` |
 | An accepted document that "has not been superseded by" another | exit `1`, `live-supersession` | exit `0` |
+
+*Amended 2026-10-19.* **A comma ends the clause a negation before the
+phrase is in, and counts toward no phrase's reach.** The amendment of
+2026-10-18 cancelled a phrase by a negation as the last word before it,
+with the comma blanked in the text it was read from, so a negation that
+ends a clause of its own stood against the next one's phrase, and
+`if not, blocked by [ADR-0002]` and
+`both or neither, because [ADR-0002] says so` each state the relation and
+were citations. Keeping the comma in that text would have moved the 40
+characters a phrase reaches. The text is
+read twice now, from one statement: once with each run of spaces and
+commas one space, as before, for the phrase and its reach, and once with
+such a run that holds a comma written as the comma, one character either
+way, for the negation before the phrase. A comma between that negation and
+the phrase keeps the two apart; one before the negation keeps nothing
+apart. Measured on main at 29c7b8a, 0.18.0, through the launcher: one
+document for each sentence, citing a second, and the relation `graph`
+exports for it.
+
+| Written | 0.18.0 | Now |
+| --- | --- | --- |
+| `If not, blocked by`, `No, blocked by` | a citation | `blocked-by` |
+| `Both or neither, because` | a citation | `assumes` |
+| `Not yet, deferred to`, `Owner: nobody, deferred to` | a citation | `delegates-to` |
+| `Ready or not, depends on` | a citation | `depends-on` |
+| `Like it or not, superseded by` | a citation | the cited document supersedes this one |
+| `Never, ever, blocked by`, `Not, repeat, not, blocked by`, `Not yet, nor ever, blocked by` | a citation | `blocked-by` |
+| `It isn't, blocked by`, `It has not, been superseded by` | a citation | the phrase's relation |
+| `Not blocked by`, `This is, however, not blocked by`, `No longer blocked by [ADR-0002], nor by the cache` | a citation | the same |
+| `If so, blocked by`, `Not now, blocked by`, `Not only, blocked by` | `blocked-by` | the same |
+| `Not, as it happens, blocked by` | `blocked-by` | the same |
+| `Blocked by none, see`, `Blocked by ADR-0003, not ADR-0002` | a citation | the same |
+| `Blocked by, if nothing else,`, `Deferred to, but not owned by,` | a citation | the same |
+| `Blocked by the shards, the queue, the cache, the log` with 40 characters to the reference, and 41 | `blocked-by`; a citation | the same |
+
+What it trades. The false negatives it removes are relations a sentence
+states after a clause that ends in a negation: a condition, `if not` or
+`or not`, an answer, `no` or `not yet`, a value, `nobody`. The false
+positives it adds are negations that deny the phrase they stand before
+and are set apart from it by a comma all the same: an emphatic one,
+`never, ever,` or `not, repeat, not,`, and a comma written between a
+negation and its own verb, `it isn't, blocked by`. The first are the way
+a clause is ended in English, and the second a way of writing that
+specifications rarely use; read either way, one kind is missed. A
+negation set apart from the phrase by more than a comma was not read
+before and is not now: `Not, as it happens, blocked by` states what its
+sentence denies, as it did.
+
+Measured on the Markdown of the family's five repositories as each main
+had it (spec-core 153ba40, spec-brief fbe9875, spec-graph 29c7b8a,
+spec-guard 3b65529, spec-harness 3c4112c): 515 relations, and two read
+otherwise, both in this ADR, where the amendment of 2026-10-18 quoted the
+two sentences above in prose: each was read as the relation it states.
+They are written in code now, as the other sentences it quotes are, and
+with that no relation of the family's changed. No repository outside the
+family was read for this amendment.
+
+**A negation after the phrase is read as it was.** The rule that a comma
+is a boundary a negation does not cross was asked for in either
+direction, and after the phrase, between it and the reference, it was
+measured two ways and neither is taken. Where a comma between the phrase
+and the negation kept the two apart, `Blocked by ADR-0003, not ADR-0002`,
+`Blocked by ADR-0003, ADR-0004, not ADR-0002` and
+`Deferred to the team, not to [ADR-0002]` read relations to the document
+each denies one, the first two a list's own exception. Where the negation
+was kept from the phrase and the reference only by a comma on each side,
+so that it cancels what it stands beside and nothing set off from it,
+`Blocked by, if nothing else, [ADR-0002]`,
+`Deferred to, but not owned by, [ADR-0002]` and
+`Blocked by ADR-0003, never by the cache, and ADR-0002` read the relation
+each states, and
+`Superseded by, as of today, nothing, though ADR-0002 proposes to` and
+`Deferred to, at present, nobody, though ADR-0002 asked` read a
+supersession and a hand-off each denies: the inference this ADR names the
+worst, for a miss of the same kind. A negation anywhere between the phrase
+and the reference cancels it, whatever commas stand there.
+
+A check that passed can fail, so it arrives in a minor release. Four
+checks, measured on both builds:
+
+| The corpus | 0.18.0 | Now |
+| --- | --- | --- |
+| An open question in a live document, `if not, blocked by` a superseded one | exit `0` | exit `1`, `ghost-handover` |
+| A live document, `both or neither, because` a superseded one says so | exit `0` | exit `1`, `stale-premise` |
+| An open question in a superseded document, `not yet, deferred to` a live one | exit `1`, `orphaned-obligation` | exit `0` |
+| An open question in a live document, `never, ever, blocked by` a superseded one | exit `0` | exit `1`, `ghost-handover` |
 
 ## Open Questions
 

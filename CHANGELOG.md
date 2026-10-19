@@ -15,6 +15,23 @@ records.
 
 ### Changed
 
+- **A comma ends the clause a negation before a phrase is in.**
+  `if not, blocked by [ADR-0002](0002.md)` and
+  `both or neither, because [ADR-0002](0002.md) says so` were citations:
+  the comma was blanked, and the negation then stood against the phrase.
+  Each is the relation it states now, `blocked-by` and `assumes`, and so
+  are `No, blocked by`, `Not yet, deferred to` and
+  `Like it or not, superseded by`. A comma still counts toward no phrase's
+  40 characters, and a negation between the phrase and the reference
+  cancels it as before, whatever commas stand there. A `ghost-handover`,
+  `stale-premise` or supersession such a sentence states is reported, and
+  an open question it hands to a live document is no longer an
+  `orphaned-obligation`, so a check that passed can fail
+  ([ADR-0006](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0006-false-positives-cost-more.md)).
+  Upgrading: run `check`; a finding it now reports from such a sentence is
+  one the sentence states. A negation set off by commas from the phrase it
+  denies, `Never, ever, blocked by`, is read as the relation too: write it
+  without the commas.
 - **A relative `--root` is read from the directory `main` is given.** The
   library's `main({ argv, cwd })` compared two values of `--root` from
   `cwd`, and read the one it kept from the process's own directory: `check
