@@ -1355,7 +1355,7 @@ steps:
   - run: npm ci
   - run: npx --no-install @descent-vtt/spec-graph --format sarif > spec-graph.sarif
     continue-on-error: true
-  - uses: github/codeql-action/upload-sarif@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
+  - uses: github/codeql-action/upload-sarif@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4.39.0
     with:
       sarif_file: spec-graph.sarif
 ```
