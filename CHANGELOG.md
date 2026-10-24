@@ -15,6 +15,34 @@ records.
 
 ### Changed
 
+- **A negation an aside sets apart from the phrase cancels it.**
+  `Not, as it happens, blocked by [ADR-0002](0002.md)` and
+  `Never, ever, blocked by` were `blocked-by`, the relation each denies:
+  the comma after the negation ended its clause. An aside closed by a comma
+  of its own leaves the clause open now, and each is a citation, and no
+  phrase before such a negation governs the reference either, so
+  `Not, as decided in [ADR-0003](0003.md), blocked by [ADR-0002](0002.md)`
+  reads no premise from the second. The miss it trades is a negation that
+  ends a clause of its own before an aside, `If not, then, blocked by`,
+  which is a citation too
+  ([ADR-0006](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0006-false-positives-cost-more.md)).
+  A `ghost-handover`, `stale-premise` or `live-supersession` such a
+  sentence denies is no longer reported, and an open question it hands to
+  a live document is an `orphaned-obligation`, so a check can pass that
+  failed, and fail that passed. Upgrading: run `check`; where a hand-off
+  is written `Owner: nobody, for now, deferred to`, write it without the
+  aside.
+- **A pointer governs the reference after it.**
+  `Per tick, see [ADR-0002](0002.md)` read the cited document as a
+  premise, and `Blocked by the cache, see [ADR-0002](0002.md)` as what
+  blocks: `see` between a phrase
+  and the reference was passed over. It governs the reference as a
+  citation now, as it does with no phrase before it; `the must-see list`
+  and `seen in` point at nothing
+  ([ADR-0006](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0006-false-positives-cost-more.md)).
+  A finding read from such a phrase is no longer reported. Upgrading: run
+  `check`; where the phrase does name the reference, name it before the
+  pointer, `Blocked by [ADR-0002](0002.md), see its table`.
 - **A `\` in an export path is a separator.** `diff` read its two paths as
   typed, so on Linux `diff 'sub\base.json' 'sub\head.json'` compared files
   of those names, or found none, and `..\sub\base.json` typed one directory
