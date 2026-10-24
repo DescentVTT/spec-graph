@@ -481,9 +481,35 @@ const NEGATION = /(?:^|[^\p{L}\p{N}-])(?:no|not|no-one|nobody|none|never|neither
  * they were cancelled (ADR-0006, 2026-10-19). A contraction is a negation,
  * `isn't` and `doesn’t`, and so is `cannot`. Tested against the text just
  * before the phrase, which ends with the space or the comma before it.
+ *
+ * An aside between the two, closed by a comma of its own, leaves the clause
+ * open: "Not, as it happens, blocked by", "never, ever, blocked by" and "it
+ * is not, as far as anyone knows, blocked by" deny the relation as the words
+ * without the aside do. The aside is anything up to a comma, and may hold
+ * several, so the negation may also end a clause the phrase is not in -
+ * "if not, then, blocked by" - and the relation such a sentence states is
+ * missed, which ADR-0006 prefers to one it denies (2026-10-24). The same few
+ * words may stand after the last comma, "not, in the end, been superseded
+ * by". A run of spaces and commas is one comma in the text this is tested
+ * on, so no aside is empty and `.*` would read as `.+` does; and only
+ * whether the pattern matches is asked, so a lazy `.+?` reads alike too.
  */
 const NEGATED_BEFORE =
-  /(?:^|[^\p{L}\p{N}-])(?:no|not|no one|no-one|nobody|none|never|neither|nor|nothing|without|cannot|\p{L}+n['’]t)(?: (?:be|been|being|is|are|was|were|yet|longer|ever|even|currently|actually|really|necessarily|always))* $/u;
+  /(?:^|[^\p{L}\p{N}-])(?:no|not|no one|no-one|nobody|none|never|neither|nor|nothing|without|cannot|\p{L}+n['’]t)(?: (?:be|been|being|is|are|was|were|yet|longer|ever|even|currently|actually|really|necessarily|always))*(?: |,.+,(?:(?:be|been|being|is|are|was|were|yet|longer|ever|even|currently|actually|really|necessarily|always) )*)$/u;
+
+/**
+ * A word that points the reader at the reference, and governs it as a
+ * citation from nearer than any phrase before it: "Per tick, see [ADR-7]"
+ * read ADR-7 as a premise, and "blocked by the cache, see [ADR-7]" read it
+ * as what blocks. `see` is no phrase for the vagueness that makes it a
+ * citation, and between a phrase and the reference it says the reference is
+ * where to read more, not what the phrase names (ADR-0006, 2026-10-24). It
+ * is a word as a negation is, between anything but a letter, a digit or a
+ * hyphen, so "the must-see list", "the licensee" and "seen in" point at
+ * nothing. The text it is tested on starts just after a phrase, where no
+ * letter stands, so the word is never its first and needs no start of text.
+ */
+const POINTER = /[^\p{L}\p{N}-]see(?![\p{L}\p{N}-])/u;
 
 /**
  * A code span that holds nothing but a negation word: `` `none` ``.
@@ -1582,9 +1608,17 @@ export function classifyReference(
     // What sits between the phrase and the reference has to be connective. A
     // negation in there reverses the claim the phrase would otherwise make,
     // and so does one just before the phrase, where no comma ends its clause
-    // first.
+    // first. A pointer in there governs the reference itself, as a citation.
     if (NEGATION.test(before.slice(end))) continue;
-    if (NEGATED_BEFORE.test(commas.slice(0, m.index))) continue;
+    if (POINTER.test(before.slice(end))) continue;
+    // A negation before a phrase stands between any phrase before it and the
+    // reference, and denies what follows it: a phrase it leaves before an
+    // aside governs no more than the one it cancels, so "Not, as decided in
+    // [ADR-3], blocked by [ADR-7]" makes ADR-7 a premise of nothing.
+    if (NEGATED_BEFORE.test(commas.slice(0, m.index))) {
+      best = null;
+      continue;
+    }
     // Always found: the pattern was compiled from this table's own keys, and a
     // lower-cased search matches them only as written. The check is for types.
     const rule = VERB_LOOKUP.get(phrase);
