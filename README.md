@@ -475,7 +475,15 @@ it, in the same statement: a sentence, a paragraph, a list item or a table cell.
   `Not in this release: deferred to` each state the relation, and are read as
   they state it. So do `if not, blocked by` and `both or neither, because`: a
   comma ends the clause the negation is in, and counts toward no phrase's 40
-  characters.
+  characters. An aside closed by a comma of its own leaves the clause open,
+  so `not, as it happens, blocked by` and `never, ever, blocked by` are
+  citations, and so is `if not, then, blocked by`, which is missed. No
+  phrase before such a negation governs the reference either:
+  `not, as decided in [ADR-0003](0003.md), blocked by [ADR-0002](0002.md)`
+  reads the first as a premise and the second as a citation.
+- A pointer between the two, `see`, governs the reference as a citation:
+  `per tick, see [ADR-0002](0002.md)` and `blocked by the cache, see` read no
+  relation, and `the must-see list` and `seen in` point at nothing.
 - A sentence written in Chinese ends at `。`, `？`, `！` or `；`, with a space
   after it or none, so `Deferred to later。另見 ADR-0002` hands nothing to
   ADR-0002. A stop only ends a statement sooner: it reads less, never more.
