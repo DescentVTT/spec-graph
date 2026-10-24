@@ -375,6 +375,111 @@ checks, measured on both builds:
 | An open question in a superseded document, `not yet, deferred to` a live one | exit `1`, `orphaned-obligation` | exit `0` |
 | An open question in a live document, `never, ever, blocked by` a superseded one | exit `0` | exit `1`, `ghost-handover` |
 
+*Amended 2026-10-24.* **A negation an aside sets apart from the phrase
+cancels it, and a pointer governs the reference after it.** The amendment
+of 2026-10-19 ended a negation's clause at a comma before the phrase, and
+recorded what it traded: a negation that denies the phrase it stands before
+and is set apart from it by commas all the same, `Never, ever, blocked by`,
+and `Not, as it happens, blocked by`, which it left as it was. A phrase also
+reached across a comma to a reference that another word points at. Measured
+on main at 4f4404d, 0.19.0, through the launcher: one document for each
+sentence, citing a second, and the relation `graph` exports for it.
+
+| Written | 0.19.0 | Now |
+| --- | --- | --- |
+| `Not, as it happens, blocked by`, `It is not, as far as anyone knows, blocked by`, `Not, as it happens, currently blocked by` | `blocked-by` | a citation |
+| `Never, ever, blocked by`, `Not, repeat, not, blocked by`, `Not yet, nor ever, blocked by`, `It isn't, currently, blocked by` | `blocked-by` | a citation |
+| `It has not, in the end, been superseded by`, `Not, as of today, superseded by` | the cited document supersedes this one | a citation |
+| `This is not, of course, deferred to`, `We do not, as a rule, depend on` | `delegates-to`, `depends-on` | a citation |
+| `Not, as decided in [ADR-0003], blocked by [ADR-0002]` | the second `blocked-by` | a citation, and the first `assumes` as before |
+| `Depends on the cache that isn't blocked by`, `Deferred to the team that cannot be blocked by` | `depends-on`, `delegates-to` | a citation |
+| `If not, then, blocked by`, `No, of course, blocked by`, `Owner: nobody, for now, deferred to`, `Ready or not, in the end, depends on`, `Not yet, but soon, deferred to` | the phrase's relation | a citation |
+| `Per tick, see`, `Blocked by the cache, see`, `Depends on the queue (see`, `Per [ADR-0003], see also`, `Superseded by, see` | the phrase's relation | a citation |
+| `Deferred to [ADR-0003] (see [ADR-0002] for why)` | the second `delegates-to` | a citation, and the first `delegates-to` as before |
+| `Blocked by what we see in` | `blocked-by` | a citation |
+| `If not, blocked by`, `No, blocked by`, `Not yet, deferred to`, `Owner: nobody, deferred to`, `Both or neither, because`, `It isn't, blocked by`, `It has not, been superseded by` | the phrase's relation | the same |
+| `If so, as it happens, blocked by`, `Not now, as it happens, blocked by`, `Not only, as it happens, blocked by` | `blocked-by` | the same |
+| `Blocked by the must-see list in`, `the see-through cache in`, `the cache, seen in`, `the overseer in`; `See the cache, deferred to`; `As decided in [ADR-0002], see the table` | the phrase's relation | the same |
+| `Not (as it happens) blocked by`, `Not — as it happens — blocked by`, `It is not - as far as anyone knows - blocked by` | `blocked-by` | the same |
+
+**An aside leaves the negation's clause open.** A comma straight after a
+negation ends its clause, and the phrase after it states the relation: an
+answer, `no` or `not yet`, a condition, `if not`. An aside is set into a
+clause and closed by a comma of its own, and the clause a negation opened
+before one goes on past it: `Not, as it happens, blocked by` denies what
+`Not blocked by` denies. So a negation, with the words of tense or doubt
+that may follow it, that ends at a comma with one aside or more after it,
+each closed by a comma, cancels the phrase after the last of them, as it
+does with nothing between, and the same few words may stand after that
+comma: `It has not, in the end, been superseded by`.
+
+What it trades. The false positives it removes are relations a sentence
+denies across an aside, the emphatic `Never, ever, blocked by` among them,
+which the amendment of 2026-10-19 traded. The false negatives it adds are
+negations that end a clause of their own, with an aside that begins the
+phrase's: `If not, then, blocked by` and `Owner: nobody, for now, deferred
+to` each state the relation, and are citations now. Read either way, one
+kind is missed; this way the miss is a relation a sentence states, where
+the other way it was one a sentence denies, the direction this ADR is for.
+A comma alone still ends the clause, so `It isn't, blocked by`, the other
+half of that trade, is still the relation, and a word that claims something
+of its own still keeps the negation from the phrase, aside or none: `Not
+now, as it happens, blocked by` is the relation, as `Not now blocked by`
+is.
+
+**A negation before a phrase leaves no phrase before it to govern.** With
+the nearest phrase cancelled, the search went on to one farther back, and a
+phrase in the aside, `as decided in` in
+`Not, as decided in [ADR-0003], blocked by [ADR-0002]`, read the second
+document as a premise: a relation the sentence does not state, made by the
+rule above. A negation before a
+phrase stands between every phrase before it and the reference, so none of
+them governs it; a phrase after the negation still does, `Not blocked by
+the cache, but deferred to`. It reaches two readings 0.19.0 made besides,
+where a negation the words between do not hold, a contraction or `cannot`,
+stood before the nearest phrase: `Depends on the cache that isn't blocked
+by` and `Deferred to the team that cannot be blocked by` are citations.
+
+**A pointer governs the reference after it.** `see` is kept out of the
+phrases because it commits to nothing, and a reference it points at is a
+citation. Between a phrase and the reference it says where to read more,
+and the phrase governs what it stands before, not the reference: `Per tick,
+see` made the cited document a premise, and `Blocked by the cache,
+see` made it what blocks. The nearest governing word governs, and `see` is
+one, governing as a citation. It is a word as a negation is, between
+anything but a letter, a digit or a hyphen, so `the must-see list`, `the
+licensee` and `seen in` point at nothing. What it trades: `see` as a verb
+in the phrase's own object, `Blocked by what we see in`, which is missed.
+
+**Left as they were.** An aside set off by parentheses or dashes is not
+read as one: a parenthesis is blanked with the link syntax that also
+writes one, and a dash counts toward a phrase's 40 characters, which this
+amendment does not move, so `Not (as it happens) blocked by` and `Not — as
+it happens — blocked by` are still `blocked-by`. A contraction or `cannot`
+between a phrase and the reference still does not cancel it, `Deferred to a
+team that doesn't own`. And `per` before a noun of its own, `per tick` or
+`per file`, is still a premise where it reaches a reference with nothing
+pointing between: of the 116 references a phrase governs in the family's
+Markdown, `per` governs 18, most of them as `per mutant` or `per file`, and
+none of the family's relations was to change here.
+
+Measured on the Markdown of the family's five repositories as each main
+had it (spec-core a54ee75, spec-brief 0dcf231, spec-graph 4f4404d,
+spec-guard f4f3ab6, spec-harness 84cb6d7), every Markdown file each tracks
+and no configuration: 524 relations, none changed, and none changed in the
+Markdown of this amendment's own pull request, whose sentences are quoted
+in code. No repository outside the family was read for this amendment.
+
+A check that passed can fail, and one that failed can pass, so it arrives
+in a minor release. Four checks, measured on both builds:
+
+| The corpus | 0.19.0 | Now |
+| --- | --- | --- |
+| An open question in a live document, `Not, as it happens, blocked by` a superseded one | exit `1`, `ghost-handover` | exit `0` |
+| A live document, `Per tick, see` a superseded one | exit `1`, `stale-premise` | exit `0` |
+| An open question in a superseded document, `Owner: nobody, for now, deferred to` a live one | exit `0` | exit `1`, `orphaned-obligation` |
+| An accepted document that `has not, in the end, been superseded by` another | exit `1`, `live-supersession` | exit `0` |
+
 ## Open Questions
 
 - [ ] Should the default include patterns be widened, or is naming the fix in
