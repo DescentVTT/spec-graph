@@ -776,6 +776,50 @@ describe('diff', () => {
     });
   });
 
+  /** The two exports again, in `sub`, beside an empty directory `below`. */
+  async function withExportsInSub(body: (dir: string) => Promise<void>): Promise<void> {
+    await withExports(async (dir) => {
+      const { copyFile, mkdir } = await import('node:fs/promises');
+      await mkdir(`${dir}/sub`);
+      await mkdir(`${dir}/below`);
+      await copyFile(`${dir}/before.json`, `${dir}/sub/before.json`);
+      await copyFile(`${dir}/after.json`, `${dir}/sub/after.json`);
+      await body(dir);
+    });
+  }
+
+  it('reads a backslash in either path as a separator, as a root and a baseline read it', async () => {
+    await withExportsInSub(async (dir) => {
+      const { resolve } = await import('node:path');
+      // Kept as a character of a name, each was a file that is not there on
+      // Linux, where the same baseline is `sub/before.json`.
+      const top = await runIn(resolve(dir), 'diff', 'sub\\before.json', '.\\sub\\after.json');
+      expect(top.code, top.err).toBe(EXIT_OK);
+      expect(top.out).toContain('1 relation changed.');
+      const below = await runIn(resolve(dir, 'below'), 'diff', '..\\sub\\before.json', '..\\after.json');
+      expect(below.code, below.err).toBe(EXIT_OK);
+      expect(below.out).toContain('1 relation changed.');
+      // A path that is not there is named as it was typed.
+      const missing = await runIn(resolve(dir), 'diff', 'sub\\gone.json', 'sub\\after.json');
+      expect(missing.code).toBe(EXIT_ERROR);
+      expect(missing.err).toMatch(/^spec-graph: cannot read sub\\gone\.json: /);
+    });
+  });
+
+  it.skipIf(process.platform === 'win32')('reads the path a backslash spells, not a file whose name holds one', async () => {
+    await withExportsInSub(async (dir) => {
+      const { copyFile } = await import('node:fs/promises');
+      const { resolve } = await import('node:path');
+      // Two files named `sub\before.json` and `sub\after.json` beside `sub`,
+      // the same export twice: read, they would compare as unchanged.
+      await copyFile(`${dir}/after.json`, `${dir}/sub\\before.json`);
+      await copyFile(`${dir}/after.json`, `${dir}/sub\\after.json`);
+      const read = await runIn(resolve(dir), 'diff', 'sub\\before.json', 'sub\\after.json');
+      expect(read.code, read.err).toBe(EXIT_OK);
+      expect(read.out).toContain('1 relation changed.');
+    });
+  });
+
   it('warns when the exports name different generators', async () => {
     await withExports(async (dir) => {
       const { readFile, writeFile } = await import('node:fs/promises');

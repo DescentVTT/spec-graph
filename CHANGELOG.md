@@ -43,6 +43,34 @@ records.
   A finding read from such a phrase is no longer reported. Upgrading: run
   `check`; where the phrase does name the reference, name it before the
   pointer, `Blocked by [ADR-0002](0002.md), see its table`.
+- **A `\` in an export path is a separator.** `diff` read its two paths as
+  typed, so on Linux `diff 'sub\base.json' 'sub\head.json'` compared files
+  of those names, or found none, and `..\sub\base.json` typed one directory
+  down found none, where a baseline typed either way is `sub/base.json`.
+  Each path is read as a root and a baseline are now, from where it was
+  typed. Windows reads as before
+  ([ADR-0010](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0010-configuration-belongs-to-the-repository.md)).
+  Upgrading: on Linux, rename an export whose file name holds a `\`; a
+  diff that read it reads the path the `\` spells now.
+- **A run does not start in a directory whose name holds a `\`.** Where the
+  host separates names with `/`, as Linux does, `check`, `query`, `graph`
+  and `rules` in `/work/a\b` read `/work/a/b`, the path the `\` spells: its
+  documents, its configuration and its rules, so a check could pass over
+  the tree it was typed in, and a `--record-baseline` was written there.
+  Each stops now with exit `2` and one line, before it reads or writes
+  anything; `diff`, `--help` and `--version` run there as before
+  ([ADR-0010](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0010-configuration-belongs-to-the-repository.md)).
+  Upgrading: run from a path whose names hold no `\`, or give `--root` one,
+  such as a link to the directory.
+- **A relative `cwd` is read once.** The library's `main({ cwd: 'docs' })`
+  with no `--root` started the run in `docs/docs`, the directory joined to
+  itself: it checked `docs/docs/*.md` for `*.md` and recorded a baseline
+  there. It starts in `docs` now, and two values of a baseline are
+  compared from there. The `spec-graph` command gives an absolute
+  directory and is as it was
+  ([ADR-0010](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0010-configuration-belongs-to-the-repository.md)).
+  Upgrading: nothing to do; a caller that gave a relative `cwd` gets the
+  directory it named.
 
 ## 0.19.0
 

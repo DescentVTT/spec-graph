@@ -11,7 +11,7 @@
  * and an error nothing here expected never as findings.
  */
 
-import { resolve } from 'node:path';
+import { resolve, sep } from 'node:path';
 
 import {
   applyBaseline,
@@ -56,7 +56,7 @@ import {
   RULE_IDS,
   RULE_QUERIES,
 } from './rules.js';
-import { foldDriveLetter, isAbsolutePath, joinPosix, toPosix } from './paths.js';
+import { foldDriveLetter, holdsBackslashInName, isAbsolutePath, joinPosix, toPosix } from './paths.js';
 import { formatRef } from './source.js';
 import { execute, parseQuery, QueryError, renderMatch, type Match, type QuerySpec } from './select.js';
 import { isProjectRule, type AnyRuleId, type RuleId, type Severity, type SpecNode } from './types.js';
@@ -616,6 +616,11 @@ export function parseArgs(argv: readonly string[], cwd: string): CliOptions {
   const once = (flag: string, typed: string, read: () => string | number, key = flag, takes = 'takes one value'): void => {
     valued.push({ flag, key, typed, read, takes });
   };
+  // A baseline typed here is read from the root where `--root` names one,
+  // and from where it was typed otherwise, which is the root's default. That
+  // directory is read once: joined to itself, a relative `cwd` such as
+  // `docs` read `docs/docs` (ADR-0010, 2026-10-24).
+  const fromRoot = (value: string): string => foldDriveLetter(resolve(cwd, rootExplicit ? toPosix(root) : '', toPosix(value)));
 
   for (let i = 0; i < args.length; i += 1) {
     const arg = args[i] as string;
@@ -700,18 +705,16 @@ export function parseArgs(argv: readonly string[], cwd: string): CliOptions {
         historyPatterns.push(next(arg, i));
         i += 1;
         break;
-      // A baseline typed here is read from the root where `--root` names one,
-      // and from where it was typed otherwise, which is the root's default.
       case '--baseline': {
         const value = filled(arg, i, 'a file');
-        once(arg, value, () => foldDriveLetter(resolve(cwd, toPosix(root), toPosix(value))));
+        once(arg, value, () => fromRoot(value));
         baseline = value;
         i += 1;
         break;
       }
       case '--record-baseline': {
         const value = filled(arg, i, 'a file');
-        once(arg, value, () => foldDriveLetter(resolve(cwd, toPosix(root), toPosix(value))));
+        once(arg, value, () => fromRoot(value));
         recordBaseline = value;
         i += 1;
         break;
@@ -1047,8 +1050,27 @@ async function run(io: CliIO, err: (text: string) => void): Promise<number> {
   // the library names with `io.cwd`, and where two values of `--root` were
   // compared: left relative, the disk read it from Node's own directory, so
   // `--root docs` checked, and recorded a baseline into, another tree than
-  // the caller's. A `\` is a separator, as the walk has always read it.
-  const start = resolve(cwd, toPosix(options.root));
+  // the caller's. A `\` typed in the root is a separator, as the walk has
+  // always read it. The directory the line was typed in is not typed, and is
+  // read once, as the host gives it: joined to itself, a relative `cwd` such
+  // as `docs` started the run in `docs/docs`.
+  const start = options.rootExplicit ? resolve(cwd, toPosix(options.root)) : resolve(cwd);
+
+  // On a host whose separator is `/`, a `\` in where the run starts is a
+  // character of a name, from the directory the line was typed in, and the
+  // walk, the configuration and a baseline read every `\` as a separator: in
+  // `/t/a\b` they read `/t/a/b`, another directory, and recorded a baseline
+  // into it. No path handed on tells the one `\` from the other, so the run
+  // stops before it reads or writes anything. A diff reads its two files
+  // where they are, from that directory as the host gives it, and is not
+  // stopped (ADR-0010, 2026-10-24).
+  if (holdsBackslashInName(start, sep)) {
+    const named = options.rootExplicit ? `--root "${options.root}" is ${start}, which has` : `${start} has`;
+    err(
+      `spec-graph: ${named} a "\\" in a name, and spec-graph reads each "\\" as a separator, so it would read ${toPosix(start)} instead: run it from a path with none, or give --root one\n`,
+    );
+    return EXIT_ERROR;
+  }
 
   // A root that was named is a directory, for every command that reads one.
   // `rules --root` with a path that is not there listed the built-in rules and
@@ -1669,9 +1691,15 @@ async function runDiff(
   for (const path of paths) {
     let raw: string;
     try {
+      // A `\` is a separator, as it is in a root and a baseline: kept as a
+      // character, `sub\a.json` typed at the top read a file of that name on
+      // Linux, where the same baseline is `sub/a.json`, and `..\sub\a.json`
+      // typed below it read nothing. The directory it was typed in is read
+      // as the host gives it, so a diff reads its files there, `\` or none.
+      //
       // Without the encoding this is a Buffer, which JSON.parse decodes as
       // UTF-8 all the same - so emptying the literal parses the same export.
-      raw = await readFile(resolve(cwd, path), 'utf8');
+      raw = await readFile(resolve(cwd, toPosix(path)), 'utf8');
     } catch (error) {
       err(`spec-graph: cannot read ${path}: ${(error as Error).message}\n`);
       return EXIT_ERROR;

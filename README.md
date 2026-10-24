@@ -902,9 +902,17 @@ reports, byte for byte, because every path here is relative to the root.
 - A path typed on the command line stays relative to where you typed it, brace
   alternative by brace alternative: `{/docs,x}` typed in `sub` is `/docs` or
   `sub/x`.
-- A `\` in a root or a baseline is a separator on every host, as in a pattern,
-  so `--baseline sub\held.json` typed at the root and `..\sub\held.json`
-  typed in `docs` are one file, `sub/held.json`, on Linux as on Windows.
+- A `\` in a root, a baseline or an export `diff` reads is a separator on
+  every host, as in a pattern, so `--baseline sub\held.json` typed at the
+  root and `..\sub\held.json` typed in `docs` are one file, `sub/held.json`,
+  on Linux as on Windows.
+- So a run does not start in a directory whose name holds a `\`, where the
+  host separates names with `/`, as Linux does: read as a separator, the
+  `\` would name another directory, and the run would check it and record a
+  baseline into it. The run stops with
+  exit `2` and one line before it reads anything; run it from a path whose
+  names hold none, or give `--root` one, such as a link to the directory.
+  `diff`, `--help` and `--version` run there.
 
 See [ADR-0018](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0018-the-configuration-file-is-the-root.md).
 
@@ -1491,6 +1499,9 @@ It names only what it can tell apart:
   resolved or reopened.
 - Findings are left to `--baseline`, which already reports what is new.
 
+Each export is read from where its path was typed, with a `\` a separator,
+as a baseline is.
+
 The exit code is `0` whether anything changed or not: a diff describes, and
 `check` gates. See
 [ADR-0020](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0020-a-diff-names-what-it-can-tell-apart.md).
@@ -1532,7 +1543,8 @@ The command line is `main`, which takes the line and the directory it was
 typed in: `await main({ argv: ['check', '--root', 'docs'], cwd })` reads
 `docs`, its configuration and any baseline beside it from `cwd`, and walks
 up from `cwd` for a configuration where no `--root` is given. Left out,
-`cwd` is the process's working directory, as for the `spec-graph` command.
+`cwd` is the process's working directory, as for the `spec-graph` command;
+a relative `cwd` is read from that directory.
 
 ## Design
 
