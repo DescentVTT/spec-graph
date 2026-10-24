@@ -431,10 +431,53 @@ describe('a governing phrase', () => {
     expect(reading('# A\n\nNo longer blocked by [ADR-0002](0002-b.md), nor by the cache.\n')).toEqual(REFERENCES);
   });
 
-  it('trades a relation where a comma sets a negation apart from the phrase it denies', () => {
-    // An emphatic negation set off by commas denies what it stands before,
-    // and is read as a clause of its own (ADR-0006, 2026-10-19).
-    expect(reading('# A\n\nNever, ever, blocked by [ADR-0002](0002-b.md).\n')).toEqual({ kind: 'blocked-by', inverted: false });
+  it('trades a relation where a comma alone sets a negation apart from the phrase it denies', () => {
+    // A comma between a negation and its own verb is read as the end of the
+    // negation's clause (ADR-0006, 2026-10-19).
+    expect(reading("# A\n\nIt isn't, blocked by [ADR-0002](0002-b.md).\n")).toEqual({ kind: 'blocked-by', inverted: false });
+  });
+
+  // Each denies the relation, with an aside between the negation and the
+  // phrase, and each was the relation (ADR-0006, 2026-10-24).
+  it.each([
+    'Not, as it happens, blocked by [ADR-0002](0002-b.md).',
+    'It is not, as far as anyone knows, blocked by [ADR-0002](0002-b.md).',
+    'Never, ever, blocked by [ADR-0002](0002-b.md).',
+    'Not, repeat, not, blocked by [ADR-0002](0002-b.md).',
+    'Not yet, nor ever, blocked by [ADR-0002](0002-b.md).',
+    "It isn't, currently, blocked by [ADR-0002](0002-b.md).",
+    'It has not, in the end, been superseded by [ADR-0002](0002-b.md).',
+    'It has not, as it happens, ever been superseded by [ADR-0002](0002-b.md).',
+    'Not, as it happens, currently blocked by [ADR-0002](0002-b.md).',
+    'We do not, as a rule, depend on [ADR-0002](0002-b.md).',
+  ])('is cancelled by a negation an aside sets apart from it: %s', (sentence) => {
+    expect(reading(`# A\n\n${sentence}\n`)).toEqual(REFERENCES);
+  });
+
+  it('trades a relation where a negation ends a clause of its own before an aside', () => {
+    // Read either way, one kind is missed, and the miss is the relation.
+    expect(reading('# A\n\nIf not, then, blocked by [ADR-0002](0002-b.md).\n')).toEqual(REFERENCES);
+    expect(reading('# A\n\nOwner: nobody, for now, deferred to [ADR-0002](0002-b.md).\n')).toEqual(REFERENCES);
+  });
+
+  it('is not cancelled across an aside by words that are no negation, or claim something of their own', () => {
+    const BLOCKED = { kind: 'blocked-by', inverted: false } as const;
+    expect(reading('# A\n\nIf so, as it happens, blocked by [ADR-0002](0002-b.md).\n')).toEqual(BLOCKED);
+    expect(reading('# A\n\nNot now, as it happens, blocked by [ADR-0002](0002-b.md).\n')).toEqual(BLOCKED);
+    expect(reading('# A\n\nNot only, as it happens, blocked by [ADR-0002](0002-b.md).\n')).toEqual(BLOCKED);
+    expect(reading('# A\n\nThe no-op, as it happens, blocked by [ADR-0002](0002-b.md).\n')).toEqual(BLOCKED);
+  });
+
+  it('leaves no phrase before a negation to govern the reference the negation denies', () => {
+    // The phrase in the aside governs what it stands before, and no further.
+    const text = '# A\n\nNot, as decided in [ADR-0003](0003-c.md), blocked by [ADR-0002](0002-b.md).\n';
+    expect(reading(text)).toEqual(REFERENCES);
+    const decided = extract(text).references.find((reference) => reference.target === '0003-c.md');
+    expect(decided && { kind: decided.kind, inverted: decided.inverted }).toEqual({ kind: 'assumes', inverted: false });
+    // So does a negation the words between do not hold, a contraction.
+    expect(reading("# A\n\nDepends on the cache that isn't blocked by [ADR-0002](0002-b.md).\n")).toEqual(REFERENCES);
+    // A phrase after the negation still governs.
+    expect(reading('# A\n\nNot blocked by the cache, but deferred to [ADR-0002](0002-b.md).\n')).toEqual(DELEGATES);
   });
 
   it('is cancelled by a negation between it and the reference, with a comma on either side of the negation', () => {
@@ -463,6 +506,43 @@ describe('a governing phrase', () => {
     // written against the bracket is its last word and has nothing after it.
     expect(reading('# A\n\nDeferred to nobody[ADR-0002](0002-b.md).\n')).toEqual(REFERENCES);
     expect(reading('# A\n\nDeferred to nobody [ADR-0002](0002-b.md).\n')).toEqual(REFERENCES);
+  });
+
+  // Each points at the reference as a place to read more, and each read the
+  // phrase before the pointer as the relation (ADR-0006, 2026-10-24).
+  it.each([
+    'Per tick, see [ADR-0002](0002-b.md).',
+    'Blocked by the cache, see [ADR-0002](0002-b.md).',
+    'Depends on the queue (see [ADR-0002](0002-b.md)).',
+    'Deferred to [ADR-0003](0003-c.md) (see [ADR-0002](0002-b.md) for why).',
+    'Per [ADR-0003](0003-c.md), see also [ADR-0002](0002-b.md).',
+    'Superseded by, see [ADR-0002](0002-b.md).',
+  ])('governs nothing past a pointer to the reference: %s', (sentence) => {
+    expect(reading(`# A\n\n${sentence}\n`)).toEqual(REFERENCES);
+  });
+
+  it('trades a relation where the pointer is a verb of the phrase’s own object', () => {
+    expect(reading('# A\n\nBlocked by what we see in [ADR-0002](0002-b.md).\n')).toEqual(REFERENCES);
+  });
+
+  it('governs past a word that only holds the pointer, and from after it', () => {
+    const BLOCKED = { kind: 'blocked-by', inverted: false } as const;
+    expect(reading('# A\n\nBlocked by the must-see list in [ADR-0002](0002-b.md).\n')).toEqual(BLOCKED);
+    expect(reading('# A\n\nBlocked by the see-through cache in [ADR-0002](0002-b.md).\n')).toEqual(BLOCKED);
+    expect(reading('# A\n\nBlocked by the cache, seen in [ADR-0002](0002-b.md).\n')).toEqual(BLOCKED);
+    expect(reading('# A\n\nBlocked by the overseer in [ADR-0002](0002-b.md).\n')).toEqual(BLOCKED);
+    expect(reading('# A\n\nDeferred to the licensee in [ADR-0002](0002-b.md).\n')).toEqual(DELEGATES);
+    // A digit joins the word as a letter does, on either side.
+    expect(reading('# A\n\nBlocked by the 2see flag in [ADR-0002](0002-b.md).\n')).toEqual(BLOCKED);
+    expect(reading('# A\n\nBlocked by the see2 flag in [ADR-0002](0002-b.md).\n')).toEqual(BLOCKED);
+    expect(reading('# A\n\nSee the cache, deferred to [ADR-0002](0002-b.md).\n')).toEqual(DELEGATES);
+    expect(reading('# A\n\nAs you see, deferred to [ADR-0002](0002-b.md).\n')).toEqual(DELEGATES);
+    // A comma alone points at nothing: a list goes on across it.
+    expect(reading('# A\n\nBlocked by the cache, [ADR-0002](0002-b.md) and the queue.\n')).toEqual(BLOCKED);
+    // The one that points at another reference leaves that one's phrase alone.
+    const text = '# A\n\nDeferred to [ADR-0003](0003-c.md) (see [ADR-0002](0002-b.md) for why).\n';
+    const handed = extract(text).references.find((reference) => reference.target === '0003-c.md');
+    expect(handed && { kind: handed.kind, inverted: handed.inverted }).toEqual(DELEGATES);
   });
 
   it('is not cancelled by a word that only begins like a negation', () => {
