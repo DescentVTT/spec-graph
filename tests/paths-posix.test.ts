@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { extnamePosix, foldDriveLetter, normalisePosix, resolveFrom } from '../src/paths.js';
+import { extnamePosix, foldDriveLetter, holdsBackslashInName, normalisePosix, resolveFrom } from '../src/paths.js';
 
 /**
  * The POSIX path arithmetic the API exports, held to what each function's
@@ -62,5 +62,19 @@ describe('a drive letter, folded for a comparison', () => {
     expect(foldDriveLetter('\\\\?\\unc\\server\\share')).toBe('\\\\?\\unc\\server\\share');
     expect(foldDriveLetter('cd:\\x')).toBe('cd:\\x');
     expect(foldDriveLetter('docs')).toBe('docs');
+  });
+});
+
+describe('a backslash inside a name', () => {
+  it('is one where the host separates names with a slash, wherever in the path it stands', () => {
+    expect(holdsBackslashInName('/t/a\\b', '/')).toBe(true);
+    expect(holdsBackslashInName('/t/a\\b/docs', '/')).toBe(true);
+    expect(holdsBackslashInName('\\docs', '/')).toBe(true);
+  });
+
+  it('is none in a path without one, or on a host that separates names with it', () => {
+    expect(holdsBackslashInName('/t/ab/docs', '/')).toBe(false);
+    expect(holdsBackslashInName('C:\\t\\a\\docs', '\\')).toBe(false);
+    expect(holdsBackslashInName('\\\\?\\C:\\t', '\\')).toBe(false);
   });
 });

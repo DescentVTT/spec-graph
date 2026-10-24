@@ -880,6 +880,86 @@ a root or a baseline, as it cannot be named by a pattern.
 Those are input taken that was refused, and runs that read another
 directory or file than they did, so they arrive in a minor release.
 
+**A `\` in an export path is a separator, a run does not start where a
+name holds one, and the directory a line was typed in is read once.**
+*Amended 2026-10-24.* The amendment of 2026-10-19 read a `\` in a root and
+a baseline as a separator wherever the run starts, and left two paths as
+they were, and a third as it was not meant to be. Measured on main at
+066966c, 0.19.0, through the launcher and through `main` with a `cwd` of
+its own, in a `node:24-slim` container and on Windows 11 (Node 24.22.1 on
+both), over trees whose documents cite one nobody wrote, so the plain check
+exits `1`, beside a clean tree where a misread path would land:
+
+| Given | 0.19.0 | Now |
+| --- | --- | --- |
+| Linux: `diff 'sub\e0.json' 'sub\e1.json'` at the top, `sub/` beside two files named so | the files named `sub\e0.json` and `sub\e1.json` | `sub/e0.json` and `sub/e1.json` |
+| Linux: the same with no file named so, and `'.\sub\e0.json'` | exit `2`, `cannot read sub\e0.json` | `sub/` compared |
+| Linux: `diff '..\sub\e0.json' '..\sub\e1.json'` one directory down | exit `2`, `cannot read` | `sub/` compared |
+| Linux: `diff '/t/d/sub\e0.json' ...`, absolute | the files named so | `/t/d/sub/` compared |
+| Linux: `check`, `graph`, `query` or `rules` in `/t/a\b`, where `/t/a/b` is clean and declares a rule | exit `0`: `/t/a/b`, its configuration and its rule | exit `2`, one line |
+| Linux: the same, `--record-baseline rec.json` | `/t/a/b/rec.json` written | exit `2`, nothing written |
+| Linux: the same, `--root docs` or `--root .` | `/t/a/b/docs`, `/t/a/b` | exit `2`, the root named as typed |
+| Linux: the same with nothing at `/t/a/b`, or in `/t/x\y/repo` | exit `2`, no specification matched, `looked under /t/a/b` | exit `2`, one line |
+| Linux: in `/t/ab`, a link to `/t/a\b` | `/t/a/b` | exit `2`, one line |
+| Linux: `--root /t/ab`, in `/t/a\b` or anywhere | `/t/a\b`, read through the link | the same |
+| Linux: `--root '/t/a\b'` typed | `/t/a/b` | the same |
+| Linux: `diff e0.json e1.json` in `/t/a\b`; `--help` and `--version` there | the files there; the help; the version | the same |
+| `main({ cwd: 'docs' })`, Node in the repository, no `--root`: `check '*.md'` | `docs/docs/*.md` checked | `docs/*.md` |
+| The same, `--record-baseline b.json` | `docs/docs/b.json` written | `docs/b.json` |
+| Windows: `diff sub\e0.json sub\e1.json`, and `..\sub\...` one directory down | `sub\` compared | the same |
+| The launcher, an absolute `cwd`, and a path with no `\` | as read | the same |
+
+**An export path is read as a baseline is.** `diff` handed each of its two
+paths to the disk as typed, so on Linux `sub\e0.json` named a file of that
+name, and `..\sub\e0.json` typed one directory down named nothing, where a
+baseline typed either way is `sub/e0.json`. A `\` in either path is a
+separator now, as in a root and a baseline, and each is read from where it
+was typed, as before. Windows reads a `\` as a separator itself, so nothing
+it reads changes; on Linux an export whose file name holds a `\` cannot be
+compared under that name, as it cannot be a baseline.
+
+**A run does not start where a name in its path holds a `\`.** The
+directory a line is typed in is the host's, not typed: on a host whose
+separator is `/`, a `\` in it is a character of a name. The run read it as
+a separator all the same, since the walk, the search for a configuration
+and a baseline's path read every `\` in a root so. A check in `/t/a\b`
+checked `/t/a/b` and passed where `/t/a\b` fails, listed that tree's
+project rules as this one's and recorded a baseline into it, and where
+nothing was there said that no specification matched under a directory
+nobody named. Two answers were weighed. Reading the directory as it is
+would need every reader of a root to tell a `\` the host wrote from one a
+person typed, and the root is handed on as a string, through `analyse` and
+`walkFiles` too, which read a `\` in any caller's root as a separator: it
+would take a second path beside each, or a typed `\` read as a name again,
+which the amendment of 2026-10-19 undid. Refusing reads nothing in its
+place, and is taken: exit `2`, one line, before anything is read or
+written, naming the directory, the path it would have read and what to do.
+
+```text
+spec-graph: /t/a\b has a "\" in a name, and spec-graph reads each "\" as a separator, so it would read /t/a/b instead: run it from a path with none, or give --root one
+```
+
+A root that was named is named as it was typed, `--root "docs" is
+/t/a\b/docs, which has`. A root whose path holds none is read from there as
+from anywhere, so `--root` through a link to such a directory runs; a link
+the line is typed in does not help, since the host gives the directory the
+link resolves to. `diff` reads its two files from the directory as the host
+gives it, and nothing reads that path again, so it runs there, and the help
+and the version read no disk. Windows writes no `\` in a name, and nothing
+it reads changes.
+
+**The directory a line was typed in is read once.** Where no `--root` was
+given, `main` read the root as the directory joined to itself, which for an
+absolute directory is itself, and for a relative one, `docs`, is
+`docs/docs`. So `main({ cwd: 'docs' })` checked `docs/docs/*.md` for `*.md`
+and recorded a baseline there, where the amendment of 2026-10-19 says a
+relative `cwd` is read from Node's directory. It is resolved once now, and
+two values of a baseline are compared from there as the run reads them. The
+launcher always gives an absolute directory, so the command is as it was.
+
+Those are input refused that was accepted, and runs that read another
+directory or file than they did, so they arrive in a minor release.
+
 ## What this does not fix
 
 The "greedy prefix" flood is narrower than it looks, and worth stating precisely

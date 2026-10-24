@@ -46,6 +46,21 @@ export function foldDriveLetter(resolved: string): string {
   return resolved.replace(LOWER_DRIVE, (_drive, device: string | undefined, letter: string) => `${device ?? ''}${letter.toUpperCase()}:`);
 }
 
+/**
+ * Whether a path the host resolved holds a `\` inside a name, on a host whose
+ * separator is `separator`.
+ *
+ * A root is read with each `\` a separator, as Windows writes one, so a root
+ * typed `docs\adr` is `docs/adr` on every host. Where the host's separator is
+ * `/`, a `\` it resolved, from the directory a run starts in, is a character
+ * of a name, and read as a separator it spells another directory: the walk,
+ * the configuration and a recorded baseline went there (ADR-0010,
+ * 2026-10-24). Where the separator is `\`, no name can hold one.
+ */
+export function holdsBackslashInName(resolved: string, separator: string): boolean {
+  return separator === '/' && resolved.includes('\\');
+}
+
 /** Removes `.` and `..` segments. Leading `..` are preserved. */
 export function normalisePosix(value: string): string {
   const absolute = value.startsWith('/');

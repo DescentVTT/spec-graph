@@ -378,6 +378,71 @@ describe('a root and a baseline read from where the line was typed', () => {
       expect((await run('check', '--root', typed, '--root', `${root}/notes`)).code).toBe(EXIT_FAILED);
     });
   });
+
+  it('reads a relative directory a caller names once, not joined to itself', async () => {
+    const { access } = await import('node:fs/promises');
+    await withRepo('cli-caller-relative', CALLER, async (root) => {
+      // Relative to the directory this process runs in, as a caller may give
+      // it. Joined to itself it named a directory below `notes` that is not
+      // there, and no specification matched.
+      const caller = `${root}/notes`;
+      const checked = await runIn(caller, 'check', '*.md');
+      expect(checked.code, checked.err).toBe(EXIT_FAILED);
+      expect(checked.out).toContain('"0099.md" does not resolve');
+      const recorded = await runIn(caller, 'check', '*.md', '--record-baseline', 'held.json');
+      expect(recorded.code, recorded.err).toBe(EXIT_OK);
+      await access(`${root}/notes/held.json`);
+      // Read as the run reads it, the relative spelling is the absolute one.
+      const both = await runIn(caller, 'check', '*.md', '--baseline', 'held.json', '--baseline', `${absolute(root)}/notes/held.json`);
+      expect(both.code, both.err).toBe(EXIT_OK);
+    });
+  });
+
+  it.skipIf(process.platform === 'win32')('refuses to start in a directory whose name holds a backslash, and reads nothing in its place', async () => {
+    const { access, readdir } = await import('node:fs/promises');
+    // `a\b` has a citation nobody wrote, and `a/b`, the path the backslash
+    // spells, is clean and declares a rule of its own: a run that read it
+    // passed, and listed that rule as this repository's.
+    const odd = {
+      'a\\b/.spec-graph.json': '{}\n',
+      'a\\b/0001.md': '# ADR-0001: One\n\nstatus: accepted\n\nThis builds on [ADR-0099](0099.md).\n',
+      'a\\b/docs/0002.md': '# ADR-0002: Two\n\nstatus: accepted\n\nThis builds on [ADR-0098](0098.md).\n',
+      'a\\b/e0.json': '{"version":1,"nodes":[],"edges":[]}\n',
+      'a\\b/e1.json': '{"version":1,"nodes":[{"id":"ADR-0001","kind":"document","title":"One","path":"0001.md","phase":"active"}],"edges":[]}\n',
+      'a/b/.spec-graph.json': '{ "rules": { "other": { "query": "document", "message": "{0}" } } }\n',
+      'a/b/0005.md': '# ADR-0005: Five\n\nstatus: accepted\n',
+      'a/b/docs/0006.md': '# ADR-0006: Six\n\nstatus: accepted\n',
+      'a/b/e1.json': '{"version":1,"nodes":[{"id":"ADR-0005","kind":"document","title":"Five","path":"0005.md","phase":"active"}],"edges":[]}\n',
+    };
+    await withRepo('cli-backslash-directory', odd, async (root) => {
+      const here = absolute(`${root}/a\\b`);
+      const said = `spec-graph: ${here} has a "\\" in a name, and spec-graph reads each "\\" as a separator, so it would read ${absolute(root)}/a/b instead: run it from a path with none, or give --root one\n`;
+      for (const argv of [['check', '*.md'], ['graph', '*.md'], ['query', 'document', '*.md'], ['rules', 'project:other'], ['check', '*.md', '--record-baseline', 'rec.json']]) {
+        expect(await runIn(here, ...argv), argv.join(' ')).toEqual({ code: EXIT_ERROR, out: '', err: said });
+      }
+      expect((await readdir(`${root}/a/b`)).sort()).toEqual(['.spec-graph.json', '0005.md', 'docs', 'e1.json']);
+      expect((await readdir(`${root}/a\\b`)).sort()).toEqual(['.spec-graph.json', '0001.md', 'docs', 'e0.json', 'e1.json']);
+      // A root typed below it is named as typed, and refused the same.
+      const below = await runIn(here, 'check', '--root', 'docs');
+      expect(below).toEqual({
+        code: EXIT_ERROR,
+        out: '',
+        err: `spec-graph: --root "docs" is ${here}/docs, which has a "\\" in a name, and spec-graph reads each "\\" as a separator, so it would read ${absolute(root)}/a/b/docs instead: run it from a path with none, or give --root one\n`,
+      });
+      // A root whose path holds none is read, from there as from anywhere.
+      const named = await runIn(here, 'check', '--root', `${absolute(root)}/a/b`, '*.md');
+      expect(named.code, named.err).toBe(EXIT_OK);
+      expect(named.out).toContain('ADR-0005');
+      // The help and the version read no disk, and a diff reads its two
+      // files where they are: the ones in `a\b`, not the one in `a/b`.
+      expect((await runIn(here, 'check', '--help')).code).toBe(EXIT_OK);
+      expect((await runIn(here, '--version')).code).toBe(EXIT_OK);
+      const diffed = await runIn(here, 'diff', 'e0.json', 'e1.json');
+      expect(diffed.code, diffed.err).toBe(EXIT_OK);
+      expect(diffed.out).toContain('+ ADR-0001');
+      await expect(access(`${root}/a/b/rec.json`)).rejects.toThrow();
+    });
+  });
 });
 
 describe('a brace alternative with a leading slash', () => {
