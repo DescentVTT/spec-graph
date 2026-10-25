@@ -11,7 +11,14 @@ the family's
 [versioning policy](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0009-versions-before-1-0.md)
 records.
 
-## Unreleased
+## 0.20.0
+
+A negation an aside sets apart from its phrase cancels it, and a
+pointer such as `see` governs the reference after it, so neither is
+read as the relation it denies or passes over. On Linux a `\` in an
+export path `diff` is given is a separator, and a run does not start in
+a directory whose name holds one. A relative `cwd` given to the library
+is read once.
 
 ### Changed
 
