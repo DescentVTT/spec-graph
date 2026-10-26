@@ -58,7 +58,7 @@ to put.
 *Amended 2026-09-26.* SARIF reaches a pull request on GitHub and nothing
 reaches a merge request on GitLab, which left a tool meant to run in any CI
 useful in one forge's review.
-[spec-core's ADR-0005](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0005-the-family-contract.md)
+[spec-core's ADR-0005](https://github.com/spec-family/spec-core/blob/main/docs/adr/0005-the-family-contract.md)
 asks each spec-* tool to add GitLab's format when it next touches its
 reporter. `--format gitlab` is that format. The Markdown table below declined
 a forge's name because the same text serves any reader; this schema is

@@ -585,7 +585,7 @@ export function formatSarif(
           tool: {
             driver: {
               name: 'spec-graph',
-              informationUri: 'https://github.com/DescentVTT/spec-graph',
+              informationUri: 'https://github.com/spec-family/spec-graph',
               // JSON.stringify drops a key whose value is undefined, so always
               // spreading the pair writes the same file; the test is for the reader.
               ...(options.version === undefined ? {} : { version: options.version, semanticVersion: options.version }),

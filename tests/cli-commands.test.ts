@@ -538,7 +538,7 @@ describe('the rules command', () => {
       const under = lines.slice(index + 1, rows[position + 1] ?? lines.length);
       expect(under.map((line) => line.trimStart()), id).toEqual([
         ...(RULE_QUERIES[id] === undefined ? [] : [RULE_QUERIES[id]]),
-        expect.stringMatching(/^https:\/\/github\.com\/DescentVTT\/spec-graph\/blob\/v[^/]+\/docs\/adr\/\d{4}-[a-z0-9-]+\.md$/),
+        expect.stringMatching(/^https:\/\/github\.com\/spec-family\/spec-graph\/blob\/v[^/]+\/docs\/adr\/\d{4}-[a-z0-9-]+\.md$/),
       ]);
       for (const line of under) expect(line.length - line.trimStart().length, line).toBe(column);
     }

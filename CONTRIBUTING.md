@@ -122,7 +122,7 @@ heuristic, check that a mutant of it dies.
 never made here. spec-core's `LICENSE` is copied beside it, and `package.json`
 ships it with the compiled copies. It is left out of the mutation sweep and of
 coverage: its mutants are killed by spec-core's own suite ([its
-ADR-0001](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0001-one-core-copied-by-hash.md)),
+ADR-0001](https://github.com/spec-family/spec-core/blob/main/docs/adr/0001-one-core-copied-by-hash.md)),
 and counting them here would move this repository's score with code it does not
 own.
 
@@ -188,7 +188,7 @@ Versions are published by CI from a tag, never from a workstation
 The release workflow runs the whole CI matrix again on that commit, packs,
 stages the version on npm with provenance, and creates the GitHub release with
 the changelog section as its notes. Then a maintainer releases it with a second
-factor: `npm stage list @descent-vtt/spec-graph`, `npm stage view <id>`,
+factor: `npm stage list @spec-family/spec-graph`, `npm stage view <id>`,
 `npm stage approve <id>`. A prerelease (`0.9.0-rc.1`) goes out under the
 `next` dist-tag and never becomes `latest`. To try the workflow without
 publishing, run it by hand from main (Actions, Release, Run workflow): it does

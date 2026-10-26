@@ -80,7 +80,7 @@ time is still `extract.ts`'s, in shard 1.
 in one process, and a shard instruments only its own files, so a file's
 minutes in a shard are not its minutes there, as spec-core found when it split
 its own sweep ([its record of
-2026-09-30](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0007-verification.md)).
+2026-09-30](https://github.com/spec-family/spec-core/blob/main/docs/adr/0007-verification.md)).
 In the three sweeps of 58a5389's source, shard 2 finished in 5 to 7 minutes
 and shard 3, which held `state.ts`, in 30 to 31, and shard 3 set the wall time
 of all three while `extract.ts` alone took 23 to 30. Read shard by shard,

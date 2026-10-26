@@ -123,7 +123,7 @@ never a bare `npx <name>`: before `npm ci` that fetches whatever the registry
 has under the name. `.npmrc` has npm stop there instead, and
 `tests/npm.test.ts` holds both. One of the family's own tools takes its
 package's full name (spec-core's
-[ADR-0005](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0005-the-family-contract.md#names),
+[ADR-0005](https://github.com/spec-family/spec-core/blob/main/docs/adr/0005-the-family-contract.md#names),
 Names).
 
 Every job names the image it runs on, never a `-latest` label, which GitHub
@@ -131,7 +131,7 @@ moves: the suite's matrix runs Ubuntu 24.04 and 26.04, and coverage, the
 sweep and the release stay on `ubuntu-24.04`, where their numbers were
 measured. `tests/runner-images.test.ts` fails a label that names no image
 and a gate that leaves its own, and spec-core's
-[ADR-0008](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0008-toolchain.md)
+[ADR-0008](https://github.com/spec-family/spec-core/blob/main/docs/adr/0008-toolchain.md)
 has the labels and the steps that move an image.
 
 ## Design rules

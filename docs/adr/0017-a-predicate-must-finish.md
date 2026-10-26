@@ -124,7 +124,7 @@ describes moved unchanged to spec-core, the library the spec-* tools share, as
 from a file runs it on the same automaton rather than on a copy of its own
 drifting from this one. It comes back as `src/vendor/spec-core/pattern/regex.ts`,
 copied byte for byte and held to the SHA-256 it was copied with
-([spec-core's ADR-0001](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0001-one-core-copied-by-hash.md)).
+([spec-core's ADR-0001](https://github.com/spec-family/spec-core/blob/main/docs/adr/0001-one-core-copied-by-hash.md)).
 Nothing about `~=` changed. `compilePattern` and `PatternError` are still
 exported, as that same function and class, and a caught error's `name` now
 reads `RegexError`.

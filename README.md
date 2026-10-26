@@ -18,8 +18,8 @@ checked.
 Exit code 1. The obligation was about to disappear.
 
 The terms the spec-* tools share are defined in the family
-[glossary](https://github.com/DescentVTT/spec-core/blob/main/docs/concepts.md),
-and the [tutorial](https://github.com/DescentVTT/spec-core/blob/main/docs/tutorial.md)
+[glossary](https://github.com/spec-family/spec-core/blob/main/docs/concepts.md),
+and the [tutorial](https://github.com/spec-family/spec-core/blob/main/docs/tutorial.md)
 takes one small repository through a round of work, from the brief to the
 archive, in ten steps.
 
@@ -52,20 +52,20 @@ document and obvious when you can query all of them at once.
 ## Quickstart
 
 ```bash
-npm install --save-dev @descent-vtt/spec-graph
-npx --no-install @descent-vtt/spec-graph
+npm install --save-dev @spec-family/spec-graph
+npx --no-install @spec-family/spec-graph
 ```
 
 No configuration, no annotations, no migration. It reads what your repository
 already looks like:
 
 ```bash
-npx --no-install @descent-vtt/spec-graph "docs/**/*.md"
+npx --no-install @spec-family/spec-graph "docs/**/*.md"
 ```
 
 ## Names
 
-The package is `@descent-vtt/spec-graph`, and the command it installs is
+The package is `@spec-family/spec-graph`, and the command it installs is
 `spec-graph`. The name without the scope is not this project: on npm,
 `spec-graph` belonged to nobody on 2026-10-07, and whoever registers it decides
 what it runs.
@@ -75,22 +75,22 @@ project has none installed - a fresh clone, a worktree before `npm ci`, a CI job
 without the install step - and without a terminal it does not ask first. So
 give `npx` the full name:
 
-- `npx --no-install @descent-vtt/spec-graph` in a project that installed it: it
+- `npx --no-install @spec-family/spec-graph` in a project that installed it: it
   runs that install, the version the lockfile pins, and where there is none it
   stops with an error that names this package.
-- `npx @descent-vtt/spec-graph`, without `--no-install`, where nothing is
+- `npx @spec-family/spec-graph`, without `--no-install`, where nothing is
   installed: it fetches this package and runs it.
 
 <!-- bare-name: the two forms in the next sentence are shown as what not to write -->
 Never `npx spec-graph`, and not `npx --no-install spec-graph` either:
 `--no-install` stops a download, and npm still runs a copy of the bare name's
 package that an earlier fetch left in its cache. The family's
-[adopting guide](https://github.com/DescentVTT/spec-core/blob/main/docs/adopting.md#names)
+[adopting guide](https://github.com/spec-family/spec-core/blob/main/docs/adopting.md#names)
 has what was measured, under npm 10, 11 and 12.
 
 Where this page writes the command alone, as in `spec-graph query ...`, it is
 what a `package.json` script holds - npm fetches nothing for a script - and what
-follows `npx --no-install @descent-vtt/` at a prompt.
+follows `npx --no-install @spec-family/` at a prompt.
 
 ## What it checks
 
@@ -385,7 +385,7 @@ The tool names that flag in the hint, so it costs one run to find:
 `--ignore-ref` suppresses *findings*, never edges. A reference that resolves is
 still a relation in the graph no matter what you exclude — not even
 `--ignore-ref "*"` can delete one. See
-[ADR-0008](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0008-wiki-links-carry-no-path.md).
+[ADR-0008](https://github.com/spec-family/spec-graph/blob/main/docs/adr/0008-wiki-links-carry-no-path.md).
 
 ### A gap that is deliberate
 
@@ -435,7 +435,7 @@ depends-on: [ADR-0004, RFC-0011]
 A front-matter key is read however it is punctuated or cased - `depends-on`,
 `depends_on` and `dependsOn` are one key - and every relation is spelled in
 both directions, so a repository writes whichever half its filing convention
-keeps ([ADR-0014](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0014-a-relation-is-spelled-both-ways.md)).
+keeps ([ADR-0014](https://github.com/spec-family/spec-graph/blob/main/docs/adr/0014-a-relation-is-spelled-both-ways.md)).
 Written in ADR-0001, `key: ADR-0002` means:
 
 | Relation | ADR-0001 → ADR-0002 | ADR-0002 → ADR-0001 |
@@ -568,7 +568,7 @@ Both forms need **two** signals, and that is deliberate: `## Q3 2026 Roadmap`
 parses as family `Q`, number 3, and `## v1.2.0` in a changelog parses as family
 `v`, number 1. Neither declares a status, so neither is a specification. A table
 of identifiers and prose is a citation list, not a register. See
-[ADR-0009](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0009-a-specification-is-a-region.md).
+[ADR-0009](https://github.com/spec-family/spec-graph/blob/main/docs/adr/0009-a-specification-is-a-region.md).
 
 ## Directives
 
@@ -640,7 +640,7 @@ checked.
 That last row is the point. Excluding the file with `--ignore` would have
 silenced the whole lot, including the links, and a journal full of 404s is
 exactly what this tool is for. See
-[ADR-0011](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0011-a-record-is-not-a-specification.md).
+[ADR-0011](https://github.com/spec-family/spec-graph/blob/main/docs/adr/0011-a-record-is-not-a-specification.md).
 
 So the two are not given together. A `--history` pattern that matches no file
 the run reads, where the files it names are left out by `--ignore` or by
@@ -687,7 +687,7 @@ gate without writing any code:
 ```yaml
 - name: No PRD may depend on a draft decision
   run: |
-    ! npx --no-install @descent-vtt/spec-graph query 'document[path^=docs/prd] -depends-on-> document[phase=draft]'
+    ! npx --no-install @spec-family/spec-graph query 'document[path^=docs/prd] -depends-on-> document[phase=draft]'
 ```
 
 That shell line is a rule wearing a disguise. Give it a name and a sentence and
@@ -724,13 +724,13 @@ which are not regular; both are refused when the selector is read, with the
 character pointed at. The automaton is spec-core's, the library the spec-* tools
 share, copied into this package rather than installed, and so is the one
 [globs](#patterns) are matched by. See
-[ADR-0017](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0017-a-predicate-must-finish.md).
+[ADR-0017](https://github.com/spec-family/spec-graph/blob/main/docs/adr/0017-a-predicate-must-finish.md).
 
 On a register, a region answers its file's front matter for every descriptive
 key — `fm.owner` on a decision inside a register is the register's owner — while
 the keys a region owns itself, its identifier and status and title, and any key
 that declares a relation, stay on the file. See
-[ADR-0009](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0009-a-specification-is-a-region.md).
+[ADR-0009](https://github.com/spec-family/spec-graph/blob/main/docs/adr/0009-a-specification-is-a-region.md).
 
 ## Your own rules
 
@@ -794,7 +794,7 @@ spec-graph: .spec-graph.json: rules.owner: "{1.phse}" asks for an attribute
   nothing has
 ```
 
-See [ADR-0016](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0016-a-query-needs-a-sentence.md).
+See [ADR-0016](https://github.com/spec-family/spec-graph/blob/main/docs/adr/0016-a-query-needs-a-sentence.md).
 
 ## Adopting this on a repository that predates it
 
@@ -864,7 +864,7 @@ nothing left to be stale about, so a typo in it looks exactly like a regression
 nobody introduced: it exits `2` instead. A `"baseline"` in the configuration is
 the other case and stays optional, because a repository declares the path before
 the first run records the file — `--verbose` says when it read nothing. Either
-may be absolute. See [ADR-0012](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0012-a-baseline-is-a-ratchet.md).
+may be absolute. See [ADR-0012](https://github.com/spec-family/spec-graph/blob/main/docs/adr/0012-a-baseline-is-a-ratchet.md).
 
 ## Configuration
 
@@ -914,7 +914,7 @@ reports, byte for byte, because every path here is relative to the root.
   names hold none, or give `--root` one, such as a link to the directory.
   `diff`, `--help` and `--version` run there.
 
-See [ADR-0018](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0018-the-configuration-file-is-the-root.md).
+See [ADR-0018](https://github.com/spec-family/spec-graph/blob/main/docs/adr/0018-the-configuration-file-is-the-root.md).
 
 A flag always wins over the file, and list flags **add** to it rather than
 replacing it — a `--ignore-ref` on the command line is one more exclusion, not a
@@ -978,7 +978,7 @@ Globs - the patterns to check, `--ignore`, `--ignore-ref`, `--history` - are
 matched by an automaton rather than by `RegExp`, because a glob with three stars
 in it is enough to keep `RegExp` busy for two minutes over a long reference
 target. See
-[ADR-0017](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0017-a-predicate-must-finish.md).
+[ADR-0017](https://github.com/spec-family/spec-graph/blob/main/docs/adr/0017-a-predicate-must-finish.md).
 
 A class never matches a `/`. A parenthesis with no `|` in its group is itself,
 so `C++(notes).md` names that file. A `..` typed below the root,
@@ -1033,7 +1033,7 @@ Nor does the walk follow a link, a pattern that starts beyond one included:
 - a leading `/` is the text of the link too: `{/docs/a.md,x}` names the target
   `/docs/a.md`, as `/docs/a.md` does, and not `docs/a.md`.
 
-See [ADR-0022](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0022-globs-are-the-family-path-dialect.md).
+See [ADR-0022](https://github.com/spec-family/spec-graph/blob/main/docs/adr/0022-globs-are-the-family-path-dialect.md).
 
 ### Family rules
 
@@ -1109,7 +1109,7 @@ over `"families": ["ADR"]` passes over the ADRs'.
 Both are consulted only after resolution has already failed, so `RFC 0001` still
 resolves to your local RFC-0001 with `RFC` on the ignore list. No configuration
 can delete an edge. See
-[ADR-0010](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0010-configuration-belongs-to-the-repository.md).
+[ADR-0010](https://github.com/spec-family/spec-graph/blob/main/docs/adr/0010-configuration-belongs-to-the-repository.md).
 
 `--verbose` lists everything they silenced, so one over-broad glob cannot quietly
 turn the check off and look like a clean repository:
@@ -1123,7 +1123,7 @@ The JSON report carries the same rows under `suppressed`, without needing the
 flag. What is deliberately *not* listed is a bare identifier spec-graph read as
 prose on its own — `T-1000` was nobody's decision, and listing it would bury the
 entries that were. See
-[ADR-0008](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0008-wiki-links-carry-no-path.md).
+[ADR-0008](https://github.com/spec-family/spec-graph/blob/main/docs/adr/0008-wiki-links-carry-no-path.md).
 
 Prose like `Phase 1`, `R69`, `Q-120`, `Table 2` and `Step 4` has never needed
 this: an identifier found in prose is only read as a citation when its family
@@ -1275,7 +1275,7 @@ loop that would justify a resident process is one line of shell, and it belongs
 to whatever the developer already uses rather than to this tool:
 
 ```bash
-npx --no-install @descent-vtt/spec-graph --format json | jq -r '.summary'
+npx --no-install @spec-family/spec-graph --format json | jq -r '.summary'
 ```
 
 ### Colour and glyphs
@@ -1353,7 +1353,7 @@ steps:
     with:
       node-version: '24'
   - run: npm ci
-  - run: npx --no-install @descent-vtt/spec-graph --format sarif > spec-graph.sarif
+  - run: npx --no-install @spec-family/spec-graph --format sarif > spec-graph.sarif
     continue-on-error: true
   - uses: github/codeql-action/upload-sarif@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4.39.0
     with:
@@ -1376,7 +1376,7 @@ command per finding, and the job's log turns each into an annotation on the
 diff, with no upload step:
 
 ```yaml
-- run: npx --no-install @descent-vtt/spec-graph --format github
+- run: npx --no-install @spec-family/spec-graph --format github
 ```
 
 ```text
@@ -1401,7 +1401,7 @@ resolved:
 spec-graph:
   script:
     - npm ci
-    - npx --no-install @descent-vtt/spec-graph --format gitlab > gl-code-quality-report.json
+    - npx --no-install @spec-family/spec-graph --format gitlab > gl-code-quality-report.json
   artifacts:
     when: always
     reports:
@@ -1432,7 +1432,7 @@ actually look:
 ```yaml
 - name: Summarise the specification graph
   if: always()
-  run: npx --no-install @descent-vtt/spec-graph --format markdown >> "$GITHUB_STEP_SUMMARY"
+  run: npx --no-install @spec-family/spec-graph --format markdown >> "$GITHUB_STEP_SUMMARY"
 ```
 
 It leads with the verdict, counts the corpus, gives every finding its hint, and
@@ -1447,7 +1447,7 @@ per-file detail that SARIF and Code Quality have nowhere to put.
 
 ```yaml
 - name: Check the specification graph
-  run: npx --no-install @descent-vtt/spec-graph "docs/**/*.md" --format json > spec-graph.json
+  run: npx --no-install @spec-family/spec-graph "docs/**/*.md" --format json > spec-graph.json
 ```
 
 The JSON report is versioned, flat, and carries start and end positions for
@@ -1483,9 +1483,9 @@ binary, so CI makes one from the base branch and one from the pull request:
 
 ```yaml
 - run: git fetch --depth 1 origin "$GITHUB_BASE_REF" && git worktree add ../base FETCH_HEAD
-- run: npx --no-install @descent-vtt/spec-graph graph --root ../base --graph-format json > base.json
-- run: npx --no-install @descent-vtt/spec-graph graph --graph-format json > head.json
-- run: npx --no-install @descent-vtt/spec-graph diff base.json head.json --format markdown >> "$GITHUB_STEP_SUMMARY"
+- run: npx --no-install @spec-family/spec-graph graph --root ../base --graph-format json > base.json
+- run: npx --no-install @spec-family/spec-graph graph --graph-format json > head.json
+- run: npx --no-install @spec-family/spec-graph diff base.json head.json --format markdown >> "$GITHUB_STEP_SUMMARY"
 ```
 
 It names only what it can tell apart:
@@ -1504,7 +1504,7 @@ as a baseline is.
 
 The exit code is `0` whether anything changed or not: a diff describes, and
 `check` gates. See
-[ADR-0020](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0020-a-diff-names-what-it-can-tell-apart.md).
+[ADR-0020](https://github.com/spec-family/spec-graph/blob/main/docs/adr/0020-a-diff-names-what-it-can-tell-apart.md).
 
 ## Visualising
 
@@ -1520,7 +1520,7 @@ owning document rather than dropping them.
 ## Programmatic API
 
 ```ts
-import { analyse, formatReport } from '@descent-vtt/spec-graph';
+import { analyse, formatReport } from '@spec-family/spec-graph';
 
 const result = await analyse({ root: process.cwd(), patterns: ['docs/**/*.md'] });
 if (!result.ok) console.error(formatReport(result, { color: true }));
@@ -1530,7 +1530,7 @@ The filesystem is optional. Everything below the runner is a pure function of
 text, so a monorepo tool or a language server can skip disk entirely:
 
 ```ts
-import { analyseSources, query } from '@descent-vtt/spec-graph';
+import { analyseSources, query } from '@spec-family/spec-graph';
 
 const { graph, diagnostics } = analyseSources([{ path: 'adr/0001.md', text: source }]);
 const ghosts = query(graph, 'item[openness=open] -delegates-to-> document[phase=retired]');
@@ -1550,35 +1550,35 @@ a relative `cwd` is read from that directory.
 
 Twenty-three ADRs, which `spec-graph` validates on every CI run:
 
-- [ADR-0001 — A hand-written Markdown scanner](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0001-hand-written-markdown-scanner.md)
-- [ADR-0002 — A four-phase lifecycle lattice](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0002-lifecycle-lattice.md)
-- [ADR-0003 — Item state is resolved from competing signals](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0003-item-state-signals.md)
-- [ADR-0004 — Reference resolution is deliberately asymmetric](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0004-reference-resolution.md)
-- [ADR-0005 — The rules and the query language share one engine](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0005-rules-are-queries.md)
-- [ADR-0006 — False positives cost more than misses](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0006-false-positives-cost-more.md)
-- [ADR-0007 — Mutation testing, and what the score actually means](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0007-mutation-testing.md)
-- [ADR-0008 — A wiki link carries a name, not a path](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0008-wiki-links-carry-no-path.md)
-- [ADR-0009 — A specification is a region of a file, not a file](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0009-a-specification-is-a-region.md)
-- [ADR-0010 — Configuration belongs to the repository](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0010-configuration-belongs-to-the-repository.md)
-- [ADR-0011 — A historical record is not a specification](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0011-a-record-is-not-a-specification.md)
-- [ADR-0012 — A baseline is a ratchet, keyed on identity](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0012-a-baseline-is-a-ratchet.md)
-- [ADR-0013 — When the scanner is unsure, it hands back prose](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0013-the-scanner-hands-back-prose.md)
-- [ADR-0014 — A relation is spelled in both directions](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0014-a-relation-is-spelled-both-ways.md)
-- [ADR-0015 — Feedback goes where the tools already look](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0015-feedback-goes-where-the-tools-already-look.md)
-- [ADR-0016 — A query needs a sentence before it is a rule](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0016-a-query-needs-a-sentence.md)
-- [ADR-0017 — A predicate must finish](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0017-a-predicate-must-finish.md)
-- [ADR-0018 — The configuration file is the root](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0018-the-configuration-file-is-the-root.md)
-- [ADR-0019 — The sweep runs in shards](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0019-the-sweep-runs-in-shards.md)
-- [ADR-0020 — A diff names only what it can tell apart](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0020-a-diff-names-what-it-can-tell-apart.md)
-- [ADR-0021 — Releases are published by CI, with provenance](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0021-releases-are-published-by-ci.md)
-- [ADR-0022 — Globs are the family's path dialect](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0022-globs-are-the-family-path-dialect.md)
-- [ADR-0023 — The scanner is the family's](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0023-the-scanner-is-the-familys.md)
+- [ADR-0001 — A hand-written Markdown scanner](https://github.com/spec-family/spec-graph/blob/main/docs/adr/0001-hand-written-markdown-scanner.md)
+- [ADR-0002 — A four-phase lifecycle lattice](https://github.com/spec-family/spec-graph/blob/main/docs/adr/0002-lifecycle-lattice.md)
+- [ADR-0003 — Item state is resolved from competing signals](https://github.com/spec-family/spec-graph/blob/main/docs/adr/0003-item-state-signals.md)
+- [ADR-0004 — Reference resolution is deliberately asymmetric](https://github.com/spec-family/spec-graph/blob/main/docs/adr/0004-reference-resolution.md)
+- [ADR-0005 — The rules and the query language share one engine](https://github.com/spec-family/spec-graph/blob/main/docs/adr/0005-rules-are-queries.md)
+- [ADR-0006 — False positives cost more than misses](https://github.com/spec-family/spec-graph/blob/main/docs/adr/0006-false-positives-cost-more.md)
+- [ADR-0007 — Mutation testing, and what the score actually means](https://github.com/spec-family/spec-graph/blob/main/docs/adr/0007-mutation-testing.md)
+- [ADR-0008 — A wiki link carries a name, not a path](https://github.com/spec-family/spec-graph/blob/main/docs/adr/0008-wiki-links-carry-no-path.md)
+- [ADR-0009 — A specification is a region of a file, not a file](https://github.com/spec-family/spec-graph/blob/main/docs/adr/0009-a-specification-is-a-region.md)
+- [ADR-0010 — Configuration belongs to the repository](https://github.com/spec-family/spec-graph/blob/main/docs/adr/0010-configuration-belongs-to-the-repository.md)
+- [ADR-0011 — A historical record is not a specification](https://github.com/spec-family/spec-graph/blob/main/docs/adr/0011-a-record-is-not-a-specification.md)
+- [ADR-0012 — A baseline is a ratchet, keyed on identity](https://github.com/spec-family/spec-graph/blob/main/docs/adr/0012-a-baseline-is-a-ratchet.md)
+- [ADR-0013 — When the scanner is unsure, it hands back prose](https://github.com/spec-family/spec-graph/blob/main/docs/adr/0013-the-scanner-hands-back-prose.md)
+- [ADR-0014 — A relation is spelled in both directions](https://github.com/spec-family/spec-graph/blob/main/docs/adr/0014-a-relation-is-spelled-both-ways.md)
+- [ADR-0015 — Feedback goes where the tools already look](https://github.com/spec-family/spec-graph/blob/main/docs/adr/0015-feedback-goes-where-the-tools-already-look.md)
+- [ADR-0016 — A query needs a sentence before it is a rule](https://github.com/spec-family/spec-graph/blob/main/docs/adr/0016-a-query-needs-a-sentence.md)
+- [ADR-0017 — A predicate must finish](https://github.com/spec-family/spec-graph/blob/main/docs/adr/0017-a-predicate-must-finish.md)
+- [ADR-0018 — The configuration file is the root](https://github.com/spec-family/spec-graph/blob/main/docs/adr/0018-the-configuration-file-is-the-root.md)
+- [ADR-0019 — The sweep runs in shards](https://github.com/spec-family/spec-graph/blob/main/docs/adr/0019-the-sweep-runs-in-shards.md)
+- [ADR-0020 — A diff names only what it can tell apart](https://github.com/spec-family/spec-graph/blob/main/docs/adr/0020-a-diff-names-what-it-can-tell-apart.md)
+- [ADR-0021 — Releases are published by CI, with provenance](https://github.com/spec-family/spec-graph/blob/main/docs/adr/0021-releases-are-published-by-ci.md)
+- [ADR-0022 — Globs are the family's path dialect](https://github.com/spec-family/spec-graph/blob/main/docs/adr/0022-globs-are-the-family-path-dialect.md)
+- [ADR-0023 — The scanner is the family's](https://github.com/spec-family/spec-graph/blob/main/docs/adr/0023-the-scanner-is-the-familys.md)
 
 **Zero runtime dependencies.** Node 22+, native ESM, TypeScript strict with
 `noUncheckedIndexedAccess` and `exactOptionalPropertyTypes`. The Markdown
 scanner, the front-matter reader, the glob matcher, the query parser and the
 regular-expression matcher behind `~=` are all written here or in
-[spec-core](https://github.com/DescentVTT/spec-core), the library the spec-*
+[spec-core](https://github.com/spec-family/spec-core), the library the spec-*
 tools share, whose code is copied into `src/vendor/` and checked by hash rather
 than installed. So the whole package is auditable in an afternoon — and nothing
 in the pipeline can take longer than its input.
@@ -1588,7 +1588,7 @@ coverage. Coverage says a line ran, so the suite is also held to a mutation
 score - 96.59% over 9,149 mutants, measured by CI's full sweep, and a build
 fails under 93 - because a vocabulary entry or a boundary
 condition can be weakened by an ordinary-looking refactor without a single test
-going red. [ADR-0007](https://github.com/DescentVTT/spec-graph/blob/main/docs/adr/0007-mutation-testing.md) is straight about what
+going red. [ADR-0007](https://github.com/spec-family/spec-graph/blob/main/docs/adr/0007-mutation-testing.md) is straight about what
 that number is and is not.
 
 **Fast enough to run on save.** A synthetic corpus of 2,000 documents — 8.9 MB,
@@ -1598,7 +1598,7 @@ repository with a few dozen ADRs finishes in tens of milliseconds.
 
 ## Relationship to spec-guard
 
-[`spec-guard`](https://github.com/DescentVTT/spec-guard) checks the **vertical**
+[`spec-guard`](https://github.com/spec-family/spec-guard) checks the **vertical**
 dimension: whether your source code still honours what a specification claims
 about it.
 
@@ -1613,9 +1613,9 @@ cleanly, and neither requires the other.
 ## Contributing
 
 How to build, test and release spec-graph, and where a change usually goes, is
-in [CONTRIBUTING.md](https://github.com/DescentVTT/spec-graph/blob/main/CONTRIBUTING.md).
+in [CONTRIBUTING.md](https://github.com/spec-family/spec-graph/blob/main/CONTRIBUTING.md).
 Report a vulnerability privately, as
-[SECURITY.md](https://github.com/DescentVTT/spec-graph/blob/main/SECURITY.md)
+[SECURITY.md](https://github.com/spec-family/spec-graph/blob/main/SECURITY.md)
 describes, and not in a public issue.
 
 ## Licence

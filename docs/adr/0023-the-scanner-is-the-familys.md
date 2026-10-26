@@ -15,9 +15,9 @@ same bill for scanners of their own, and by 2026-09-26 the three disagreed about
 fences, comments and code spans in ways that were each a defect somewhere.
 
 spec-core now holds one scanner for all of them, built on this one as its model
-([spec-core's ADR-0004](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0004-markdown-structure.md)),
+([spec-core's ADR-0004](https://github.com/spec-family/spec-core/blob/main/docs/adr/0004-markdown-structure.md)),
 copied into each tool byte for byte and checked by hash
-([spec-core's ADR-0001](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0001-one-core-copied-by-hash.md)).
+([spec-core's ADR-0001](https://github.com/spec-family/spec-core/blob/main/docs/adr/0001-one-core-copied-by-hash.md)).
 It follows CommonMark wherever CommonMark decides what is code or a comment,
 and stays a scanner everywhere else: one pass, offsets throughout, and three
 masks for the three questions a tool asks. Its tests run this repository's old
@@ -141,7 +141,7 @@ It holds at any depth and in every bracket form - with `[ADR-0002]` defined,
 destination is reported where the outer one was. A badge wrapped in a link
 is still the link around it, and a wiki link, which is not CommonMark's,
 leaves the link around it a link
-([spec-core's ADR-0004](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0004-markdown-structure.md)).
+([spec-core's ADR-0004](https://github.com/spec-family/spec-core/blob/main/docs/adr/0004-markdown-structure.md)).
 No document in this repository, its fixtures or the rest of the family
 writes one, and over them every `check` format and every graph export is
 what 0.9.4 wrote. The test is in `tests/extract-references.test.ts`.
@@ -166,7 +166,7 @@ link to `0003-c.md`, where it defined `r.md](0003-c.md)` under the label
 `[r`, and `[a\]b]: x` is read. A reference link's second bracket is a label
 on the same terms, and where it is none the first bracket is a shortcut:
 with `[r]` defined, `[r][a[b]c]` cites `r`'s destination, where it cited
-nothing ([spec-core's ADR-0004](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0004-markdown-structure.md)).
+nothing ([spec-core's ADR-0004](https://github.com/spec-family/spec-core/blob/main/docs/adr/0004-markdown-structure.md)).
 The row above for `[foo](not a link)` holds, with `[foo]` defined where
 CommonMark reads it: its test in `tests/markdown.test.ts` had `[foo]: 0003-c.md`
 under a footnote and a `[Note]: prose` line, one paragraph in which neither
@@ -223,7 +223,7 @@ difference is spec-core's to take up.
 - [ ] Slugs drop `_`, which GitHub keeps, because spec-core kept spec-graph's
       slug. Matching GitHub would move anchors and item ids, and waits for a
       release that can say so.
-      [spec-core's ADR-0004](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0004-markdown-structure.md)
+      [spec-core's ADR-0004](https://github.com/spec-family/spec-core/blob/main/docs/adr/0004-markdown-structure.md)
       holds the same question.
 
 ## See also

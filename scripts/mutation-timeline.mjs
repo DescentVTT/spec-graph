@@ -31,7 +31,7 @@
  *   node scripts/mutation-timeline.mjs <report: mutation.json or index.html> sweep.log
  *
  * scripts/mutation-shards.mjs balances its shards on these numbers. Adapted
- * from @descent-vtt/spec-guard.
+ * from @spec-family/spec-guard.
  */
 
 import { readFileSync } from 'node:fs';

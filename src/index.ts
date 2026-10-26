@@ -5,7 +5,7 @@
  * custom reporter or an editor extension can do too.
  *
  * ```ts
- * import { analyse, formatReport } from '@descent-vtt/spec-graph';
+ * import { analyse, formatReport } from '@spec-family/spec-graph';
  *
  * const result = await analyse({ root: process.cwd(), patterns: ['docs/**\/*.md'] });
  * if (!result.ok) console.error(formatReport(result, { color: true }));
@@ -15,7 +15,7 @@
  * a test - skip the filesystem entirely:
  *
  * ```ts
- * import { analyseSources, query } from '@descent-vtt/spec-graph';
+ * import { analyseSources, query } from '@spec-family/spec-graph';
  *
  * const { graph } = analyseSources([{ path: 'adr/0001.md', text: '...' }]);
  * const ghosts = query(graph, 'item[openness=open] -delegates-to-> document[phase=retired]');

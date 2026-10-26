@@ -40,7 +40,7 @@
  * not installed nothing is measured, and the run fails saying which package
  * it could not find.
  *
- * The counting is spec-core's, which adapted it from @descent-vtt/spec-guard
+ * The counting is spec-core's, which adapted it from @spec-family/spec-guard
  * (its ADR-0003, amended 2026-10-12): the tools hold their own sources with
  * the same count.
  */

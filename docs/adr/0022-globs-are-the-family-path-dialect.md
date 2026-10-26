@@ -17,12 +17,12 @@ thing to the tool that writes a brief and another to the tool that checks it.
 
 spec-core now holds one engine for all of them: three named dialects over one
 automaton that cannot backtrack
-([spec-core's ADR-0003](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0003-glob-dialects.md)),
+([spec-core's ADR-0003](https://github.com/spec-family/spec-core/blob/main/docs/adr/0003-glob-dialects.md)),
 copied into each tool byte for byte and checked by hash
-([spec-core's ADR-0001](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0001-one-core-copied-by-hash.md)).
+([spec-core's ADR-0001](https://github.com/spec-family/spec-core/blob/main/docs/adr/0001-one-core-copied-by-hash.md)).
 The family contract says a path is compared case-sensitively on every host,
 because a result must not depend on the machine it ran on
-([spec-core's ADR-0005](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0005-the-family-contract.md)).
+([spec-core's ADR-0005](https://github.com/spec-family/spec-core/blob/main/docs/adr/0005-the-family-contract.md)).
 spec-graph broke that twice, in a function whose own comment said it must not:
 a glob folded case where the filesystem did, and a pattern with no glob syntax
 in it was compared lower-cased on every host, Linux included.

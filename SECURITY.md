@@ -4,11 +4,11 @@
 
 | Version | Fixed |
 | --- | --- |
-| The latest minor release on npm (`npm view @descent-vtt/spec-graph version`) | yes, in a patch release of it |
+| The latest minor release on npm (`npm view @spec-family/spec-graph version`) | yes, in a patch release of it |
 | Any older minor | no |
 
 A fix ships as a patch release of the latest minor, which under the spec-*
-tools' [versions policy](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0009-versions-before-1-0.md)
+tools' [versions policy](https://github.com/spec-family/spec-core/blob/main/docs/adr/0009-versions-before-1-0.md)
 cannot turn a passing run red. Older minors get no fixes: to take one, upgrade
 to the latest minor.
 

@@ -1,5 +1,5 @@
 {
-  "name": "@descent-vtt/spec-graph",
+  "name": "@spec-family/spec-graph",
   "version": "0.20.0",
   "description": "Turn Markdown specs into a verifiable relational graph. Catches ghost handovers, stale premises and broken references in CI.",
   "keywords": [
@@ -64,12 +64,12 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/DescentVTT/spec-graph.git"
+    "url": "git+https://github.com/spec-family/spec-graph.git"
   },
   "bugs": {
-    "url": "https://github.com/DescentVTT/spec-graph/issues"
+    "url": "https://github.com/spec-family/spec-graph/issues"
   },
-  "homepage": "https://github.com/DescentVTT/spec-graph#readme",
+  "homepage": "https://github.com/spec-family/spec-graph#readme",
   "overrides": {
     "qs": "^6.16.0"
   }
