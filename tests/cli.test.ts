@@ -1153,7 +1153,7 @@ describe('rules', () => {
     // Where a reader who installed spec-graph can open it: no package ships
     // docs/, and the tag of the running release is the ADR its rules were cut from.
     const { version } = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { version: string };
-    const at = `https://github.com/DescentVTT/spec-graph/blob/v${version}/docs/adr/`;
+    const at = `https://github.com/spec-family/spec-graph/blob/v${version}/docs/adr/`;
     expect(result.out).toContain(`${at}0002-lifecycle-lattice.md`);
     expect(result.out).toContain(`${at}0014-a-relation-is-spelled-both-ways.md`);
     expect(result.out).not.toMatch(/^\s+docs\/adr\//m);

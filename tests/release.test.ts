@@ -48,7 +48,7 @@ describe('a tag that names a release', () => {
   });
 
   it('sends a prerelease to next, so no upgrade picks it up by accident', () => {
-    // `npm install @descent-vtt/spec-graph` with no version takes `latest`.
+    // `npm install @spec-family/spec-graph` with no version takes `latest`.
     expect(releaseOf('v0.2.0-rc.1', '0.2.0-rc.1', CHANGELOG)).toEqual({
       version: '0.2.0-rc.1',
       distTag: 'next',

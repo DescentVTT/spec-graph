@@ -55,7 +55,7 @@ closes a round of work by writing `status: archived` into the brief and moving
 it to an archive directory, and the family's lifecycle table gives the word
 one meaning in every spec-* tool: a closed round, frozen, and a record -
 depending on it is normal
-([spec-core's ADR-0005](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0005-the-family-contract.md)).
+([spec-core's ADR-0005](https://github.com/spec-family/spec-core/blob/main/docs/adr/0005-the-family-contract.md)).
 spec-graph read it as retired, so a live brief that depended on an archived
 one was a stale premise, and an archived brief with a task left unticked was
 an orphaned obligation: two findings about a round nobody can reopen, which is

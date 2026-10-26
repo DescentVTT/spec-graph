@@ -203,16 +203,30 @@ end. So npmjs.com does give a rehearsal dispatched from main a token.
 spec-guard's ADR-0019 has the same day's dry run under 12.2.0, which read the
 same as far as a dry run goes.
 
+*Amended 2026-10-26.* From 0.21.0 the package is `@spec-family/spec-graph`,
+published from the repository `spec-family/spec-graph`: that day the family
+moved to a GitHub organization and an npm scope of its own, and its versions
+go on under the new names (spec-core's
+[ADR-0005](https://github.com/spec-family/spec-core/blob/main/docs/adr/0005-the-family-contract.md#names),
+amended 2026-10-26). 0.2.0 to 0.20.0 were published as
+`@descent-vtt/spec-graph` from `DescentVTT/spec-graph`, and keep that name
+on the registry. The new package is set up on npmjs.com as the first of the
+Consequences below says, with a trusted publisher of its own for the
+repository `spec-family/spec-graph`; `package.json` names that repository,
+and the summary a staged release ends with names the new package. The ADR
+`rules --explain` names for a rule is the file at the running release's tag
+in `spec-family/spec-graph`, where the tags of the earlier releases came too.
+
 ## Consequences
 
 - **A maintainer sets up npmjs.com once.** In the package's settings, add a
-  trusted publisher: GitHub Actions, repository `DescentVTT/spec-graph`,
+  trusted publisher: GitHub Actions, repository `spec-family/spec-graph`,
   workflow `release.yml`, environment `npm`. Then set publishing access to
   require two-factor authentication and disallow tokens, which leaves this
   workflow and a person holding a second factor as the only ways to publish.
 - **A maintainer approves each release.** The tag's run ends with the version
   staged, and its summary names the commands: `npm stage list
-  @descent-vtt/spec-graph`, `npm stage view <id>`, then `npm stage approve <id>`
+  @spec-family/spec-graph`, `npm stage view <id>`, then `npm stage approve <id>`
   with a second factor, or the Staged Packages tab on npmjs.com.
 - **The `npm` environment carries the release's own protections**, in the
   repository's settings rather than in this file: which refs may deploy to it,

@@ -132,7 +132,7 @@ jobs:
     # repository's settings.
     environment:
       name: npm
-      url: https://www.npmjs.com/package/@descent-vtt/spec-graph/v/${{ needs.pack.outputs.version }}
+      url: https://www.npmjs.com/package/@spec-family/spec-graph/v/${{ needs.pack.outputs.version }}
     permissions:
       contents: read
       id-token: write # the OIDC token npmjs.com trades for the upload
@@ -237,11 +237,11 @@ jobs:
           {
             echo '### Staged, not published'
             echo
-            echo "@descent-vtt/spec-graph@$VERSION is queued on npmjs.com and installable by nobody."
+            echo "@spec-family/spec-graph@$VERSION is queued on npmjs.com and installable by nobody."
             echo 'To release it, with 2FA:'
             echo
             echo '```'
-            echo 'npm stage list @descent-vtt/spec-graph'
+            echo 'npm stage list @spec-family/spec-graph'
             echo 'npm stage view <stage-id>'
             echo 'npm stage approve <stage-id>'
             echo '```'

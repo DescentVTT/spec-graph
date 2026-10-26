@@ -130,7 +130,7 @@ describe('the toolchain', () => {
 });
 
 describe('the documents the package ships', () => {
-  const REPOSITORY = 'https://github.com/DescentVTT/spec-graph/blob/main/';
+  const REPOSITORY = 'https://github.com/spec-family/spec-graph/blob/main/';
   const { files } = JSON.parse(readFileSync('package.json', 'utf8')) as { files: string[] };
   // npm reads an entry with no slash in it as a name at any depth, so a bare
   // `README.md` packed spec-core's vendored README beside the licence it is

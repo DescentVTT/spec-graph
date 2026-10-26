@@ -100,7 +100,7 @@ stream refused, a defect in a reporter or in the parser. The launcher ends
 on `process.exitCode = await cli.main()`, so the rejection was Node's uncaught
 error, the stack and exit `1`, which CI reads as findings and the family
 contract
-([spec-core's ADR-0005](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0005-the-family-contract.md))
+([spec-core's ADR-0005](https://github.com/spec-family/spec-core/blob/main/docs/adr/0005-the-family-contract.md))
 as "it found something". Measured on 0.12.1 through the launcher, with a stdout
 that throws: `--version`, `--help`, `check`, `query`, `graph` and `rules` each
 exited `1`, and so did `graph --graph-format json` into a reader that closed
@@ -127,7 +127,7 @@ sends a person looking for a defect that is not there.
 It is now one line on stderr and no stack,
 `spec-graph: stdout was closed before all of the output was written`, in the
 words every tool of the family uses
-([the family contract](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0005-the-family-contract.md)).
+([the family contract](https://github.com/spec-family/spec-core/blob/main/docs/adr/0005-the-family-contract.md)).
 The exit stays `2`: the answer did not arrive, and what a script was handed of
 a document is not the document. Every time, it arrived as the stream's `error`
 event, which nothing awaits, and never as an error thrown where `main()`
@@ -236,7 +236,7 @@ on Windows a console with `WT_SESSION=` was sent the Unicode glyphs, where
 one that leaves the variable unset gets ASCII. `FORCE_COLOR` is off now for
 exactly `0` or exactly `false`, on a terminal too, and on for any other value
 that is not empty, as it was, `true`, `1` and `FALSE` among them
-([spec-core's ADR-0005](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0005-the-family-contract.md)).
+([spec-core's ADR-0005](https://github.com/spec-family/spec-core/blob/main/docs/adr/0005-the-family-contract.md)).
 `WT_SESSION` and `TERM_PROGRAM` set to nothing are unset, as `NO_COLOR` and
 `FORCE_COLOR` are and as spec-guard reads them: each was read for being set,
 the fault `SPEC_GRAPH_ASCII` had. One of the two cleared beside one that names
@@ -265,7 +265,7 @@ spec-graph: --ascii is given beside --no-ascii, and the glyphs are drawn one way
 
 The later of the two would decide and the earlier go unread, and two things
 of which one would go unread are refused together
-([spec-core's ADR-0005](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0005-the-family-contract.md),
+([spec-core's ADR-0005](https://github.com/spec-family/spec-core/blob/main/docs/adr/0005-the-family-contract.md),
 2026-10-11). `--color` beside `--no-color` is still taken, the later
 deciding: that pair is not this amendment's, and is left as it is.
 `--help` and `--version` are answered first, as they are beside an option of
@@ -275,7 +275,7 @@ another command.
 Only a check's report draws a glyph, and the family's rule is that an option
 is refused where taking it would say what is not so, and taken where it asks
 a command to leave out what it never does
-([spec-core's ADR-0005](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0005-the-family-contract.md),
+([spec-core's ADR-0005](https://github.com/spec-family/spec-core/blob/main/docs/adr/0005-the-family-contract.md),
 2026-10-11). `--ascii` on a command that draws no glyph asks for what is
 already so, as `--no-color` does there, and every command still takes it.
 `--no-ascii` there would say the Unicode glyphs were drawn where none is, as
@@ -456,7 +456,7 @@ family that links to an ADR and an RFC nobody wrote goes the same way under
 on it, written in brackets or in prose.
 
 The family contract has a line for this: nothing measured is not clean
-([spec-core's ADR-0005](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0005-the-family-contract.md)).
+([spec-core's ADR-0005](https://github.com/spec-family/spec-core/blob/main/docs/adr/0005-the-family-contract.md)).
 So where a list is in force, `--family` or `families`, and no document of the
 corpus belongs to a family on it, a check ends with exit `2` before it reports
 or records anything:
@@ -623,7 +623,7 @@ expects a graph export on each side, got "" for the first`.
 values as they were typed, and answered `--help` and `--version` before
 every refusal made once the line was read. The family's contract was
 amended the other way on both, and on a third thing
-([spec-core's ADR-0005](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0005-the-family-contract.md),
+([spec-core's ADR-0005](https://github.com/spec-family/spec-core/blob/main/docs/adr/0005-the-family-contract.md),
 2026-10-18). Measured on main at 4574727, 0.17.0, through the launcher
 (Windows 11, Node 24.18.1), over an ADR that cites an ADR and an RFC nobody
 wrote, beside an RFC, so the plain check exits `1`:
@@ -852,7 +852,7 @@ named is still named as it was typed in what the run says of it.
 
 **A drive letter names its volume in either case**, on Windows, as the
 family's contract has it
-([spec-core's ADR-0005](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0005-the-family-contract.md),
+([spec-core's ADR-0005](https://github.com/spec-family/spec-core/blob/main/docs/adr/0005-the-family-contract.md),
 2026-10-19). `path.resolve` keeps the case a drive letter was typed in, so
 the comparison folds the letter, at the start of the resolved path or after
 `\\?\` or `\\.\`, before it compares two values. Past the letter it

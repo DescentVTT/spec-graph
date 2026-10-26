@@ -766,7 +766,7 @@ runner asks for the tests of a mutant by names joined with a space
 ([stryker-js #6210](https://github.com/stryker-mutator/stryker-js/issues/6210),
 open). The evidence is spec-guard's, which met this on 2026-09-07 and pinned
 vitest then
-([its ADR-0003](https://github.com/DescentVTT/spec-guard/blob/main/docs/adr/0003-mutation-testing.md)).
+([its ADR-0003](https://github.com/spec-family/spec-guard/blob/main/docs/adr/0003-mutation-testing.md)).
 On 2026-10-06 Dependabot proposed vitest 5.0.0 across the family. The two
 repositories that sweep a pull request in full measured it: 4.00% in
 spec-core, where main reads 96.36%, and 3.83% in spec-harness, where main
@@ -782,7 +782,7 @@ by hand fails `npm test` before it reaches main. Minors and patches of 4
 still come, and a security update is not held back.
 
 The hold is the family's and is lifted in spec-core first, by the steps in
-[its ADR-0008](https://github.com/DescentVTT/spec-core/blob/main/docs/adr/0008-toolchain.md)
+[its ADR-0008](https://github.com/spec-family/spec-core/blob/main/docs/adr/0008-toolchain.md)
 (amended 2026-10-07), which also says what vitest 4 still receives while it
 is held. When the bump comes here, its pull request's sweep reuses vitest
 4's verdicts and measures nothing: dispatch `mutation.yml` on the branch,
@@ -798,7 +798,7 @@ order puts first the file that failed in the worker's last run, then the
 longest. spec-harness measured what that cost its sweep, where a static
 mutant waited out forty seconds of sandbox tests ahead of the unit file that
 kills it, and gave the sweep an order of its own, the quickest first
-([its ADR-0010](https://github.com/DescentVTT/spec-harness/blob/main/docs/adr/0010-toolchain-and-verification.md),
+([its ADR-0010](https://github.com/spec-family/spec-harness/blob/main/docs/adr/0010-toolchain-and-verification.md),
 2026-10-09). It inferred that vitest's order costs this sweep as well. Nobody
 had measured that.
 
@@ -1052,7 +1052,7 @@ the same reason. spec-harness met it again in the sweep of its 0.15.0: the
 emptied body of the function its tables are built through was a survivor,
 where the sweep before had killed it through a test whose file had since
 come to import the module
-([its ADR-0010](https://github.com/DescentVTT/spec-harness/blob/main/docs/adr/0010-toolchain-and-verification.md)).
+([its ADR-0010](https://github.com/spec-family/spec-harness/blob/main/docs/adr/0010-toolchain-and-verification.md)).
 So the question was put to this repository's own survivors, which nobody
 had asked it of since that pass.
 

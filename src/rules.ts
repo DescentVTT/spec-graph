@@ -113,7 +113,7 @@ export const RULE_DECISIONS: Readonly<Record<RuleId, string>> = Object.freeze({
  * of the release they run is the ADR as it stood for the rules they got.
  */
 export function decisionUrl(path: string, version: string): string {
-  return `https://github.com/DescentVTT/spec-graph/blob/v${version}/${path}`;
+  return `https://github.com/spec-family/spec-graph/blob/v${version}/${path}`;
 }
 
 

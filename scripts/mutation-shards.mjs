@@ -14,7 +14,7 @@
  * with the library Stryker's own gate uses, and compares it the way that gate
  * does.
  *
- * Adapted from @descent-vtt/spec-guard, where the same merge has scored every
+ * Adapted from @spec-family/spec-guard, where the same merge has scored every
  * sweep since its 0.9.0.
  *
  *   node scripts/mutation-shards.mjs cache <shard>
