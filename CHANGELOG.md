@@ -11,7 +11,11 @@ the family's
 [versioning policy](https://github.com/spec-family/spec-core/blob/main/docs/adr/0009-versions-before-1-0.md)
 records.
 
-## Unreleased
+## 0.21.0
+
+The first release as `@spec-family/spec-graph`, from
+`spec-family/spec-graph`: the family moved to a GitHub organization and
+an npm scope of its own. What a check finds is as in 0.20.0.
 
 ### Changed
 
